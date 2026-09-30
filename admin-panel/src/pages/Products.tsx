@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
@@ -9,17 +9,20 @@ import {
   deleteProduct,
   updateInventory,
   listCategories,
+  listSubcategories,
   uploadImage,
   generateProductBarcode,
   IMAGE_ORIGIN,
 } from '../api/admin'
-import type { Product, Category } from '../types/admin'
+import type { Product, Category, Subcategory } from '../types/admin'
 
 const emptyForm = {
   name: '',
   description: '',
   price: '',
+  mrp: '',
   category_id: '',
+  subcategory_id: '',
   stock: '',
   image_url: '',
   gst_percent: '0',
@@ -28,7 +31,9 @@ const emptyForm = {
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,9 +70,26 @@ export default function Products() {
     }
   }
 
+  async function loadSubcategoriesFor(categoryId: string) {
+    if (!categoryId) {
+      setSubcategories([])
+      return
+    }
+    try {
+      const res = await listSubcategories(categoryId)
+      setSubcategories(res.subcategories ?? res ?? [])
+    } catch {
+      setSubcategories([])
+    }
+  }
+
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    loadSubcategoriesFor(form.category_id)
+  }, [form.category_id])
 
   function openCreate() {
     setForm(emptyForm)
@@ -81,7 +103,9 @@ export default function Products() {
       name: p.name,
       description: p.description ?? '',
       price: String(p.price),
+      mrp: p.mrp ? String(p.mrp) : '',
       category_id: String(p.category_id),
+      subcategory_id: p.subcategory_id ? String(p.subcategory_id) : '',
       stock: '',
       image_url: p.image_url ?? '',
       gst_percent: String(p.gst_percent ?? 0),
@@ -95,6 +119,10 @@ export default function Products() {
   function closeModal() {
     setShowCreate(false)
     setEditingProduct(null)
+  }
+
+  function handleCategoryChange(categoryId: string) {
+    setForm((f) => ({ ...f, category_id: categoryId, subcategory_id: '' }))
   }
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -124,12 +152,15 @@ export default function Products() {
 
     setIsSaving(true)
     try {
+      const subcategoryId = form.subcategory_id ? parseInt(form.subcategory_id, 10) : null
       if (editingProduct) {
         await updateProduct(editingProduct.id, {
           name: form.name.trim(),
           description: form.description.trim(),
           price: parseFloat(form.price),
+          mrp: form.mrp ? parseFloat(form.mrp) : parseFloat(form.price),
           category_id: parseInt(form.category_id, 10),
+          subcategory_id: subcategoryId,
           image_url: form.image_url.trim(),
           gst_percent: form.gst_percent ? parseFloat(form.gst_percent) : 0,
           hsn_code: form.hsn_code.trim(),
@@ -139,7 +170,9 @@ export default function Products() {
           name: form.name.trim(),
           description: form.description.trim(),
           price: parseFloat(form.price),
+          mrp: form.mrp ? parseFloat(form.mrp) : parseFloat(form.price),
           category_id: parseInt(form.category_id, 10),
+          subcategory_id: subcategoryId,
           image_url: form.image_url.trim(),
           gst_percent: form.gst_percent ? parseFloat(form.gst_percent) : 0,
           hsn_code: form.hsn_code.trim(),
@@ -204,11 +237,6 @@ export default function Products() {
     }
   }
 
-  // Opens a small popup with a printable label: the product name, price,
-  // the barcode as both a scannable QR code and its plain text value, then
-  // triggers the browser print dialog. QR (not a 1D barcode image) because
-  // it's what the warehouse app's camera scanner reliably decodes, and it's
-  // trivial to render client-side with no extra rendering dependencies.
   async function handlePrintLabel(product: Product) {
     if (!product.barcode) return
     const qrDataUrl = await QRCode.toDataURL(product.barcode, { width: 500, margin: 2 })
@@ -238,6 +266,14 @@ export default function Products() {
     win.onload = () => win.print()
   }
 
+  function categoryName(id: number) {
+    return categories.find((c) => c.id === id)?.name ?? '-'
+  }
+  const filteredProducts = products.filter((p) =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+
   return (
     <Layout>
       <div className="p-8">
@@ -248,6 +284,18 @@ export default function Products() {
               {products.length} product{products.length !== 1 ? 's' : ''}
             </p>
           </div>
+          <input
+            
+type="text"
+            
+value={searchQuery}
+            
+onChange={(e) => setSearchQuery(e.target.value)}
+            
+placeholder="Search products..."
+            
+className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm w-64 mr-3"
+          />
           <button
             onClick={openCreate}
             className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-colors"
@@ -272,6 +320,7 @@ export default function Products() {
                 <tr className="bg-slate-900 text-slate-400 text-left">
                   <th className="px-4 py-3 font-medium">Image</th>
                   <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Price</th>
                   <th className="px-4 py-3 font-medium">Stock</th>
                   <th className="px-4 py-3 font-medium">Barcode</th>
@@ -279,10 +328,9 @@ export default function Products() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((p) => (
+                {filteredProducts.map((p) => (
                   <tr key={p.id} className="border-t border-slate-800">
                     <td className="px-4 py-3">
-
                       {p.image_url ? (
                         <img
                           src={
@@ -298,7 +346,19 @@ export default function Products() {
                       )}
                     </td>
                     <td className="px-4 py-3">{p.name}</td>
-                    <td className="px-4 py-3">₹{p.price}</td>
+                    <td className="px-4 py-3 text-slate-400">
+                      {categoryName(p.category_id)}
+                      {p.subcategory?.name ? ` / ${p.subcategory.name}` : ''}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>₹{p.price}</div>
+                      {p.mrp > p.price && (
+                        <div className="text-xs text-slate-500">
+                          <span className="line-through">₹{p.mrp}</span>{' '}
+                          <span className="text-emerald-400">{Math.round(((p.mrp - p.price) / p.mrp) * 100)}% OFF</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <input
                         type="number"
@@ -382,13 +442,28 @@ export default function Products() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Price (₹)</label>
+                <label className="text-xs text-slate-400 block mb-1">Selling Price (₹)</label>
                 <input
                   type="number"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
                 />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">MRP (₹) - optional</label>
+                <input
+                  type="number"
+                  value={form.mrp}
+                  onChange={(e) => setForm({ ...form, mrp: e.target.value })}
+                  placeholder="Same as price if blank"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                />
+                {form.mrp && form.price && parseFloat(form.mrp) > parseFloat(form.price) && (
+                  <p className="text-xs text-emerald-400 mt-1">
+                    {Math.round(((parseFloat(form.mrp) - parseFloat(form.price)) / parseFloat(form.mrp)) * 100)}% OFF
+                  </p>
+                )}
               </div>
               {!editingProduct && (
                 <div>
@@ -402,20 +477,40 @@ export default function Products() {
                 </div>
               )}
             </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Category</label>
-              <select
-                value={form.category_id}
-                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="">Select a category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Category</label>
+                <select
+                  value={form.category_id}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Subcategory</label>
+                <select
+                  value={form.subcategory_id}
+                  onChange={(e) => setForm({ ...form, subcategory_id: e.target.value })}
+                  disabled={!form.category_id || subcategories.length === 0}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm disabled:opacity-40"
+                >
+                  <option value="">
+                    {form.category_id ? 'None' : 'Select category first'}
                   </option>
-                ))}
-              </select>
+                  {subcategories.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

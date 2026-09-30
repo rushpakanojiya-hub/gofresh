@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { RevenueSummary, Expense, ExpenseListResponse, ExpenseFormInput, Payroll, PayrollListResponse, PayrollFormInput, ProfitLoss, PaymentReconciliation, GSTSummary, Vendor, VendorRequest, VendorBill, VendorBillRequest, VendorBillHoldRequest, VendorBillVoidRequest, Account, AccountRequest, LedgerEntry, ManualJournalEntryRequest, TrialBalance, BankTransaction, BankTransactionRequest, BankTransactionMatchRequest, BankTransactionVoidRequest, FinanceDashboard } from '../types/finance'
+import type { RevenueSummary, Expense, ExpenseListResponse, ExpenseFormInput, Payroll, PayrollListResponse, PayrollFormInput, ProfitLoss, PaymentReconciliation, GSTSummary, Vendor, VendorRequest, VendorBill, VendorBillRequest, VendorBillHoldRequest, VendorBillVoidRequest, Account, AccountRequest, LedgerEntry, ManualJournalEntryRequest, TrialBalance, BankTransaction, BankTransactionRequest, BankTransactionMatchRequest, BankTransactionVoidRequest, FinanceDashboard, VendorBankChangeRequest, VendorBankChangeRequestBody } from '../types/finance'
 
 export async function getRevenue(from: string, to: string): Promise<RevenueSummary> {
   const { data } = await apiClient.get<RevenueSummary>('/admin/finance/revenue', {
@@ -338,5 +338,33 @@ export async function exportMonthlyMIS(month: string): Promise<Blob> {
     params: { month },
     responseType: 'blob',
   })
+  return data
+}
+
+// ---- Vendor Bank Change Requests ----
+
+export async function listVendorBankChangeRequests(params: {
+  status?: string
+  vendor_id?: number
+}): Promise<{ bank_change_requests: VendorBankChangeRequest[] }> {
+  const { data } = await apiClient.get('/admin/finance/vendor-bank-change-requests', { params })
+  return data
+}
+
+export async function requestVendorBankChange(
+  vendorId: number,
+  payload: VendorBankChangeRequestBody
+): Promise<VendorBankChangeRequest> {
+  const { data } = await apiClient.post(`/admin/finance/vendors/${vendorId}/bank-change-request`, payload)
+  return data
+}
+
+export async function approveVendorBankChange(id: number): Promise<{ vendor: any; bank_change_request: VendorBankChangeRequest }> {
+  const { data } = await apiClient.post(`/admin/finance/vendor-bank-change-requests/${id}/approve`)
+  return data
+}
+
+export async function rejectVendorBankChange(id: number, reason: string): Promise<VendorBankChangeRequest> {
+  const { data } = await apiClient.post(`/admin/finance/vendor-bank-change-requests/${id}/reject`, { reason })
   return data
 }

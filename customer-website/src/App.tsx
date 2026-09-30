@@ -16,6 +16,8 @@ import Wallet from './pages/Wallet'
 import Wishlist from './pages/Wishlist'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
+import Support from './pages/Support'
+import SupportDetail from './pages/SupportDetail'
 
 function App() {
   return (
@@ -89,6 +91,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/support"
+                element={
+                  <ProtectedRoute>
+                    <Support />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/support/:id"
+                element={
+                  <ProtectedRoute>
+                    <SupportDetail />
                   </ProtectedRoute>
                 }
               />

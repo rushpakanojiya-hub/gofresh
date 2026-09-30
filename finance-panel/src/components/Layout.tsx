@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+﻿import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const NAV_ITEMS = [
@@ -6,6 +6,15 @@ const NAV_ITEMS = [
   { to: '/revenue', label: 'Revenue' },
   { to: '/mis', label: 'Weekly MIS' },
   { to: '/payments', label: 'Payments \u0026 Refunds' },
+  { to: '/finance/payments-detailed', label: 'Payments - Detailed List' },
+  { to: '/finance/general-ledger', label: 'General Ledger' },
+  { to: '/finance/vendor-bank-change-requests', label: 'Vendor Bank Changes' },
+  { to: '/finance/mismatch-center', label: 'Mismatch Center' },
+  { to: '/finance/rider-payouts', label: 'Rider Payouts' },
+  { to: '/finance/rider-cod-deposits', label: 'Rider COD Deposits' },
+  { to: '/finance/audit-logs', label: 'Audit Logs' },
+  { to: '/finance/rider-payable-report', label: 'Rider Payable Report' },
+  { to: '/finance/gateway-settlement-report', label: 'Gateway Settlement Report' },
   { to: '/expenses', label: 'Expenses' },
   { to: '/payroll', label: 'Payroll' },
   { to: '/profit-loss', label: 'Profit \u0026 Loss' },

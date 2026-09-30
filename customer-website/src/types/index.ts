@@ -258,3 +258,36 @@ export interface ReturnRequest {
   created_at: string
   updated_at: string
 }
+
+export interface SupportTicket {
+  id: number
+  user_id: number
+  order_id?: number | null
+  subject: string
+  status: 'open' | 'in_progress' | 'resolved' | 'closed'
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  issue_type: string
+  assigned_to_staff_id?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SupportMessage {
+  id: number
+  ticket_id: number
+  sender_id: number
+  sender_type: 'customer' | 'admin'
+  message: string
+  created_at: string
+}
+
+export interface CreateTicketRequest {
+  order_id?: number | null
+  subject: string
+  message: string
+  issue_type?: string
+}
+
+export interface ReplyRequest {
+  message: string
+}

@@ -1,6 +1,6 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
-import { getInventoryOverview, listWarehouses, listCategories } from '../api/admin'
+import { getInventoryOverview, listWarehouses, listCategories, updateInventory } from '../api/admin'
 import type { InventoryOverviewResponse } from '../types/admin'
 
 export default function InventoryOverview() {
@@ -39,6 +39,27 @@ export default function InventoryOverview() {
       setError(err.response?.data?.error ?? 'Failed to load inventory.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleStockEdit(productId: number, warehouseId: number, newStock: number) {
+    if (Number.isNaN(newStock) || newStock < 0) return
+    try {
+      await updateInventory(productId, newStock, warehouseId)
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              rows: prev.rows.map((r) =>
+                r.product_id === productId && r.warehouse_id === warehouseId
+                  ? { ...r, stock: newStock, available: newStock - r.reserved, in_stock: newStock > 0 }
+                  : r
+              ),
+            }
+          : prev
+      )
+    } catch {
+      // silently ignore - row keeps its last known value on failure
     }
   }
 
@@ -155,7 +176,14 @@ export default function InventoryOverview() {
                     <td className="px-4 py-3">{r.product_name}</td>
                     <td className="px-4 py-3 text-slate-400">{r.category_name}</td>
                     <td className="px-4 py-3 text-slate-400">{r.warehouse_name}</td>
-                    <td className="px-4 py-3">{r.stock}</td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        defaultValue={r.stock}
+                        onBlur={(e) => handleStockEdit(r.product_id, r.warehouse_id, parseInt(e.target.value, 10))}
+                        className="w-20 bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-sm"
+                      />
+                    </td>
                     <td className="px-4 py-3 text-amber-300">{r.reserved}</td>
                     <td className="px-4 py-3 text-emerald-300">{r.available}</td>
                     <td className="px-4 py-3">

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { listAddresses } from '../api/addresses'
 import { checkout, createPaymentOrder, verifyPayment, getCheckoutEstimate, type CheckoutEstimate } from '../api/orders'
@@ -69,11 +69,12 @@ export default function Checkout() {
 
   const itemsAmount = cart?.total_amount ?? 0
   const discount = appliedCoupon?.discount_amount ?? 0
-  const walletUsable = Math.min(walletBalance, Math.max(0, itemsAmount - discount))
-  const walletApplied = useWallet ? walletUsable : 0
   const deliveryCharge = estimate?.delivery_charge ?? 0
   const platformFee = estimate?.platform_fee ?? 0
-  const estimatedTotal = Math.max(0, itemsAmount + deliveryCharge + platformFee - discount - walletApplied)
+  const totalBeforeWallet = Math.max(0, itemsAmount + deliveryCharge + platformFee - discount)
+  const walletUsable = Math.min(walletBalance, totalBeforeWallet)
+  const walletApplied = useWallet ? walletUsable : 0
+  const estimatedTotal = Math.max(0, totalBeforeWallet - walletApplied)
 
   async function handleApplyCoupon() {
     setCouponError(null)

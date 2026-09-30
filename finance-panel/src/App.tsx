@@ -22,6 +22,15 @@ import VendorBills from './pages/VendorBills'
 import Accounts from './pages/Accounts'
 import Ledger from './pages/Ledger'
 import BankReconciliation from './pages/BankReconciliation'
+import RiderPayouts from './pages/RiderPayouts'
+import RiderCODDeposits from './pages/RiderCODDeposits'
+import AuditLogs from './pages/AuditLogs'
+import RiderPayableReport from './pages/RiderPayableReport'
+import GatewaySettlementReport from './pages/GatewaySettlementReport'
+import AdminPaymentsDetail from './pages/AdminPaymentsDetail'
+import GeneralLedger from './pages/GeneralLedger'
+import VendorBankChangeRequests from './pages/VendorBankChangeRequests'
+import MismatchCenter from './pages/MismatchCenter'
 
 export default function App() {
   return (
@@ -56,6 +65,15 @@ export default function App() {
             <Route path="/accounting/accounts" element={<Accounts />} />
             <Route path="/accounting/ledger" element={<Ledger />} />
             <Route path="/accounting/bank-reconciliation" element={<BankReconciliation />} />
+            <Route path="/finance/rider-payouts" element={<RiderPayouts />} />
+            <Route path="/finance/rider-cod-deposits" element={<RiderCODDeposits />} />
+            <Route path="/finance/audit-logs" element={<AuditLogs />} />
+            <Route path="/finance/rider-payable-report" element={<RiderPayableReport />} />
+            <Route path="/finance/gateway-settlement-report" element={<GatewaySettlementReport />} />
+            <Route path="/finance/payments-detailed" element={<AdminPaymentsDetail />} />
+            <Route path="/finance/general-ledger" element={<GeneralLedger />} />
+            <Route path="/finance/vendor-bank-change-requests" element={<VendorBankChangeRequests />} />
+            <Route path="/finance/mismatch-center" element={<MismatchCenter />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

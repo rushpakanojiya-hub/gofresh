@@ -440,3 +440,24 @@ export interface WeeklyMIS {
   vendor_reconciliation: MISManualEntry[]
   expense_approval: MISExpenseApproval[]
 }
+
+export interface VendorBankChangeRequest {
+  id: number
+  vendor_id: number
+  vendor?: Vendor
+  new_account_holder: string
+  new_account_number: string
+  new_ifsc: string
+  status: 'pending' | 'approved' | 'rejected'
+  requested_by_id: number
+  approved_by_id?: number
+  approved_at?: string
+  rejection_reason?: string
+  created_at: string
+}
+
+export interface VendorBankChangeRequestBody {
+  account_holder: string
+  account_number: string
+  ifsc: string
+}

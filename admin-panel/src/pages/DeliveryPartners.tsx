@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import {
@@ -155,6 +155,7 @@ export default function DeliveryPartners() {
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Phone</th>
                   <th className="px-4 py-3 font-medium">Vehicle No.</th>
+                  <th className="px-4 py-3 font-medium">Rating</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium"></th>
                 </tr>
@@ -165,6 +166,7 @@ export default function DeliveryPartners() {
                     <td className="px-4 py-3">{p.name}</td>
                     <td className="px-4 py-3">{p.phone}</td>
                     <td className="px-4 py-3 text-slate-400">{p.vehicle_number || '-'}</td>
+                    <td className="px-4 py-3">{p.rating_count ? "★ " + (p.avg_rating ?? 0).toFixed(1) + " (" + p.rating_count + ")" : "-"}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`text-xs px-2 py-1 rounded-full ${

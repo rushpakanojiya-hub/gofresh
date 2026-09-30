@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import { listOrders, updateOrderStatus, assignDeliveryPartner, listDeliveryPartners } from '../api/admin'
 import type { Order, DeliveryPartner } from '../types/admin'
@@ -40,16 +40,21 @@ export default function Orders() {
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [assigningId, setAssigningId] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
 
   async function load() {
     setIsLoading(true)
     setError(null)
     try {
       const [ordersRes, partnersRes] = await Promise.all([
-        listOrders(statusFilter ? { status: statusFilter } : undefined),
+        listOrders({ page, limit: 20, ...(statusFilter ? { status: statusFilter } : {}) }),
         listDeliveryPartners(),
       ])
       setOrders(ordersRes.orders ?? [])
+      setTotalPages(ordersRes.total_pages ?? 1)
+      setTotal(ordersRes.total ?? (ordersRes.orders ?? []).length)
       setPartners(partnersRes.delivery_partners ?? partnersRes.partners ?? partnersRes ?? [])
     } catch (err: any) {
       setError(err.response?.data?.error ?? 'Failed to load orders.')
@@ -61,6 +66,10 @@ export default function Orders() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, page])
+
+  useEffect(() => {
+    setPage(1)
   }, [statusFilter])
 
   async function handleStatusChange(id: number, status: string) {
@@ -95,7 +104,7 @@ export default function Orders() {
           <div>
             <h1 className="text-xl font-semibold">Orders</h1>
             <p className="text-sm text-slate-400 mt-1">
-              {orders.length} order{orders.length !== 1 ? 's' : ''}
+              {total} order{total !== 1 ? 's' : ''}
             </p>
           </div>
           <select
@@ -131,8 +140,10 @@ export default function Orders() {
                   <th className="px-4 py-3 font-medium">Products</th>
                   <th className="px-4 py-3 font-medium">Total</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Payment</th>
                   <th className="px-4 py-3 font-medium">Update</th>
                   <th className="px-4 py-3 font-medium">Assign Delivery</th>
+                  <th className="px-4 py-3 font-medium">Delivery Proof</th>
                 </tr>
               </thead>
               <tbody>
@@ -146,7 +157,7 @@ export default function Orders() {
                           {o.items.map((it) => (
                             <div key={it.id} className="text-slate-300">
                               {it.product?.name ?? `Product #${it.product_id}`}
-                              <span className="text-slate-500"> Ãƒâ€” {it.quantity}</span>
+                              <span className="text-slate-500"> × {it.quantity}</span>
                             </div>
                           ))}
                         </div>
@@ -154,7 +165,7 @@ export default function Orders() {
                         <span className="text-xs text-slate-500">No items</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">â‚¹{o.total_amount}</td>
+                    <td className="px-4 py-3">₹{o.total_amount}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`px-2 py-1 rounded-md text-xs font-medium ${
@@ -162,6 +173,11 @@ export default function Orders() {
                         }`}
                       >
                         {o.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-md ${o.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                        {o.payment_status ?? "-"} ({o.payment_method ?? "-"})
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -184,8 +200,10 @@ export default function Orders() {
                       {(o.status === 'confirmed' || o.status === 'shipped' || o.status === 'ready_for_dispatch' || o.status === 'delivered') ? (
                         <div className="space-y-1">
                           {o.delivery_partner_id ? (
-                            <div className="text-xs text-emerald-300">
-                              Assigned: {partners.find((p) => p.id === o.delivery_partner_id)?.name ?? `Partner #${o.delivery_partner_id}`}
+                            <div className={o.delivery_status === 'assigned' ? "text-xs text-amber-300" : "text-xs text-emerald-300"}>
+                              {o.delivery_status === 'assigned' ? 'Requested: ' : 'Assigned: '}
+                              {partners.find((p) => p.id === o.delivery_partner_id)?.name ?? `Partner #${o.delivery_partner_id}`}
+                              {o.delivery_status === 'assigned' ? ' (awaiting response)' : ''}
                             </div>
                           ) : null}
                           <select
@@ -207,14 +225,48 @@ export default function Orders() {
                       ) : (
                         <span className="text-xs text-slate-500">-</span>
                       )}
+                    </td>                    <td className="px-4 py-3">
+                      {o.delivery_proof_url ? (
+                        <a href={o.delivery_proof_url} target="_blank" rel="noreferrer">
+                          <img
+                            src={o.delivery_proof_url}
+                            alt="Delivery proof"
+                            className="h-12 w-12 rounded object-cover border border-slate-700"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-500">-</span>
+                      )}
                     </td>
+
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </div>
+
+        {!isLoading && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 text-sm text-slate-400">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-md border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800"
+            >
+              Previous
+            </button>
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-md border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800"
+            >
+              Next
+            </button>
+          </div>
+        )}      </div>
     </Layout>
   )
 }

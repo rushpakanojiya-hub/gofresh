@@ -1,4 +1,4 @@
-﻿import apiClient from './client'
+import apiClient from './client'
 import type {
   StockTransfer,
   OrdersResponse,
@@ -28,6 +28,8 @@ import type {
   WarehouseNotificationsResponse,
   SubstitutionRequest,
   SubstitutionRequestsResponse,
+  StoreReturnRequest,
+  StoreReturnsResponse,
 } from '../types/warehouse'
 
 export const listMyStockTransfers = () =>
@@ -298,4 +300,15 @@ export const approveSubstitutionRequest = (id: number, note?: string) =>
 
 export const rejectSubstitutionRequest = (id: number, note?: string) =>
   apiClient.put(`/warehouse/substitutions/${id}/reject`, { note }).then((r) => r.data as SubstitutionRequest)
+
+// ---- Returns ----
+
+export const listStoreReturns = (params: { status?: string }) =>
+  apiClient.get('/warehouse/returns', { params }).then((r) => r.data as StoreReturnsResponse)
+
+export const approveStoreReturn = (id: number) =>
+  apiClient.put(`/warehouse/returns/${id}/approve`).then((r) => r.data as StoreReturnRequest)
+
+export const rejectStoreReturn = (id: number, reason?: string) =>
+  apiClient.put(`/warehouse/returns/${id}/reject`, { reason }).then((r) => r.data as StoreReturnRequest)
 

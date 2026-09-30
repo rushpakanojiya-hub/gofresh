@@ -76,6 +76,12 @@ export default function FinanceReports() {
     }
   }, [tab, from, to])
 
+  const totalInflow = cashFlow.rows.reduce((sum, r) => sum + r.inflow, 0)
+  const totalOutflow = cashFlow.rows.reduce((sum, r) => sum + r.outflow, 0)
+  const totalLiabilitiesAndEquity = balanceSheet
+    ? balanceSheet.liabilities.total + balanceSheet.equity.total
+    : 0
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
@@ -128,7 +134,7 @@ export default function FinanceReports() {
           rows={purchaseRegister}
           columns={[
             { key: 'bill_number', label: 'Bill #' },
-            { key: 'vendor', label: 'Vendor', format: (v: any) => v?.name ?? '—' },
+            { key: 'vendor', label: 'Vendor', format: (v: any) => v?.name ?? '\u2014' },
             { key: 'amount', label: 'Amount', format: formatCurrency },
             { key: 'gst_amount', label: 'GST', format: formatCurrency },
             { key: 'amount_paid', label: 'Paid', format: formatCurrency },
@@ -174,11 +180,21 @@ export default function FinanceReports() {
             ]}
             emptyLabel="No cash movement in this range."
           />
-          <div className="mt-4 border border-slate-800 rounded-xl p-4 inline-block">
-            <p className="text-xs text-slate-500 mb-1">Net Cash Flow</p>
-            <p className={`text-lg font-semibold ${cashFlow.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {formatCurrency(cashFlow.net)}
-            </p>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <div className="border border-slate-800 rounded-xl p-4 inline-block">
+              <p className="text-xs text-slate-500 mb-1">Total Inflows</p>
+              <p className="text-lg font-semibold text-emerald-400">{formatCurrency(totalInflow)}</p>
+            </div>
+            <div className="border border-slate-800 rounded-xl p-4 inline-block">
+              <p className="text-xs text-slate-500 mb-1">Total Outflows</p>
+              <p className="text-lg font-semibold text-red-400">{formatCurrency(totalOutflow)}</p>
+            </div>
+            <div className="border border-slate-800 rounded-xl p-4 inline-block">
+              <p className="text-xs text-slate-500 mb-1">Net Cash Flow</p>
+              <p className={`text-lg font-semibold ${cashFlow.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatCurrency(cashFlow.net)}
+              </p>
+            </div>
           </div>
         </>
       )}
@@ -186,7 +202,7 @@ export default function FinanceReports() {
       {!isLoading && !error && tab === 'balance-sheet' && balanceSheet && (
         <div className="space-y-6">
           <div className={`text-xs px-3 py-2 rounded-lg inline-block ${balanceSheet.balances ? 'bg-emerald-600/15 text-emerald-400' : 'bg-red-600/15 text-red-400'}`}>
-            {balanceSheet.balances ? 'Balanced ✓' : 'Out of balance ✗'} — as of {balanceSheet.as_of}
+            {balanceSheet.balances ? 'Balanced \u2713' : 'Out of balance \u2717'} {'\u2014'} as of {balanceSheet.as_of}
           </div>
           <div className="grid grid-cols-3 gap-6">
             <BalanceSheetSection title="Assets" total={balanceSheet.assets.total} accounts={balanceSheet.assets.accounts} />
@@ -200,6 +216,16 @@ export default function FinanceReports() {
                 </div>
               </div>
               <p className="text-xs text-slate-500 mt-2 px-1">Total: {formatCurrency(balanceSheet.equity.total)}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-800">
+            <div className="border border-slate-800 rounded-xl p-4 inline-block">
+              <p className="text-xs text-slate-500 mb-1">Total Assets</p>
+              <p className="text-lg font-semibold">{formatCurrency(balanceSheet.assets.total)}</p>
+            </div>
+            <div className="border border-slate-800 rounded-xl p-4 inline-block">
+              <p className="text-xs text-slate-500 mb-1">Total Liabilities + Equity</p>
+              <p className="text-lg font-semibold">{formatCurrency(totalLiabilitiesAndEquity)}</p>
             </div>
           </div>
         </div>
@@ -252,7 +278,7 @@ function ReportTable({
             <tr key={i} className="border-t border-slate-800">
               {columns.map((c) => (
                 <td key={c.key} className="px-4 py-2">
-                  {c.format ? c.format(row[c.key]) : String(row[c.key] ?? '—')}
+                  {c.format ? c.format(row[c.key]) : String(row[c.key] ?? '\u2014')}
                 </td>
               ))}
             </tr>

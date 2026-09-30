@@ -1,12 +1,15 @@
-﻿import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   listReceivings,
   createReceiving,
   markReceived,
   qcReceiving,
   putAwayReceiving,
+  listZones,
+  listRacks,
+  listBins,
 } from '../api/warehouse'
-import type { Receiving } from '../types/warehouse'
+import type { Receiving, WarehouseZone, WarehouseRack, WarehouseBin } from '../types/warehouse'
 import StatusBadge from '../components/StatusBadge'
 import { getErrorMessage } from '../utils/errors'
 
@@ -50,6 +53,12 @@ export default function ReceivingPage() {
 
   // Put-away form state
   const [putAwayBinId, setPutAwayBinId] = useState('')
+  const [putAwayZones, setPutAwayZones] = useState<WarehouseZone[]>([])
+  const [putAwayRacks, setPutAwayRacks] = useState<WarehouseRack[]>([])
+  const [putAwayBins, setPutAwayBins] = useState<WarehouseBin[]>([])
+  const [putAwayZoneId, setPutAwayZoneId] = useState('')
+  const [putAwayRackId, setPutAwayRackId] = useState('')
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -82,6 +91,15 @@ export default function ReceivingPage() {
     setAcceptedQty(String(rec.received_quantity))
     setRejectionReason('')
     setPutAwayBinId('')
+    setPutAwayZoneId('')
+    setPutAwayRackId('')
+    setPutAwayRacks([])
+    setPutAwayBins([])
+    setIsLoadingLocations(true)
+    listZones()
+      .then((data) => setPutAwayZones(data.zones))
+      .catch(() => setPutAwayZones([]))
+      .finally(() => setIsLoadingLocations(false))
   }
 
   const submitCreate = async () => {
@@ -175,6 +193,32 @@ export default function ReceivingPage() {
     } finally {
       setIsActing(false)
     }
+  }
+
+  const selectPutAwayZone = (zoneId: string) => {
+    setPutAwayZoneId(zoneId)
+    setPutAwayRackId('')
+    setPutAwayBinId('')
+    setPutAwayBins([])
+    setPutAwayRacks([])
+    if (!zoneId) return
+    setIsLoadingLocations(true)
+    listRacks(parseInt(zoneId, 10))
+      .then((data) => setPutAwayRacks(data.racks))
+      .catch(() => setPutAwayRacks([]))
+      .finally(() => setIsLoadingLocations(false))
+  }
+
+  const selectPutAwayRack = (rackId: string) => {
+    setPutAwayRackId(rackId)
+    setPutAwayBinId('')
+    setPutAwayBins([])
+    if (!rackId) return
+    setIsLoadingLocations(true)
+    listBins(parseInt(rackId, 10))
+      .then((data) => setPutAwayBins(data.bins))
+      .catch(() => setPutAwayBins([]))
+      .finally(() => setIsLoadingLocations(false))
   }
 
   return (
@@ -357,7 +401,7 @@ export default function ReceivingPage() {
               <StatusBadge status={selected.status} />
             </div>
             <p className="text-xs text-slate-500 mb-4">
-              {selected.supplier_name} {selected.reference_number ? `· ${selected.reference_number}` : ''} ·{' '}
+              {selected.supplier_name} {selected.reference_number ? `ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${selected.reference_number}` : ''} ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·{' '}
               {selected.product?.name ?? `Product #${selected.product_id}`}
             </p>
 
@@ -462,15 +506,54 @@ export default function ReceivingPage() {
             {selected.status === 'accepted' && (
               <div className="space-y-3">
                 <h3 className="text-xs font-medium text-slate-300">Put Away</h3>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Bin ID (optional)</label>
-                  <input
-                    value={putAwayBinId}
-                    onChange={(e) => setPutAwayBinId(e.target.value)}
-                    placeholder="Leave empty to skip bin assignment"
-                    className="w-full text-sm bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200"
-                  />
+                <p className="text-xs text-slate-500 -mt-2">Select a location, or skip to put away without one.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Zone</label>
+                    <select
+                      value={putAwayZoneId}
+                      onChange={(e) => selectPutAwayZone(e.target.value)}
+                      className="w-full text-sm bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-slate-200"
+                    >
+                      <option value="">Select zone...</option>
+                      {putAwayZones.map((z) => (
+                        <option key={z.id} value={z.id}>{z.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Rack</label>
+                    <select
+                      value={putAwayRackId}
+                      onChange={(e) => selectPutAwayRack(e.target.value)}
+                      disabled={!putAwayZoneId}
+                      className="w-full text-sm bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-slate-200 disabled:opacity-40"
+                    >
+                      <option value="">Select rack...</option>
+                      {putAwayRacks.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Bin</label>
+                    <select
+                      value={putAwayBinId}
+                      onChange={(e) => setPutAwayBinId(e.target.value)}
+                      disabled={!putAwayRackId}
+                      className="w-full text-sm bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-slate-200 disabled:opacity-40"
+                    >
+                      <option value="">Select bin...</option>
+                      {putAwayBins.map((b) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+                {isLoadingLocations && <p className="text-xs text-slate-500">Loading...</p>}
+                {putAwayZones.length === 0 && !isLoadingLocations && (
+                  <p className="text-xs text-amber-400">No zones set up yet - you can still put away without a bin.</p>
+                )}
                 <button
                   onClick={submitPutAway}
                   disabled={isActing}
@@ -482,7 +565,7 @@ export default function ReceivingPage() {
             )}
 
             {(selected.status === 'put_away' || selected.status === 'rejected') && (
-              <p className="text-xs text-slate-500">This record is finalized — no further action available.</p>
+              <p className="text-xs text-slate-500">This record is finalized ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â no further action available.</p>
             )}
 
             <button onClick={() => setSelected(null)} className="w-full text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 mt-3">

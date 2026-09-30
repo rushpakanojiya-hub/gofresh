@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
@@ -17,15 +17,23 @@ import WarehouseStaff from './pages/WarehouseStaff'
 import StockTransfers from './pages/StockTransfers'
 import Returns from './pages/Returns'
 import Analytics from './pages/Analytics'
+import PickerPerformance from './pages/PickerPerformance'
 import AuditLogs from './pages/AuditLogs'
 import Notifications from './pages/Notifications'
 import Offers from './pages/Offers'
 import Banners from './pages/Banners'
 import DeliveryZones from './pages/DeliveryZones'
 import SupportTickets from './pages/SupportTickets'
+import ControlTower from './pages/ControlTower'
+import UnassignedOrders from './pages/UnassignedOrders'
+import DeliveryManagement from './pages/DeliveryManagement'
+import OperationsAnalytics from './pages/OperationsAnalytics'
 import Payments from './pages/Payments'
 import Invoices from './pages/Invoices'
 import WalletCredit from './pages/WalletCredit'
+import Suppliers from './pages/Suppliers'
+import PurchaseOrders from './pages/PurchaseOrders'
+import Replenishment from './pages/Replenishment'
 
 function App() {
   return (
@@ -169,6 +177,15 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/picker-performance"
+            element={
+              <ProtectedRoute>
+                <PickerPerformance />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/notifications"
             element={
@@ -210,6 +227,38 @@ function App() {
             }
           />
           <Route
+            path="/control-tower"
+            element={
+              <ProtectedRoute>
+                <ControlTower />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/unassigned-orders"
+            element={
+              <ProtectedRoute>
+                <UnassignedOrders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/delivery-management"
+            element={
+              <ProtectedRoute>
+                <DeliveryManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operations-analytics"
+            element={
+              <ProtectedRoute>
+                <OperationsAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/payments"
             element={
               <ProtectedRoute>
@@ -222,6 +271,30 @@ function App() {
             element={
               <ProtectedRoute>
                 <Invoices />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/suppliers"
+            element={
+              <ProtectedRoute>
+                <Suppliers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/purchase-orders"
+            element={
+              <ProtectedRoute>
+                <PurchaseOrders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/replenishment"
+            element={
+              <ProtectedRoute>
+                <Replenishment />
               </ProtectedRoute>
             }
           />

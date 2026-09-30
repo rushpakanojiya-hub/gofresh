@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import ServiceAreaModal from '../components/ServiceAreaModal'
@@ -18,6 +18,17 @@ const emptyForm = {
   lng: '',
   service_radius_km: '5',
   is_active: true,
+  warehouse_type: 'dark_store' as 'dark_store' | 'mother_warehouse',
+  status: 'open' as 'open' | 'closed' | 'paused',
+  capacity: '',
+  opening_time: '',
+  closing_time: '',
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  open: 'bg-emerald-500/15 text-emerald-400',
+  closed: 'bg-red-500/15 text-red-400',
+  paused: 'bg-amber-500/15 text-amber-400',
 }
 
 export default function Warehouses() {
@@ -66,6 +77,11 @@ export default function Warehouses() {
       lng: String(w.lng),
       service_radius_km: String(w.service_radius_km ?? 5),
       is_active: w.is_active ?? true,
+      warehouse_type: (w.warehouse_type as 'dark_store' | 'mother_warehouse') ?? 'dark_store',
+      status: (w.status as 'open' | 'closed' | 'paused') ?? 'open',
+      capacity: w.capacity != null ? String(w.capacity) : '',
+      opening_time: w.opening_time ?? '',
+      closing_time: w.closing_time ?? '',
     })
     setFormError(null)
     setEditingWarehouse(w)
@@ -103,6 +119,11 @@ export default function Warehouses() {
         lng,
         service_radius_km: form.service_radius_km ? parseFloat(form.service_radius_km) : 5,
         is_active: form.is_active,
+        warehouse_type: form.warehouse_type,
+        status: form.status,
+        capacity: form.capacity ? parseInt(form.capacity, 10) : 0,
+        opening_time: form.opening_time || null,
+        closing_time: form.closing_time || null,
       }
       if (editingWarehouse) {
         await updateWarehouse(editingWarehouse.id, payload)
@@ -137,16 +158,16 @@ export default function Warehouses() {
       <div className="p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-semibold">Warehouses</h1>
+            <h1 className="text-xl font-semibold">Stores / Dark Stores</h1>
             <p className="text-sm text-slate-400 mt-1">
-              {warehouses.length} warehouse{warehouses.length !== 1 ? 's' : ''}
+              {warehouses.length} store{warehouses.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button
             onClick={openCreate}
             className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-colors"
           >
-            + Add warehouse
+            + Add store
           </button>
         </div>
 
@@ -155,7 +176,7 @@ export default function Warehouses() {
 
         {!isLoading && !error && warehouses.length === 0 && (
           <div className="border border-dashed border-slate-800 rounded-xl p-10 text-center text-slate-500">
-            No warehouses yet. Add your first one to get started.
+            No stores yet. Add your first one to get started.
           </div>
         )}
 
@@ -165,8 +186,10 @@ export default function Warehouses() {
               <thead>
                 <tr className="bg-slate-900 text-slate-400 text-left">
                   <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">City</th>
-                  <th className="px-4 py-3 font-medium">Lat, Lng</th>
+                  <th className="px-4 py-3 font-medium">Capacity</th>
+                  <th className="px-4 py-3 font-medium">Hours</th>
                   <th className="px-4 py-3 font-medium">Radius (km)</th>
                   <th className="px-4 py-3 font-medium">Service Area</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -177,9 +200,17 @@ export default function Warehouses() {
                 {warehouses.map((w) => (
                   <tr key={w.id} className="border-t border-slate-800">
                     <td className="px-4 py-3">{w.name}</td>
-                    <td className="px-4 py-3">{w.city}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-1 rounded-full bg-slate-700 text-slate-300">
+                        {w.warehouse_type === 'mother_warehouse' ? 'Mother WH' : 'Dark Store'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-400">{w.city}</td>
+                    <td className="px-4 py-3">{w.capacity ?? 0}</td>
                     <td className="px-4 py-3 text-slate-400">
-                      {w.lat?.toFixed(4)}, {w.lng?.toFixed(4)}
+                      {w.opening_time && w.closing_time
+                        ? `${w.opening_time.slice(0, 5)} - ${w.closing_time.slice(0, 5)}`
+                        : '24x7'}
                     </td>
                     <td className="px-4 py-3">{w.service_radius_km ?? 5}</td>
                     <td className="px-4 py-3">
@@ -197,12 +228,10 @@ export default function Warehouses() {
                     <td className="px-4 py-3">
                       <span
                         className={`text-xs px-2 py-1 rounded-full ${
-                          w.is_active
-                            ? 'bg-emerald-500/15 text-emerald-400'
-                            : 'bg-slate-700 text-slate-300'
+                          STATUS_STYLES[w.status ?? 'open'] ?? STATUS_STYLES.open
                         }`}
                       >
-                        {w.is_active ? 'active' : 'inactive'}
+                        {w.status ?? 'open'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
@@ -229,7 +258,7 @@ export default function Warehouses() {
 
       {showCreate && (
         <Modal
-          title={editingWarehouse ? 'Edit warehouse' : 'Add warehouse'}
+          title={editingWarehouse ? 'Edit store' : 'Add store'}
           onClose={closeModal}
         >
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -240,6 +269,33 @@ export default function Warehouses() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Store Type</label>
+                <select
+                  value={form.warehouse_type}
+                  onChange={(e) =>
+                    setForm({ ...form, warehouse_type: e.target.value as 'dark_store' | 'mother_warehouse' })
+                  }
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="dark_store">Dark Store</option>
+                  <option value="mother_warehouse">Mother Warehouse</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value as 'open' | 'closed' | 'paused' })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="open">Open</option>
+                  <option value="paused">Paused</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className="text-xs text-slate-400 block mb-1">City</label>
@@ -281,15 +337,47 @@ export default function Warehouses() {
                 />
               </div>
             </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Service Radius (km)</label>
-              <input
-                type="number"
-                step="any"
-                value={form.service_radius_km}
-                onChange={(e) => setForm({ ...form, service_radius_km: e.target.value })}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Service Radius (km)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.service_radius_km}
+                  onChange={(e) => setForm({ ...form, service_radius_km: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Capacity (orders)</label>
+                <input
+                  type="number"
+                  value={form.capacity}
+                  onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                  placeholder="e.g. 200"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Opening Time</label>
+                <input
+                  type="time"
+                  value={form.opening_time}
+                  onChange={(e) => setForm({ ...form, opening_time: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Closing Time</label>
+                <input
+                  type="time"
+                  value={form.closing_time}
+                  onChange={(e) => setForm({ ...form, closing_time: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -315,7 +403,7 @@ export default function Warehouses() {
                 ? 'Saving...'
                 : editingWarehouse
                 ? 'Save changes'
-                : 'Add warehouse'}
+                : 'Add store'}
             </button>
           </form>
         </Modal>

@@ -564,3 +564,39 @@ export interface SubstitutionRequestsResponse {
   total: number
   total_pages: number
 }
+
+export interface ReturnRequestItem {
+id: number
+return_request_id: number
+order_item_id: number
+order_item?: {
+id: number
+product_id: number
+quantity: number
+price: number
+product?: { id: number; name: string; image_url?: string }
+}
+quantity: number
+refund_amount: number
+}
+
+export interface StoreReturnRequest {
+id: number
+order_id: number
+user_id: number
+reason: string
+status: string
+refund_amount: number
+items?: ReturnRequestItem[]
+processed_by?: number
+rejection_reason?: string
+image_url?: string
+created_at: string
+updated_at: string
+customer_name: string
+customer_phone: string
+}
+
+export interface StoreReturnsResponse {
+return_requests: StoreReturnRequest[]
+}

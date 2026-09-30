@@ -1,4 +1,4 @@
-﻿import apiClient from './client'
+import apiClient from './client'
 import type { Product, ProductCreateRequest, CreateCouponRequest, CreateOfferRequest, CreateBannerRequest, CreateDeliveryZoneRequest, DeliveryPartner, Warehouse, WarehouseStaff } from '../types/admin'
 
 export const IMAGE_ORIGIN = (apiClient.defaults.baseURL ?? '').replace(/\/api\/v1\/?$/, '')
@@ -29,6 +29,23 @@ export const updateInventory = (id: number, stock: number, warehouseId: number) 
 
 export const generateProductBarcode = (id: number) =>
   apiClient.post(`/admin/products/${id}/barcode`).then((r) => r.data as { id: number; barcode: string })
+
+// ---- Subcategories ----
+export const listSubcategories = (categoryId?: number | string) =>
+  apiClient
+    .get('/subcategories', { params: categoryId ? { category_id: categoryId } : {} })
+    .then((r) => r.data)
+
+export const createSubcategory = (data: { name: string; category_id: number; image_url?: string }) =>
+  apiClient.post('/admin/subcategories', data).then((r) => r.data)
+
+export const updateSubcategory = (
+  id: number,
+  data: { name: string; category_id: number; image_url?: string }
+) => apiClient.put(`/admin/subcategories/${id}`, data).then((r) => r.data)
+
+export const deleteSubcategory = (id: number) =>
+  apiClient.delete(`/admin/subcategories/${id}`).then((r) => r.data)
 
 // ---- Categories ----
 export const listCategories = () =>
@@ -66,6 +83,21 @@ export const updateCouponStatus = (id: number, isActive: boolean) =>
 // ---- Delivery Partners ----
 export const listDeliveryPartners = () =>
   apiClient.get('/admin/delivery-partners').then((r) => r.data)
+
+export const getUnassignedOrders = () =>
+  apiClient.get('/admin/delivery/unassigned-orders').then((r) => r.data)
+
+export const getActiveDeliveries = () =>
+  apiClient.get('/admin/delivery/active').then((r) => r.data)
+
+export const getRiderWorkload = () =>
+  apiClient.get('/admin/delivery/rider-workload').then((r) => r.data)
+
+export const getFailedDeliveries = () =>
+  apiClient.get('/admin/delivery/failed').then((r) => r.data)
+
+export const getOperationsReport = (from?: string, to?: string) =>
+  apiClient.get('/admin/reports/operations', { params: { from, to } }).then((r) => r.data)
 
 export const createDeliveryPartner = (data: Partial<DeliveryPartner>) =>
   apiClient.post('/admin/delivery-partners', data).then((r) => r.data)
@@ -125,12 +157,18 @@ export const listReturns = () =>
 export const approveReturn = (id: number) =>
   apiClient.put(`/admin/returns/${id}/approve`).then((r) => r.data)
 
-export const rejectReturn = (id: number) =>
-  apiClient.put(`/admin/returns/${id}/reject`).then((r) => r.data)
+export const rejectReturn = (id: number, reason?: string) =>
+  apiClient.put(`/admin/returns/${id}/reject`, reason ? { reason } : {}).then((r) => r.data)
+
+export const assignReturnPickup = (id: number, deliveryPartnerId: number) =>
+  apiClient.put(`/admin/returns/${id}/assign-pickup`, { delivery_partner_id: deliveryPartnerId }).then((r) => r.data)
 
 // ---- Analytics ----
 export const getAnalyticsSummary = () =>
   apiClient.get('/admin/analytics/summary').then((r) => r.data)
+
+export const getPickerPerformance = (warehouseId?: number) =>
+  apiClient.get('/admin/analytics/picker-performance', { params: warehouseId ? { warehouse_id: warehouseId } : {} }).then((r) => r.data)
 
 export const getProductPerformance = () =>
   apiClient.get('/admin/analytics/products').then((r) => r.data)
@@ -225,6 +263,25 @@ export const updateDeliveryZone = (id: number, data: Partial<CreateDeliveryZoneR
 export const deleteDeliveryZone = (id: number) =>
   apiClient.delete(`/admin/delivery-zones/${id}`).then((r) => r.data)
 
+// ---- Control Tower ----
+export const getControlTowerOverview = () =>
+  apiClient.get('/admin/control-tower').then((r) => r.data)
+
+export const updatePlatformPause = (paused: boolean, reason: string) =>
+  apiClient.put('/admin/control-tower/platform-pause', { paused, reason }).then((r) => r.data)
+
+export const updateCityStatus = (city: string, status: 'open' | 'paused' | 'closed', reason: string) =>
+  apiClient.put('/admin/control-tower/city-status', { city, status, reason }).then((r) => r.data)
+
+export const getLiveOperations = () =>
+  apiClient.get('/admin/control-tower/operations').then((r) => r.data)
+
+export const getControlTowerSettings = () =>
+  apiClient.get('/admin/control-tower/settings').then((r) => r.data)
+
+export const updateCodEnabled = (enabled: boolean, reason: string) =>
+  apiClient.put('/admin/control-tower/settings/cod', { enabled, reason }).then((r) => r.data)
+
 // ---- Support Tickets ----
 export const listSupportTickets = (status?: string) =>
   apiClient.get('/admin/support/tickets', { params: status ? { status } : {} }).then((r) => r.data)
@@ -237,6 +294,8 @@ export const replyToSupportTicket = (id: number, message: string) =>
 
 export const updateSupportTicketStatus = (id: number, status: string) =>
   apiClient.put(`/admin/support/tickets/${id}/status`, { status }).then((r) => r.data)
+export const updateSupportTicket = (id: number, body: { issue_type?: string; assigned_to_staff_id?: number | null; priority?: string }) =>
+  apiClient.put(`/admin/support/tickets/${id}`, body).then((r) => r.data)
 
 export const listAdminPayments = (params: {
   search?: string
@@ -294,3 +353,47 @@ export const downloadAdminInvoicePDF = async (id: number, invoiceNumber?: string
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+// ---- Suppliers (Procurement) ----
+export const listSuppliers = () =>
+  apiClient.get('/admin/procurement/suppliers').then((r) => r.data)
+
+export const createSupplier = (data: import('../types/admin').SupplierRequest) =>
+  apiClient.post('/admin/procurement/suppliers', data).then((r) => r.data)
+
+export const updateSupplier = (id: number, data: import('../types/admin').SupplierRequest) =>
+  apiClient.put(`/admin/procurement/suppliers/${id}`, data).then((r) => r.data)
+
+export const deleteSupplier = (id: number) =>
+  apiClient.delete(`/admin/procurement/suppliers/${id}`).then((r) => r.data)
+
+// ---- Purchase Orders ----
+export const listPurchaseOrders = (params?: Record<string, any>) =>
+  apiClient.get('/admin/procurement/purchase-orders', { params }).then((r) => r.data)
+
+export const getPurchaseOrder = (id: number) =>
+  apiClient.get(`/admin/procurement/purchase-orders/${id}`).then((r) => r.data)
+
+export const createPurchaseOrder = (data: import('../types/admin').CreatePurchaseOrderRequest) =>
+  apiClient.post('/admin/procurement/purchase-orders', data).then((r) => r.data)
+
+export const updatePurchaseOrderStatus = (id: number, status: string, reason?: string) =>
+  apiClient
+    .put(`/admin/procurement/purchase-orders/${id}/status`, { status, ...(reason ? { reason } : {}) })
+    .then((r) => r.data)
+
+export const receivePurchaseOrderItems = (
+  id: number,
+  items: { item_id: number; quantity_received: number }[]
+) => apiClient.post(`/admin/procurement/purchase-orders/${id}/receive`, { items }).then((r) => r.data)
+
+// ---- Replenishment ----
+export const getReplenishmentSuggestions = (warehouseId?: number) =>
+  apiClient
+    .get('/admin/procurement/replenishment', { params: warehouseId ? { warehouse_id: warehouseId } : {} })
+    .then((r) => r.data)
+
+export const updateProductReorderLevel = (productId: number, reorderLevel: number) =>
+  apiClient
+    .put(`/admin/products/${productId}/reorder-level`, { reorder_level: reorderLevel })
+    .then((r) => r.data)
