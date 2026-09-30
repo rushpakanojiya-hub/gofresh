@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"fmt"
@@ -37,8 +37,15 @@ func GetProducts(c *gin.Context) {
 	if query.InStock != nil {
 		inStockStr = fmt.Sprintf("%v", *query.InStock)
 	}
-	cacheKey := fmt.Sprintf("products:list:page=%d:limit=%d:search=%s:cat=%d:min=%.2f:max=%.2f:instock=%s:sort=%s",
-		query.Page, query.Limit, query.Search, query.CategoryID, query.MinPrice, query.MaxPrice, inStockStr, query.Sort)
+	latStr, lngStr := "none", "none"
+    if query.Lat != nil {
+        latStr = fmt.Sprintf("%.4f", *query.Lat)
+    }
+    if query.Lng != nil {
+        lngStr = fmt.Sprintf("%.4f", *query.Lng)
+    }
+    cacheKey := fmt.Sprintf("products:list:page=%d:limit=%d:search=%s:cat=%d:min=%.2f:max=%.2f:instock=%s:sort=%s:lat=%s:lng=%s",
+        query.Page, query.Limit, query.Search, query.CategoryID, query.MinPrice, query.MaxPrice, inStockStr, query.Sort, latStr, lngStr)
 
 	var cachedResponse models.ProductListResponse
 	if found, _ := cache.Get(c.Request.Context(), cacheKey, &cachedResponse); found {
@@ -46,7 +53,7 @@ func GetProducts(c *gin.Context) {
 		return
 	}
 
-	db := database.DB.Model(&models.Product{}).Preload("Category").Preload("Inventories")
+	db := database.DB.Model(&models.Product{}).Preload("Category").Preload("Subcategory").Preload("Inventories")
 
 	// Search by name or description
 	if strings.TrimSpace(query.Search) != "" {
@@ -106,7 +113,30 @@ db = db.Where("EXISTS (SELECT 1 FROM inventories WHERE inventories.product_id = 
 
 	totalPages := int(math.Ceil(float64(total) / float64(query.Limit)))
 
-	response := models.ProductListResponse{
+    // If the caller supplied their location, resolve stock against the
+    // warehouse that would actually serve them (same logic checkout uses),
+    // rather than "in stock somewhere" which is misleading when the
+    // nearest warehouse is empty but a distant one still has stock.
+    if query.Lat != nil && query.Lng != nil {
+        nearestWarehouse, _, err := FindNearestWarehouse(*query.Lat, *query.Lng)
+        if err == nil && nearestWarehouse != nil {
+            for i := range products {
+                stock := 0
+                inStock := false
+                for _, inv := range products[i].Inventories {
+                    if inv.WarehouseID == nearestWarehouse.ID {
+                        stock = inv.Stock
+                        inStock = inv.InStock
+                        break
+                    }
+                }
+                products[i].NearestStock = &stock
+                products[i].NearestInStock = &inStock
+            }
+        }
+    }
+
+    response := models.ProductListResponse{
 		Products:   products,
 		Page:       query.Page,
 		Limit:      query.Limit,
@@ -130,7 +160,7 @@ func GetProductByID(c *gin.Context) {
 		return
 	}
 
-	if err := database.DB.Preload("Category").Preload("Inventories").First(&product, id).Error; err != nil {
+	if err := database.DB.Preload("Category").Preload("Subcategory").Preload("Inventories").First(&product, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
 		return
 	}

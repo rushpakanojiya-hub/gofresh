@@ -1,11 +1,13 @@
-﻿package handlers
+package handlers
 
 import (
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -65,7 +67,7 @@ func GetDeliveryPartners(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load delivery partners"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"delivery_partners": partners})
+	c.JSON(http.StatusOK, gin.H{"delivery_partners": buildPartnersWithRatings(partners)})
 }
 
 // UpdateDeliveryPartner godoc
@@ -108,6 +110,25 @@ func UpdateDeliveryPartner(c *gin.Context) {
 func DeleteDeliveryPartner(c *gin.Context) {
 	id := c.Param("id")
 
+	// Refuse to delete a partner who still has an active, in-flight order
+	// assigned to them - otherwise the order is silently stranded with a
+	// delivery_partner_id that no longer resolves to anyone, and neither
+	// the customer nor any other partner is ever notified to pick it up.
+	var activeCount int64
+	if err := database.DB.Model(&models.Order{}).
+		Where("delivery_partner_id = ? AND status NOT IN (?)", id, []string{
+			models.OrderStatusDelivered,
+			models.OrderStatusCancelled,
+			models.OrderStatusReturned,
+		}).
+		Count(&activeCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check active deliveries"})
+		return
+	}
+	if activeCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "This delivery partner has active in-flight orders and cannot be deleted until they are reassigned or completed"})
+		return
+	}
 	result := database.DB.Delete(&models.DeliveryPartner{}, id)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete delivery partner"})
@@ -135,6 +156,7 @@ var (
 	errAssignPartnerInactive = errors.New("delivery partner is not active")
 	errAssignPartnerOffline  = errors.New("delivery partner is offline")
 	errAssignAlreadyActive   = errors.New("order already has an active delivery assignment")
+	errAssignPartnerAtCapacity = errors.New("delivery partner is at maximum active order capacity")
 )
 
 // AssignDeliveryPartner godoc
@@ -175,11 +197,13 @@ func AssignDeliveryPartner(c *gin.Context) {
 		}
 
 		// Only re-assignable if there is no partner yet, or the
-		// previous partner rejected the delivery. An ASSIGNED or
-		// ACCEPTED order is already actively owned by a partner and
-		// must not be silently reassigned here.
+		// previous partner rejected the delivery or their offer expired
+		// unaccepted. An ASSIGNED or ACCEPTED order is already actively
+		// owned by a partner and must not be silently reassigned here.
 		if order.DeliveryPartnerID != nil &&
-			(order.DeliveryAssignmentStatus == nil || *order.DeliveryAssignmentStatus != models.DeliveryAssignmentStatusRejected) {
+			(order.DeliveryAssignmentStatus == nil ||
+				(*order.DeliveryAssignmentStatus != models.DeliveryAssignmentStatusRejected &&
+					*order.DeliveryAssignmentStatus != models.DeliveryAssignmentStatusExpired)) {
 			return errAssignAlreadyActive
 		}
 
@@ -194,6 +218,37 @@ func AssignDeliveryPartner(c *gin.Context) {
 			return errAssignPartnerOffline
 		}
 
+		// Capacity check: a partner already handling as many active
+		// (not yet delivered/cancelled/returned) orders as their configured
+		// MaxActiveOrders must not receive another manual assignment - mirrors
+		// the guard AutoAssignDeliveryPartner already applies.
+		var activeCount int64
+		if err := tx.Model(&models.Order{}).
+			Where("delivery_partner_id = ? AND status NOT IN (?)", partner.ID, []string{
+				models.OrderStatusDelivered,
+				models.OrderStatusCancelled,
+				models.OrderStatusReturned,
+			}).
+			Count(&activeCount).Error; err != nil {
+			return fmt.Errorf("failed to check partner workload: %w", err)
+		}
+		maxActive := partner.MaxActiveOrders
+		if maxActive <= 0 {
+			maxActive = 5
+		}
+		if activeCount >= int64(maxActive) {
+			return errAssignPartnerAtCapacity
+		}
+
+		// AssignedAt is set once, on the very first successful
+		// assignment - later re-assignments (e.g. after a rejection)
+		// must not overwrite the original confirmed-to-assigned
+		// duration used for operations analytics.
+		assignedAtValue := order.AssignedAt
+		if assignedAtValue == nil {
+			now := time.Now()
+			assignedAtValue = &now
+		}
 		newStatus := models.DeliveryAssignmentStatusAssigned
 		expiresAt := time.Now().Add(services.AssignmentTimeout())
 		order.DeliveryPartnerID = &req.DeliveryPartnerID
@@ -207,6 +262,7 @@ func AssignDeliveryPartner(c *gin.Context) {
 			"delivery_assignment_expires_at": expiresAt,
 			"delivery_attempted_partner_ids": fmt.Sprint(req.DeliveryPartnerID),
 			"delivery_status":                models.DeliveryStatusAssigned,
+			"assigned_at":                    assignedAtValue,
 		}).Error; err != nil {
 			return fmt.Errorf("failed to assign delivery partner: %w", err)
 		}
@@ -227,6 +283,8 @@ func AssignDeliveryPartner(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery partner is not active"})
 		case errors.Is(err, errAssignPartnerOffline):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery partner is offline and cannot receive new assignments"})
+		case errors.Is(err, errAssignPartnerAtCapacity):
+			c.JSON(http.StatusConflict, gin.H{"error": "Delivery partner already has the maximum number of active orders and cannot receive another assignment"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign delivery partner"})
 		}
@@ -236,10 +294,13 @@ func AssignDeliveryPartner(c *gin.Context) {
 	database.DB.Preload("DeliveryPartner").First(&order, order.ID)
 
 	// Notify the partner's device(s) that a new order has been assigned.
-	go services.SendPushToPartner(
+	go services.SendPushToPartnerWithData(req.DeliveryPartnerID, "New Order Assigned", "You have a new delivery order. Tap to view and accept it.", map[string]string{"type": "new_assignment", "order_id": fmt.Sprint(order.ID)})
+	services.CreateDeliveryNotification(
 		req.DeliveryPartnerID,
 		"New delivery assigned",
 		fmt.Sprintf("Order #%d has been assigned to you", order.ID),
+		"new_assignment",
+		&order.ID,
 	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Delivery partner assigned", "order": order})
@@ -254,26 +315,28 @@ func AssignDeliveryPartner(c *gin.Context) {
 // it does not include the customer's account/user record, other saved
 // addresses, product cost/margin fields, etc.
 type OrderItemSummary struct {
-ProductName string  `json:"product_name"`
-Quantity    int     `json:"quantity"`
-Price       float64 `json:"price"`
+	ProductName string  `json:"product_name"`
+	Quantity    int     `json:"quantity"`
+	Price       float64 `json:"price"`
 }
 
 type AssignedOrderSummary struct {
-	OrderID             uint       `json:"order_id"`
-	Status              string     `json:"status"`
-	AssignmentStatus    *string    `json:"assignment_status,omitempty"`
-	RejectionReason     *string    `json:"rejection_reason,omitempty"`
-	AssignmentExpiresAt *time.Time `json:"assignment_expires_at,omitempty"`
-	DeliveryStatus      *string    `json:"delivery_status,omitempty"`
-	DeliveryAddress     string     `json:"delivery_address"`
-	CustomerName        string     `json:"customer_name"`
-	CustomerPhone       string     `json:"customer_phone"`
-	TotalAmount         float64    `json:"total_amount"`
-	PaymentMethod       string     `json:"payment_method"`
-	ItemCount           int        `json:"item_count"`
-Items               []OrderItemSummary `json:"items"`
-	CreatedAt           time.Time  `json:"created_at"`
+	OrderID             uint               `json:"order_id"`
+	Status              string             `json:"status"`
+	AssignmentStatus    *string            `json:"assignment_status,omitempty"`
+	RejectionReason     *string            `json:"rejection_reason,omitempty"`
+	AssignmentExpiresAt *time.Time         `json:"assignment_expires_at,omitempty"`
+	DeliveryStatus      *string            `json:"delivery_status,omitempty"`
+	DeliveryAddress     string             `json:"delivery_address"`
+	CustomerName        string             `json:"customer_name"`
+	CustomerPhone       string             `json:"customer_phone"`
+	TotalAmount         float64            `json:"total_amount"`
+	PaymentMethod       string             `json:"payment_method"`
+	ItemCount           int                `json:"item_count"`
+	Items               []OrderItemSummary `json:"items"`
+        DeliveryLat *float64 `json:"delivery_lat,omitempty"`
+        DeliveryLng *float64 `json:"delivery_lng,omitempty"`
+	CreatedAt           time.Time          `json:"created_at"`
 }
 
 func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
@@ -282,14 +345,14 @@ func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
 		addr = fmt.Sprintf("%s, %s, %s, %s - %s", o.Address.Line1, o.Address.Line2, o.Address.City, o.Address.State, o.Address.Pincode)
 	}
 	itemSummaries := make([]OrderItemSummary, 0, len(o.Items))
-for _, it := range o.Items {
-itemSummaries = append(itemSummaries, OrderItemSummary{
-ProductName: it.Product.Name,
-Quantity:    it.Quantity,
-Price:       it.Price,
-})
-}
-return AssignedOrderSummary{
+	for _, it := range o.Items {
+		itemSummaries = append(itemSummaries, OrderItemSummary{
+			ProductName: it.Product.Name,
+			Quantity:    it.Quantity,
+			Price:       it.Price,
+		})
+	}
+	return AssignedOrderSummary{
 		OrderID:             o.ID,
 		Status:              o.Status,
 		AssignmentStatus:    o.DeliveryAssignmentStatus,
@@ -302,8 +365,10 @@ return AssignedOrderSummary{
 		TotalAmount:         o.TotalAmount,
 		PaymentMethod:       o.PaymentMethod,
 		ItemCount:           len(o.Items),
-Items:               itemSummaries,
+		Items:               itemSummaries,
 		CreatedAt:           o.CreatedAt,
+                DeliveryLat: o.Address.Lat,
+                DeliveryLng: o.Address.Lng,
 	}
 }
 
@@ -458,6 +523,38 @@ func UpdateDeliveryStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Delivery status updated", "order": toAssignedOrderSummary(*order)})
 }
 
+// ResolveFailedDelivery godoc
+// PUT /api/v1/delivery/orders/:id/resolve-failed (delivery partner only)
+// Explicitly resolves an order stuck in FAILED_DELIVERY - either "retry"
+// (back out for delivery, with a fresh OTP) or "return" (terminal, back to
+// the store). Always requires a reason, recorded for admin/ops visibility.
+func ResolveFailedDelivery(c *gin.Context) {
+	partnerID := c.MustGet("user_id").(uint)
+	orderID64, convErr := strconv.ParseUint(c.Param("id"), 10, 64)
+	if convErr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found or not assigned to you"})
+		return
+	}
+	var req models.ResolveFailedDeliveryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	order, _, err := services.ResolveFailedDelivery(uint(orderID64), partnerID, req.Action, req.Reason)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrDeliveryStatusOrderNotOwned):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found or not assigned to you"})
+		case errors.Is(err, services.ErrDeliveryStatusInvalidTransition):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Order is not in a failed-delivery state, or the requested action is invalid"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve delivery"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Delivery resolved", "order": toAssignedOrderSummary(*order)})
+}
+
 // UpdateDeliveryOrderStatus godoc
 // PUT /api/v1/delivery/orders/:id/status (delivery partner only)
 // Lets the assigned partner move an order from confirmed -> shipped
@@ -502,6 +599,62 @@ func UpdateDeliveryOrderStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Order status updated", "order": order})
 }
 
+// UploadDeliveryProof godoc
+// PUT /api/v1/delivery/orders/:id/delivery-proof (delivery partner only)
+// Accepts a multipart/form-data "image" field, uploads it via the same
+// Cloudinary/local-disk path as UploadImage, and stores the resulting URL
+// on the order as delivery_proof_url. This is mandatory before
+// ConfirmDelivery will succeed - see the check there.
+func UploadDeliveryProof(c *gin.Context) {
+	partnerID := c.MustGet("user_id").(uint)
+	orderID := c.Param("id")
+
+	var order models.Order
+	if err := database.DB.Where("id = ? AND delivery_partner_id = ?", orderID, partnerID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found or not assigned to you"})
+		return
+	}
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No image file provided (expected form field 'image')"})
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !allowedImageExts[ext] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type. Allowed: jpg, jpeg, png, webp"})
+		return
+	}
+
+	var proofURL string
+	cfg := config.AppConfig
+	if cfg != nil && cfg.CloudinaryCloudName != "" && cfg.CloudinaryAPIKey != "" && cfg.CloudinaryAPISecret != "" {
+		url, err := uploadToCloudinary(file, cfg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload image: " + err.Error()})
+			return
+		}
+		proofURL = url
+	} else {
+		filename := fmt.Sprintf("delivery-proof-%d%s", time.Now().UnixNano(), ext)
+		savePath := filepath.Join("uploads", filename)
+		if err := c.SaveUploadedFile(file, savePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+			return
+		}
+		proofURL = cfg.PublicBaseURL + "/uploads/" + filename
+	}
+
+	if err := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).Update("delivery_proof_url", proofURL).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save delivery proof"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"delivery_proof_url": proofURL})
+}
+
 // ConfirmDelivery godoc
 // PUT /api/v1/delivery/orders/:id/deliver (delivery partner only)
 // Marks the order delivered. For COD orders this also marks payment as
@@ -516,18 +669,31 @@ func ConfirmDelivery(c *gin.Context) {
 		return
 	}
 
-	if order.Status != models.OrderStatusShipped {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Order must be shipped before it can be marked delivered"})
+	if order.Status == models.OrderStatusDelivered {
+		c.JSON(http.StatusOK, gin.H{"message": "Order is already marked delivered", "order": order})
 		return
 	}
-
-	// Bypass fix: require secure OTP+geofence delivery-status flow to have already completed.
+	// Bypass fix: require secure geofence delivery-status flow to have already completed.
 	if order.DeliveryStatus == nil || *order.DeliveryStatus != models.DeliveryStatusDelivered {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Order must complete OTP and geofence verification via the delivery-status endpoint before it can be confirmed delivered"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Order must complete geofence verification via the delivery-status endpoint before it can be confirmed delivered"})
 		return
 	}
-
+	// Delivery proof photo (uploaded at ARRIVED_AT_CUSTOMER via the
+	// delivery-proof endpoint) is mandatory before delivery can be confirmed.
+	if order.DeliveryProofURL == nil || *order.DeliveryProofURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery proof photo is required before confirming delivery"})
+		return
+	}
+	// The granular delivery_status chain (going_to_store -> ... -> delivered) is
+	// now the source of truth for pickup/shipment progress under the new flow,
+	// so promote order.Status to Shipped here if the older manual "mark as
+	// shipped" step was skipped, before finalizing as Delivered.
+	if order.Status != models.OrderStatusShipped {
+		order.Status = models.OrderStatusShipped
+	}
 	order.Status = models.OrderStatusDelivered
+	deliveredAt := time.Now()
+	order.DeliveredAt = &deliveredAt
 	if order.PaymentMethod == models.PaymentMethodCOD {
 		order.PaymentStatus = models.OrderPaymentStatusPaid
 	}
@@ -539,8 +705,15 @@ func ConfirmDelivery(c *gin.Context) {
 
 	// Revenue is recognized now (COD delivery just confirmed) - post the
 	// double-entry sales ledger entry at this exact moment, not earlier.
+	// GenerateInvoiceIfNotExists is idempotent (safe re-call) - this is a
+	// safety net in case the checkout-time COD invoice generation
+	// (order_handler.go) failed or was skipped, so ledger posting below
+	// is never silently blocked by a missing invoice.
+	if _, err := services.GenerateInvoiceIfNotExists(order.ID); err != nil {
+		log.Printf("CRITICAL: failed to generate invoice for delivered order %s, ledger will not post: %v", orderID, err)
+	}
 	if err := services.PostSalesLedgerEntry(order.ID); err != nil {
-		log.Printf("failed to post sales ledger entry for order %s: %v", orderID, err)
+		log.Printf("CRITICAL: failed to post sales ledger entry for order %s - revenue untracked: %v", orderID, err)
 	}
 
 	// Notify the customer that their order has been delivered.
@@ -549,6 +722,10 @@ func ConfirmDelivery(c *gin.Context) {
 		"Order delivered",
 		fmt.Sprintf("Your order #%d has been delivered. Enjoy!", order.ID),
 	)
+
+        // This partner just freed up - immediately try to backfill any
+        // orders that were left unassigned because every partner was busy.
+        go services.TryAssignPendingOrdersToPartner(partnerID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Delivery confirmed", "order": order})
 }
@@ -625,14 +802,3 @@ func GetMyEarnings(c *gin.Context) {
 		"entries":           entries,
 	})
 }
-
-
-
-
-
-
-
-
-
-
-

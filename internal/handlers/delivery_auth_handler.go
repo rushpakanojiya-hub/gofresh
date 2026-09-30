@@ -8,6 +8,7 @@ import (
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
+	"gorm.io/gorm"
 )
 
 // SendPartnerOTP godoc
@@ -65,15 +66,24 @@ func VerifyPartnerOTP(c *gin.Context) {
 
 	var otp models.OTP
 	err := database.DB.
-		Where("phone = ? AND code = ? AND verified = ?", req.Phone, req.OTP, false).
+		Where("phone = ? AND verified = ?", req.Phone, false).
 		Order("created_at DESC").
 		First(&otp).Error
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP"})
 		return
 	}
+	if otp.Attempts >= 5 {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many incorrect attempts. Please request a new OTP."})
+		return
+	}
 	if time.Now().After(otp.ExpiresAt) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP has expired, please request a new one"})
+		return
+	}
+	if otp.Code != req.OTP {
+		database.DB.Model(&models.OTP{}).Where("id = ?", otp.ID).Update("attempts", gorm.Expr("attempts + 1"))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP"})
 		return
 	}
 	database.DB.Model(&otp).Update("verified", true)
@@ -81,6 +91,10 @@ func VerifyPartnerOTP(c *gin.Context) {
 	var partner models.DeliveryPartner
 	if err := database.DB.Where("phone = ?", req.Phone).First(&partner).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Delivery partner not found"})
+		return
+	}
+	if !partner.IsActive {
+		c.JSON(http.StatusForbidden, gin.H{"error": "This delivery partner account is inactive"})
 		return
 	}
 
@@ -139,18 +153,20 @@ func UpdateLocation(c *gin.Context) {
 // preloaded order+partner. Shared by GetOrderTracking (customer) and
 // GetOrderTrackingAdmin (admin) so both surfaces stay consistent.
 func trackingPayload(order models.Order) gin.H {
-	partner := order.DeliveryPartner
-	payload := gin.H{
-		"delivery_partner_name": partner.Name,
-		"vehicle_number":        partner.VehicleNumber,
-		"phone":                 partner.Phone,
-		"current_lat":           partner.CurrentLat,
-		"current_lng":           partner.CurrentLng,
-		"last_updated":          partner.LastLocationUpdate,
-		"order_status":          order.Status,
-		"delivery_status":       order.DeliveryStatus,
-	}
-	return payload
+partner := order.DeliveryPartner
+payload := gin.H{
+"delivery_partner_name": partner.Name,
+"vehicle_number":        partner.VehicleNumber,
+"phone":                 partner.Phone,
+"current_lat":           partner.CurrentLat,
+"current_lng":           partner.CurrentLng,
+"last_updated":          partner.LastLocationUpdate,
+"order_status":          order.Status,
+"delivery_status":       order.DeliveryStatus,
+"address_lat":           order.Address.Lat,
+"address_lng":           order.Address.Lng,
+}
+return payload
 }
 
 // GetOrderTracking godoc
@@ -166,6 +182,7 @@ func GetOrderTracking(c *gin.Context) {
 	var order models.Order
 	if err := database.DB.
 		Preload("DeliveryPartner").
+                Preload("Address").
 		Where("id = ? AND user_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
@@ -177,6 +194,20 @@ func GetOrderTracking(c *gin.Context) {
 		return
 	}
 
+	trackDS := ""
+    if order.DeliveryStatus != nil {
+        trackDS = *order.DeliveryStatus
+    }
+    // Rider ki live location sirf tab share hoti hai jab delivery leg chal rahi ho.
+    // Warna delivered/rejected/expired ke baad bhi customer us partner ko track karta rehta.
+    if trackDS != models.DeliveryStatusOutForDelivery && trackDS != models.DeliveryStatusArrivedAtCustomer {
+        payload := trackingPayload(order)
+        payload["current_lat"] = nil
+        payload["current_lng"] = nil
+        payload["last_updated"] = nil
+        c.JSON(http.StatusOK, gin.H{"message": "Live location is shared once your order is out for delivery", "tracking": payload})
+        return
+    }
 	if order.DeliveryPartner.CurrentLat == nil || order.DeliveryPartner.CurrentLng == nil {
 		c.JSON(http.StatusOK, gin.H{"message": "Delivery partner assigned, live location not available yet", "tracking": trackingPayload(order)})
 		return
@@ -195,6 +226,7 @@ func GetOrderTrackingAdmin(c *gin.Context) {
 	var order models.Order
 	if err := database.DB.
 		Preload("DeliveryPartner").
+                Preload("Address").
 		Where("id = ?", orderID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})

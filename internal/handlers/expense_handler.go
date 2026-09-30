@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "log"
@@ -135,6 +135,9 @@ c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid expense_date, use YYYY-MM-
 return
 }
 
+previousAmount := expense.Amount
+previousStatus := expense.ApprovalStatus
+
 expense.Amount = req.Amount
 expense.Category = req.Category
 expense.ExpenseDate = expenseDate
@@ -145,6 +148,15 @@ expense.ReceiptURL = req.ReceiptURL
 if err := database.DB.Save(&expense).Error; err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update expense"})
 return
+}
+
+// If this expense was already paid (and therefore already posted to
+// the general ledger), post an adjusting entry for the amount delta so
+// the ledger doesn't go stale relative to the updated Expense record.
+if previousStatus == "paid" && req.Amount != previousAmount {
+if err := services.PostExpenseAdjustmentLedgerEntry(expense.ID, req.Amount-previousAmount); err != nil {
+log.Printf("failed to post expense adjustment ledger entry for expense %d: %v", expense.ID, err)
+}
 }
 
 adminID := c.MustGet("user_id").(uint)
@@ -158,7 +170,16 @@ c.JSON(http.StatusOK, expense)
 // DELETE /api/v1/admin/finance/expenses/:id
 func DeleteExpense(c *gin.Context) {
 id := c.Param("id")
-if err := database.DB.Delete(&models.Expense{}, id).Error; err != nil {
+var expense models.Expense
+if err := database.DB.First(&expense, id).Error; err != nil {
+c.JSON(http.StatusNotFound, gin.H{"error": "Expense not found"})
+return
+}
+if expense.ApprovalStatus == "paid" || expense.ApprovalStatus == "approved" {
+c.JSON(http.StatusBadRequest, gin.H{"error": "Paid or approved expenses cannot be deleted"})
+return
+}
+if err := database.DB.Delete(&expense).Error; err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete expense"})
 return
 }

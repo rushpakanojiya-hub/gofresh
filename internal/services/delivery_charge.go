@@ -1,7 +1,8 @@
-﻿package services
+package services
 
 import (
 "math"
+"strings"
 
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
@@ -18,13 +19,99 @@ baseDeliveryFee    = 20.0
 perKmDeliveryFee   = 8.0
 maxDeliveryFee     = 150.0
 fallbackFlatCharge = 50.0
+fallbackEstimatedDays = 3
 )
 
-// CalculateDeliveryCharge returns the delivery charge for an order going to
-// the given address coordinates, based on distance from the nearest active
-// warehouse. Callers are still responsible for applying any free-delivery-
-// above-threshold rule on top of this (e.g. waiving it for large orders).
-func CalculateDeliveryCharge(addrLat, addrLng *float64) float64 {
+// ServiceabilityResult is what checkout needs to know about how (and
+// whether) an address can be served: the delivery charge, whether COD is
+// allowed there, the estimated delivery time, and which DeliveryZone (if
+// any) produced these numbers. ZoneID is nil when no active zone matched
+// this pincode and the haversine-distance fallback was used instead.
+type ServiceabilityResult struct {
+DeliveryCharge float64
+CODAvailable   bool
+EstimatedDays  int
+Serviceable    bool
+ZoneID         *uint
+}
+
+// findMatchingZone returns the first active DeliveryZone whose comma-separated
+// Pincodes list contains the given pincode, or nil if none match. Matching is
+// exact-pincode, not prefix/range - a zone must explicitly list a pincode to
+// serve it.
+func findMatchingZone(pincode string) *models.DeliveryZone {
+if pincode == "" {
+return nil
+}
+var zones []models.DeliveryZone
+if err := database.DB.Where("is_active = ?", true).Find(&zones).Error; err != nil {
+return nil
+}
+for i := range zones {
+for _, p := range strings.Split(zones[i].Pincodes, ",") {
+if strings.TrimSpace(p) == pincode {
+return &zones[i]
+}
+}
+}
+return nil
+}
+
+// CalculateServiceability is the single source of truth for "can we deliver
+// here, what does it cost, is COD allowed, and how long will it take" -
+// used by both Checkout and GetCheckoutEstimate so the two can never
+// disagree with each other or with what admin configured in DeliveryZones.
+//
+// Priority order (see SRS discussion on serviceability):
+//  1. An active DeliveryZone whose Pincodes list contains this address's
+//     pincode wins outright - its DeliveryCharge, IsCODAvailable and
+//     EstimatedDays are authoritative.
+//  2. If no zone matches, fall back to the pre-existing haversine-distance
+//     pricing from the nearest active warehouse, with COD allowed and the
+//     flat fallbackEstimatedDays - this preserves existing behavior for
+//     areas admin hasn't explicitly zoned yet, rather than blocking
+//     checkout entirely for pincodes nobody has configured.
+func CalculateServiceability(pincode string, addrLat, addrLng *float64) ServiceabilityResult {
+if zone := findMatchingZone(pincode); zone != nil {
+zoneID := zone.ID
+return ServiceabilityResult{
+DeliveryCharge: zone.DeliveryCharge,
+CODAvailable:   zone.IsCODAvailable,
+EstimatedDays:  zone.EstimatedDays,
+Serviceable:    true,
+ZoneID:         &zoneID,
+}
+}
+
+// No configured zone for this pincode - fall back to distance-based
+// pricing exactly as before, with COD allowed by default.
+	var activeZoneCount int64
+	database.DB.Model(&models.DeliveryZone{}).Where("is_active = ?", true).Count(&activeZoneCount)
+	if activeZoneCount > 0 {
+		return ServiceabilityResult{
+			Serviceable: false,
+		}
+	}
+	return ServiceabilityResult{
+DeliveryCharge: calculateHaversineDeliveryCharge(addrLat, addrLng),
+CODAvailable:   true,
+EstimatedDays:  fallbackEstimatedDays,
+Serviceable:    true,
+ZoneID:         nil,
+}
+}
+
+// CalculateDeliveryCharge is kept for any caller that only needs the charge
+// number and doesn't care about zone/COD/ETA - it now goes through the same
+// zone-aware logic as CalculateServiceability instead of always using the
+// haversine fallback, so a caller can't accidentally bypass zone pricing.
+func CalculateDeliveryCharge(pincode string, addrLat, addrLng *float64) float64 {
+return CalculateServiceability(pincode, addrLat, addrLng).DeliveryCharge
+}
+
+// calculateHaversineDeliveryCharge is the original distance-based pricing,
+// used only when no DeliveryZone matches the address's pincode.
+func calculateHaversineDeliveryCharge(addrLat, addrLng *float64) float64 {
 if addrLat == nil || addrLng == nil {
 return fallbackFlatCharge
 }

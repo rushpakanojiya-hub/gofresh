@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"bytes"
@@ -73,7 +73,7 @@ func UploadImage(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"image_url": "/uploads/" + filename,
+		"image_url": cfg.PublicBaseURL + "/uploads/" + filename,
 	})
 }
 

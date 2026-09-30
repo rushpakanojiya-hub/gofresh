@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import (
     "time"
@@ -14,7 +14,7 @@ type DeliveryPartner struct {
     Name               string     `gorm:"not null" json:"name"`
     Phone              string     `gorm:"not null;uniqueIndex" json:"phone"`
     VehicleNumber      string     `json:"vehicle_number"`
-    IsActive           bool       `gorm:"default:true" json:"is_active"`
+	IsActive           bool       `json:"is_active"`
     IsOnline           bool       `gorm:"default:false" json:"is_online"`
     CurrentLat         *float64   `json:"current_lat,omitempty"`
     CurrentLng         *float64   `json:"current_lng,omitempty"`

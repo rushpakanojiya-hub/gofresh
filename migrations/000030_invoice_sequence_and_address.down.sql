@@ -1,4 +1,4 @@
-﻿ALTER TABLE invoices DROP COLUMN IF EXISTS discount_amount;
+ALTER TABLE invoices DROP COLUMN IF EXISTS discount_amount;
 ALTER TABLE invoices DROP COLUMN IF EXISTS address_line1;
 ALTER TABLE invoices DROP COLUMN IF EXISTS address_line2;
 ALTER TABLE invoices DROP COLUMN IF EXISTS address_city;

@@ -1,4 +1,4 @@
-﻿package database
+package database
 import (
 	"log"
 	"time"
@@ -103,8 +103,11 @@ func AutoMigrate() {
             &models.DebitNote{},
             &models.VendorBankChangeRequest{},
             &models.PendingJournalEntry{},
+		&models.MismatchDismissal{},
             &models.RiderCODDeposit{},
             &models.RiderPayout{},
+&models.DeliveryNotification{},
+&models.WalletTopup{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto-migrate database: %v", err)
@@ -137,6 +140,20 @@ log.Fatalf("Failed to add platform_fee column to invoices: %v", err)
 }
 if err := DB.Exec(`ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
 log.Fatalf("Failed to add is_online column to delivery_partners: %v", err)
+}
+if err := DB.Exec(`CREATE TABLE IF NOT EXISTS subcategories (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category_id BIGINT NOT NULL REFERENCES categories(id),
+    image_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+)`).Error; err != nil {
+log.Fatalf("Failed to create subcategories table: %v", err)
+}
+if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id BIGINT REFERENCES subcategories(id)`).Error; err != nil {
+log.Fatalf("Failed to add subcategory_id column to products: %v", err)
 }
 if err := DB.Exec(`CREATE TABLE IF NOT EXISTS expenses (
 id BIGSERIAL PRIMARY KEY,
@@ -455,6 +472,23 @@ log.Fatalf("Failed to add is_deleted column to addresses: %v", err)
 if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_addresses_is_deleted ON addresses(is_deleted)`).Error; err != nil {
 log.Fatalf("Failed to create addresses is_deleted index: %v", err)
 }
+	_ = DB.Exec(`CREATE SEQUENCE IF NOT EXISTS public.po_number_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1`)
+	_ = DB.Exec(`ALTER TABLE otps ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0`)
+	_ = DB.Exec(`CREATE TABLE IF NOT EXISTS wallet_topups (
+		id BIGSERIAL PRIMARY KEY,
+		user_id BIGINT NOT NULL REFERENCES users(id),
+		amount DOUBLE PRECISION NOT NULL,
+		razorpay_order_id VARCHAR(255) NOT NULL,
+		razorpay_payment_id VARCHAR(255),
+		razorpay_signature VARCHAR(255),
+		status VARCHAR(20) NOT NULL DEFAULT 'pending',
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`)
+	_ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cart_product ON cart_items(cart_id, product_id)`)
+	_ = DB.Exec(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_proof_url TEXT`)
+	_ = DB.Exec(`ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT`)
+	_ = DB.Exec(`ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS image_url TEXT`)
 
     RunMISMigration()
 }
@@ -492,5 +526,4 @@ log.Fatalf("Failed to ensure invoice columns exist: %v", err)
 }
 }
 }
-
 

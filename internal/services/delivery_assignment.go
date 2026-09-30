@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
     "errors"
@@ -18,7 +18,7 @@ import (
 // be for them to be considered "trackable" for nearest-match purposes.
 // Partners with an older (or missing) location are still eligible, but are
 // ranked after trackable ones, since we can't judge their real distance.
-const staleLocationWindow = 30 * time.Minute
+const staleLocationWindow = 3 * time.Hour
 
 // haversineKm returns the great-circle distance in kilometers between two
 // lat/lng points. This is the standard formula used for short-to-medium
@@ -166,7 +166,7 @@ func AutoAssignDeliveryPartner(orderID uint) {
         var loads []loadRow
         if err := tx.Model(&models.Order{}).
             Select("delivery_partner_id, count(*) as cnt").
-            Where("delivery_partner_id IS NOT NULL AND status IN ?", []string{models.OrderStatusConfirmed, models.OrderStatusPicking, models.OrderStatusPicked, models.OrderStatusPacking, models.OrderStatusPacked, models.OrderStatusReadyForDispatch, models.OrderStatusHandedOver, models.OrderStatusShipped}).
+            Where("delivery_partner_id IS NOT NULL AND status IN ? AND updated_at > ?", []string{models.OrderStatusConfirmed, models.OrderStatusPicking, models.OrderStatusPicked, models.OrderStatusPacking, models.OrderStatusPacked, models.OrderStatusReadyForDispatch, models.OrderStatusHandedOver, models.OrderStatusShipped}, time.Now().Add(-12*time.Hour)).
             Group("delivery_partner_id").
             Scan(&loads).Error; err != nil {
             return fmt.Errorf("failed to load partner workloads: %w", err)
@@ -238,9 +238,11 @@ func AutoAssignDeliveryPartner(orderID uint) {
             Updates(map[string]interface{}{
                 "delivery_partner_id":            bestPartner.ID,
                 "delivery_assignment_status":     assignedStatus,
+                "delivery_status":                models.DeliveryStatusAssigned,
                 "delivery_rejection_reason":      nil,
                 "delivery_assignment_expires_at": time.Now().Add(AssignmentTimeout()),
                 "delivery_attempted_partner_ids": fmt.Sprint(bestPartner.ID),
+                "assigned_at":                    time.Now(),
             })
         if result.Error != nil {
             return fmt.Errorf("failed to assign partner %d to order %d: %w", bestPartner.ID, order.ID, result.Error)
@@ -263,10 +265,40 @@ func AutoAssignDeliveryPartner(orderID uint) {
 
     log.Printf("[auto-assign] order %d assigned to delivery partner %d (%s)", orderID, assignedPartnerID, assignedPartnerName)
 
-    go SendPushToPartner(
-        assignedPartnerID,
-        "New delivery assigned",
-        fmt.Sprintf("Order #%d has been assigned to you", orderID),
-    )
+    go SendPushToPartnerWithData(assignedPartnerID, "New Order Assigned", "You have a new delivery order. Tap to view and accept it.", map[string]string{"type": "new_assignment", "order_id": fmt.Sprint(orderID)})
+CreateDeliveryNotification(
+assignedPartnerID,
+"New delivery assigned",
+fmt.Sprintf("Order #%d has been assigned to you", orderID),
+"new_assignment",
+&orderID,
+)
+CreateDeliveryNotification(
+assignedPartnerID,
+"New delivery assigned",
+fmt.Sprintf("Order #%d has been assigned to you", orderID),
+"new_assignment",
+&orderID,
+)
 }
 
+
+// TryAssignPendingOrdersToPartner looks for orders that are CONFIRMED but
+// have never been assigned a delivery partner (delivery_partner_id IS NULL)
+// and retries AutoAssignDeliveryPartner for each one. This exists because
+// UpdateDeliveryAvailability only flips is_online and previously left
+// already-placed orders stuck unassigned until an admin manually assigned
+// them or a brand-new order came in after this partner went online.
+func TryAssignPendingOrdersToPartner(partnerID uint) {
+    var orderIDs []uint
+    err := database.DB.Model(&models.Order{}).
+        Where("delivery_partner_id IS NULL AND status = ?", models.OrderStatusConfirmed).
+        Pluck("id", &orderIDs).Error
+    if err != nil {
+        log.Printf("[auto-assign] failed to load pending unassigned orders for partner %d: %v", partnerID, err)
+        return
+    }
+    for _, id := range orderIDs {
+        AutoAssignDeliveryPartner(id)
+    }
+}

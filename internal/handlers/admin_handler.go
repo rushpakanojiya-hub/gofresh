@@ -129,25 +129,54 @@ func CreateProduct(c *gin.Context) {
 		Name:        req.Name,
 		Description: req.Description,
 		Price:       req.Price,
+		MRP:         req.MRP,
 		CostPrice:   req.CostPrice,
                GSTPercent:  req.GSTPercent,
 		HSNCode:     req.HSNCode,
 		ImageURL:    req.ImageURL,
 		CategoryID:  req.CategoryID,
+		SubcategoryID: req.SubcategoryID,
 	}
-
-	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&product).Error; err != nil {
-			return err
-		}
-		inventory := models.Inventory{
-ProductID:   product.ID,
-WarehouseID: 1, // TODO: support multiple warehouses; defaults to the primary warehouse for now
-Stock:       req.Stock,
-InStock:     req.Stock > 0,
-}
-		return tx.Create(&inventory).Error
-	})
+    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+            if err := tx.Create(&product).Error; err != nil {
+                    return err
+            }
+            var warehouses []models.Warehouse
+            if err := tx.Where("is_active = ?", true).Find(&warehouses).Error; err != nil {
+                    return err
+            }
+            if len(warehouses) == 0 {
+                    // No warehouses configured yet - fall back to the old
+                    // single-warehouse-1 behavior so product creation still works.
+                    inventory := models.Inventory{
+                            ProductID:   product.ID,
+                            WarehouseID: 1,
+                            Stock:       req.Stock,
+                            InStock:     req.Stock > 0,
+                    }
+                    return tx.Create(&inventory).Error
+            }
+            // Every product gets an inventory row at every active warehouse
+            // from day one. Only the first (primary) warehouse gets the
+            // stock figure entered on creation; others start at 0 and are
+            // stocked separately by the admin later.
+            for i, wh := range warehouses {
+                    stock := 0
+                    if i == 0 {
+                            stock = req.Stock
+                    }
+                    inventory := models.Inventory{
+                            ProductID:   product.ID,
+                            WarehouseID: wh.ID,
+                            Stock:       stock,
+                            InStock:     stock > 0,
+                    }
+                    if err := tx.Create(&inventory).Error; err != nil {
+                            return err
+                    }
+            }
+            return nil
+    })
 
 	if txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create product"})
@@ -190,11 +219,13 @@ func UpdateProduct(c *gin.Context) {
 	product.Name = req.Name
 	product.Description = req.Description
 	product.Price = req.Price
+	product.MRP = req.MRP
 	product.CostPrice = req.CostPrice
        product.GSTPercent = req.GSTPercent
 	product.HSNCode = req.HSNCode
 	product.ImageURL = req.ImageURL
 	product.CategoryID = req.CategoryID
+	product.SubcategoryID = req.SubcategoryID
 
 	if err := database.DB.Save(&product).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product"})
@@ -356,6 +387,7 @@ func GetAllOrders(c *gin.Context) {
 	if err := db.
 		Preload("Items.Product").
 		Preload("Address").
+		Preload("DeliveryPartner").
 		Order("created_at DESC").
 		Offset((page - 1) * limit).
 		Limit(limit).

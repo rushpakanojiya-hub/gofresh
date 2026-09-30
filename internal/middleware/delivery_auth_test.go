@@ -72,7 +72,7 @@ func resetDeliveryPartnersTable(t *testing.T) {
 func seedPartner(t *testing.T, phone string, active bool) models.DeliveryPartner {
 	t.Helper()
 	partner := models.DeliveryPartner{Name: "Test Partner", Phone: phone, IsActive: active}
-	if err := database.DB.Create(&partner).Error; err != nil {
+	if err := database.DB.Select("*").Create(&partner).Error; err != nil {
 		t.Fatalf("failed to seed delivery partner: %v", err)
 	}
 	return partner
@@ -224,5 +224,43 @@ func TestWarehouseStaffOnly_DeliveryPartnerRole_Forbidden(t *testing.T) {
 	w := runChain(token, AuthMiddleware(), WarehouseStaffOnly())
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected 403 for delivery_partner on warehouse-only route, got %d", w.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CustomerOnly middleware must reject non-customer tokens - this is the
+// direct regression guard for the BOLA/role-confusion vulnerability where
+// DeliveryPartner and User rows share overlapping auto-increment IDs
+// (e.g. delivery partner ID 1 and customer ID 1 both exist), so any
+// customer-only route MUST verify role == "customer" and not just trust
+// the numeric user_id claim.
+// ---------------------------------------------------------------------------
+
+func TestCustomerOnly_DeliveryPartnerRole_Forbidden(t *testing.T) {
+	resetDeliveryPartnersTable(t)
+	partner := seedPartner(t, "9000077777", true)
+	token, _ := utils.GenerateJWT(partner.ID, partner.Phone, "delivery_partner")
+
+	w := runChain(token, AuthMiddleware(), CustomerOnly())
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for delivery_partner role on customer-only route, got %d", w.Code)
+	}
+}
+
+func TestCustomerOnly_AdminRole_Forbidden(t *testing.T) {
+	token, _ := utils.GenerateJWT(1, "9000000003", "admin")
+
+	w := runChain(token, AuthMiddleware(), CustomerOnly())
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for admin role on customer-only route, got %d", w.Code)
+	}
+}
+
+func TestCustomerOnly_ValidCustomerRole_Allowed(t *testing.T) {
+	token, _ := utils.GenerateJWT(1, "9000088888", "customer")
+
+	w := runChain(token, AuthMiddleware(), CustomerOnly())
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for valid customer role, got %d", w.Code)
 	}
 }

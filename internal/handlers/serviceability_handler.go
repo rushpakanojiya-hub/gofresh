@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "math"
@@ -38,7 +38,7 @@ return earthRadiusKm * c
 // order is placed). Returns (nil, 0, nil) if there are no active warehouses.
 func FindNearestWarehouse(lat, lng float64) (*models.Warehouse, float64, error) {
 var warehouses []models.Warehouse
-if err := database.DB.Where("is_active = ?", true).Find(&warehouses).Error; err != nil {
+if err := database.DB.Where("is_active = ? AND status = ?", true, "open").Find(&warehouses).Error; err != nil {
 return nil, 0, err
 }
 if len(warehouses) == 0 {

@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "errors"
@@ -18,6 +18,8 @@ import (
 // freeDeliveryThreshold and flatDeliveryCharge implement a simple, common
 // Indian-ecommerce delivery pricing rule: free delivery above the threshold,
 // otherwise a flat charge. Swap for a real shipping/rate-card service later.
+var errOrderAlreadyCancelled = errors.New("order already cancelled or no longer cancellable")
+
 const (
 freeDeliveryThreshold = 500.0
 flatDeliveryCharge    = 50.0
@@ -146,7 +148,11 @@ Price:     ci.Product.Price,
 })
 }
 
-deliveryCharge := services.CalculateDeliveryCharge(address.Lat, address.Lng)
+serviceability := services.CalculateServiceability(address.Pincode, address.Lat, address.Lng)
+if paymentMethod == models.PaymentMethodCOD && !serviceability.CODAvailable {
+return errors.New("Cash on Delivery is not available for this address")
+}
+deliveryCharge := serviceability.DeliveryCharge
 if itemsAmount >= freeDeliveryThreshold {
 deliveryCharge = 0
 }
@@ -329,7 +335,8 @@ func GetCheckoutEstimate(c *gin.Context) {
         itemsAmount += ci.Product.Price * float64(ci.Quantity)
     }
 
-    deliveryCharge := services.CalculateDeliveryCharge(address.Lat, address.Lng)
+    serviceability := services.CalculateServiceability(address.Pincode, address.Lat, address.Lng)
+    deliveryCharge := serviceability.DeliveryCharge
     if itemsAmount >= freeDeliveryThreshold {
         deliveryCharge = 0
     }
@@ -342,6 +349,10 @@ func GetCheckoutEstimate(c *gin.Context) {
         "delivery_charge": deliveryCharge,
         "platform_fee":    platformFee,
         "estimated_total": estimatedTotal,
+        "cod_available":   serviceability.CODAvailable,
+        "estimated_days":  serviceability.EstimatedDays,
+        "serviceable":     serviceability.Serviceable,
+        "zone_id":         serviceability.ZoneID,
     })
 }
 
@@ -453,9 +464,23 @@ var payment models.Payment
 var gatewayRefundAmount float64
 
 txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+// Re-fetch the order under a row-level lock so two concurrent cancel
+// requests for the same order cannot both pass the earlier status
+// check and both restock inventory / refund wallet / refund gateway.
+// The second request blocks here until the first commits, then sees
+// the now-cancelled status and bails out cleanly instead of
+// double-processing the refund.
+var lockedOrder models.Order
+if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedOrder, order.ID).Error; err != nil {
+return err
+}
+if lockedOrder.Status != models.OrderStatusPending && lockedOrder.Status != models.OrderStatusConfirmed {
+return errOrderAlreadyCancelled
+}
+
 for _, item := range order.Items {
 var inventory models.Inventory
-q := tx.Where("product_id = ?", item.ProductID)
+q := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("product_id = ?", item.ProductID)
 if order.WarehouseID != nil {
 // Known-good case: restore to the exact warehouse this order
 // was fulfilled from.
@@ -530,20 +555,25 @@ return err
 
 return tx.Model(&order).Updates(map[string]interface{}{
 "status":                      models.OrderStatusCancelled,
+"payment_status":              models.OrderPaymentStatusRefunded,
 "delivery_partner_id":         nil,
 "delivery_assignment_status":  nil,
 "delivery_status":             nil,
 "delivery_assignment_expires_at": nil,
 }).Error
 })
-
 if txErr != nil {
+if errors.Is(txErr, errOrderAlreadyCancelled) {
+c.JSON(http.StatusBadRequest, gin.H{"error": "Only pending or confirmed orders can be cancelled"})
+return
+}
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel order"})
 return
 }
 
-if gatewayRefundAmount > 0 {
-if err := services.PostWalletRefundLedgerEntry(order.ID, gatewayRefundAmount); err != nil {
+totalWalletRefund := gatewayRefundAmount + order.WalletAmountUsed
+if totalWalletRefund > 0 {
+if err := services.PostWalletRefundLedgerEntry(order.ID, totalWalletRefund); err != nil {
 log.Printf("failed to post refund ledger entry for order %d: %v", order.ID, err)
 }
 }

@@ -78,7 +78,7 @@ func DeliveryPartnerOnly() gin.HandlerFunc {
 
 		var partner models.DeliveryPartner
 		if err := database.DB.Select("id", "is_active").First(&partner, partnerID).Error; err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Delivery partner account not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Delivery partner not found"})
 			c.Abort()
 			return
 		}
@@ -98,6 +98,48 @@ return func(c *gin.Context) {
 role, exists := c.Get("role")
 if !exists || role != "warehouse_staff" {
 c.JSON(http.StatusForbidden, gin.H{"error": "Warehouse staff access required"})
+c.Abort()
+return
+}
+		staffID, _ := c.Get("user_id")
+		var staff models.WarehouseStaff
+		if err := database.DB.Select("id", "is_active").First(&staff, staffID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Warehouse staff not found"})
+			c.Abort()
+			return
+		}
+		if !staff.IsActive {
+			c.JSON(http.StatusForbidden, gin.H{"error": "This warehouse staff account is inactive"})
+			c.Abort()
+			return
+		}
+		c.Next()
+}
+}
+
+// CustomerOnly restricts access to users with role "customer". Must run after AuthMiddleware.
+func CustomerOnly() gin.HandlerFunc {
+return func(c *gin.Context) {
+role, exists := c.Get("role")
+if !exists || role != "customer" {
+c.JSON(http.StatusForbidden, gin.H{"error": "Customer access required"})
+c.Abort()
+return
+}
+c.Next()
+}
+}
+
+// AdminOrCustomerOnly restricts access to users with role "admin" or
+// "customer". Must run after AuthMiddleware. Used for endpoints like image
+// upload that both an admin (product/category images) and a customer
+// (return request photos) legitimately need, but warehouse staff and
+// delivery partners do not.
+func AdminOrCustomerOnly() gin.HandlerFunc {
+return func(c *gin.Context) {
+role, exists := c.Get("role")
+if !exists || (role != "admin" && role != "customer") {
+c.JSON(http.StatusForbidden, gin.H{"error": "Access required"})
 c.Abort()
 return
 }

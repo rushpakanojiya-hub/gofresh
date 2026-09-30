@@ -38,6 +38,7 @@ func main() {
     // 3b. Apply small production-safe schema patches even when full
     // AutoMigrate is skipped (GIN_MODE=release) - see EnsureProductionSchemaPatches.
     database.EnsureProductionSchemaPatches()
+	database.EnsureInvoiceSchemaPatches()
 
     // 4. Initialize Firebase (push notifications)
     fb.InitFirebase(cfg.FirebaseCredentialsPath)
@@ -105,4 +106,5 @@ func main() {
     }
     log.Println("Server exited cleanly")
 }
+
 

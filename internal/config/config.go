@@ -30,6 +30,12 @@ type Config struct {
 	CloudinaryAPISecret     string
 	RedisURL                string
 
+	// PublicBaseURL is this server's own public https origin, used to
+	// build absolute URLs for files saved to local disk (the Cloudinary
+	// fallback path) so links work correctly from other domains like the
+	// admin panel (which is hosted separately on CloudFront/S3).
+	PublicBaseURL string
+
 	// Seller/invoice details. All blank by default - never invented. Set
 	// these env vars to the real registered business details before
 	// invoices need to be GST-compliant; until then the PDF/API clearly
@@ -67,10 +73,18 @@ type Config struct {
 	// services.UpdateDeliveryStatus).
 	DeliveryOTPMaxAttempts int
 
+	// CustomerOTPMaxAttempts caps how many wrong login-OTP guesses a phone
+	// number can make against a single OTP before it is locked out and a
+	// fresh OTP must be requested via /auth/send-otp.
+	CustomerOTPMaxAttempts int
 	// DeliveryGeofenceRadiusMeters is how close (in meters) the delivery
 	// partner's last known GPS location must be to the customer's saved
 	// delivery address before a DELIVERED transition is allowed.
 	DeliveryGeofenceRadiusMeters float64
+	// WarehouseHandoverGeofenceRadiusMeters is how close (in meters) the
+	// delivery partner's last known GPS location must be to the warehouse
+	// before warehouse staff can confirm an order handover to them.
+	WarehouseHandoverGeofenceRadiusMeters float64
 }
 
 var AppConfig *Config
@@ -81,37 +95,40 @@ func LoadConfig() *Config {
 	}
 
 	cfg := &Config{
-		Port:                             getEnv("PORT", "8080"),
-		GinMode:                          getEnv("GIN_MODE", "debug"),
-		DBHost:                           getEnv("DB_HOST", "localhost"),
-		DBPort:                           getEnv("DB_PORT", "5432"),
-		DBUser:                           getEnv("DB_USER", "postgres"),
-		DBPassword:                       getEnv("DB_PASSWORD", "postgres"),
-		DBName:                           getEnv("DB_NAME", "ecommerce_db"),
-		DBSSLMode:                        getEnv("DB_SSLMODE", "disable"),
-		FirebaseCredentialsPath:          getEnv("FIREBASE_CREDENTIALS_PATH", "secrets/firebase-service-account.json"),
-		JWTSecret:                        getEnv("JWT_SECRET", "default_secret_change_me"),
-		JWTExpiryHours:                   getEnv("JWT_EXPIRY_HOURS", "72"),
-		RazorpayKeyID:                    getEnv("RAZORPAY_KEY_ID", ""),
-		RazorpayKeySecret:                getEnv("RAZORPAY_KEY_SECRET", ""),
-		AllowedOrigins:                   getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:19006"),
-		CloudinaryCloudName:              getEnv("CLOUDINARY_CLOUD_NAME", ""),
-		CloudinaryAPIKey:                 getEnv("CLOUDINARY_API_KEY", ""),
-		CloudinaryAPISecret:              getEnv("CLOUDINARY_API_SECRET", ""),
-		RedisURL:                         getEnv("REDIS_URL", ""),
-		SellerCompanyName:                getEnv("SELLER_COMPANY_NAME", ""),
-		SellerAddress:                    getEnv("SELLER_ADDRESS", ""),
-		SellerGSTIN:                      getEnv("SELLER_GSTIN", ""),
-		SellerContactNumber:              getEnv("SELLER_CONTACT_NUMBER", ""),
-		SellerEmail:                      getEnv("SELLER_EMAIL", ""),
-		SellerState:                      getEnv("SELLER_STATE", ""),
-		SellerStateCode:                  getEnv("SELLER_STATE_CODE", ""),
-		SellerFSSAINumber:                getEnv("SELLER_FSSAI_NUMBER", ""),
-		DefaultMaxActiveOrdersPerPartner: getEnvInt("MAX_ACTIVE_ORDERS_PER_PARTNER", 5),
-		DeliveryAssignmentTimeoutMinutes: getEnvInt("DELIVERY_ASSIGNMENT_TIMEOUT_MINUTES", 5),
-		DeliveryOTPExpiryMinutes:         getEnvInt("DELIVERY_OTP_EXPIRY_MINUTES", 15),
-		DeliveryOTPMaxAttempts:           getEnvInt("DELIVERY_OTP_MAX_ATTEMPTS", 5),
-		DeliveryGeofenceRadiusMeters:     getEnvFloat("DELIVERY_GEOFENCE_RADIUS_METERS", 200),
+		Port:                                  getEnv("PORT", "8080"),
+		GinMode:                               getEnv("GIN_MODE", "debug"),
+		DBHost:                                getEnv("DB_HOST", "localhost"),
+		DBPort:                                getEnv("DB_PORT", "5432"),
+		DBUser:                                getEnv("DB_USER", "postgres"),
+		DBPassword:                            getEnv("DB_PASSWORD", "postgres"),
+		DBName:                                getEnv("DB_NAME", "ecommerce_db"),
+		DBSSLMode:                             getEnv("DB_SSLMODE", "disable"),
+		FirebaseCredentialsPath:               getEnv("FIREBASE_CREDENTIALS_PATH", "secrets/firebase-service-account.json"),
+		JWTSecret:                             getEnv("JWT_SECRET", "default_secret_change_me"),
+		JWTExpiryHours:                        getEnv("JWT_EXPIRY_HOURS", "72"),
+		RazorpayKeyID:                         getEnv("RAZORPAY_KEY_ID", ""),
+		RazorpayKeySecret:                     getEnv("RAZORPAY_KEY_SECRET", ""),
+		AllowedOrigins:                        getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:19006"),
+		CloudinaryCloudName:                   getEnv("CLOUDINARY_CLOUD_NAME", ""),
+		CloudinaryAPIKey:                      getEnv("CLOUDINARY_API_KEY", ""),
+		CloudinaryAPISecret:                   getEnv("CLOUDINARY_API_SECRET", ""),
+		RedisURL:                              getEnv("REDIS_URL", ""),
+		PublicBaseURL:                         getEnv("PUBLIC_BASE_URL", "https://32-196-3-31.sslip.io"),
+		SellerCompanyName:                     getEnv("SELLER_COMPANY_NAME", ""),
+		SellerAddress:                         getEnv("SELLER_ADDRESS", ""),
+		SellerGSTIN:                           getEnv("SELLER_GSTIN", ""),
+		SellerContactNumber:                   getEnv("SELLER_CONTACT_NUMBER", ""),
+		SellerEmail:                           getEnv("SELLER_EMAIL", ""),
+		SellerState:                           getEnv("SELLER_STATE", ""),
+		SellerStateCode:                       getEnv("SELLER_STATE_CODE", ""),
+		SellerFSSAINumber:                     getEnv("SELLER_FSSAI_NUMBER", ""),
+		DefaultMaxActiveOrdersPerPartner:      getEnvInt("MAX_ACTIVE_ORDERS_PER_PARTNER", 5),
+		DeliveryAssignmentTimeoutMinutes:      getEnvInt("DELIVERY_ASSIGNMENT_TIMEOUT_MINUTES", 5),
+		DeliveryOTPExpiryMinutes:              getEnvInt("DELIVERY_OTP_EXPIRY_MINUTES", 15),
+		DeliveryOTPMaxAttempts:                getEnvInt("DELIVERY_OTP_MAX_ATTEMPTS", 5),
+		CustomerOTPMaxAttempts:                getEnvInt("CUSTOMER_OTP_MAX_ATTEMPTS", 5),
+		DeliveryGeofenceRadiusMeters:          getEnvFloat("DELIVERY_GEOFENCE_RADIUS_METERS", 350),
+		WarehouseHandoverGeofenceRadiusMeters: getEnvFloat("WAREHOUSE_HANDOVER_GEOFENCE_RADIUS_METERS", 200),
 	}
 
 	if cfg.CloudinaryCloudName == "" || cfg.CloudinaryAPIKey == "" || cfg.CloudinaryAPISecret == "" {

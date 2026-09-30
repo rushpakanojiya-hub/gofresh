@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "log"
@@ -283,6 +283,11 @@ case models.PaymentStatusPartiallyRefunded:
 order.PaymentStatus = models.OrderPaymentStatusPartiallyRefunded
 }
 database.DB.Save(&order)
+
+if refundDelta > 0 && (req.Status == models.PaymentStatusRefunded || req.Status == models.PaymentStatusPartiallyRefunded) {
+go services.SendPushToUser(order.UserID, "Refund Initiated", "Your refund has been initiated.")
+go services.SendPushToUser(order.UserID, "Refund Completed", "Your refund has been completed.")
+}
 
 adminID := c.MustGet("user_id").(uint)
 adminPhone := c.MustGet("phone").(string)

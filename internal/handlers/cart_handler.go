@@ -21,6 +21,9 @@ func getOrCreateCart(userID uint) (*models.Cart, error) {
 
 	cart = models.Cart{UserID: userID}
 	if err := database.DB.Create(&cart).Error; err != nil {
+		if queryErr := database.DB.Where("user_id = ?", userID).First(&cart).Error; queryErr == nil {
+			return &cart, nil
+		}
 		return nil, err
 	}
 	return &cart, nil
@@ -116,13 +119,6 @@ func AddToCart(c *gin.Context) {
 		return
 	}
 
-	var existingItem models.CartItem
-	hasExisting := database.DB.Where("cart_id = ? AND product_id = ?", cart.ID, req.ProductID).First(&existingItem).Error == nil
-	newQuantity := req.Quantity
-	if hasExisting {
-		newQuantity = existingItem.Quantity + req.Quantity
-	}
-
 	// Resolve the user's nearest warehouse (from their default address) so
 	// the stock check/hold is warehouse-specific and accounts for other
 	// shoppers' active 10-minute reservations. Users without a saved
@@ -135,6 +131,17 @@ func AddToCart(c *gin.Context) {
 	}
 
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Re-check for an existing cart item under the transaction so two
+		// concurrent AddToCart requests for the same product cannot both
+		// decide the item is new and both attempt an insert, creating
+		// duplicate rows for the same (cart_id, product_id) pair.
+		var existingItem models.CartItem
+		hasExisting := tx.Where("cart_id = ? AND product_id = ?", cart.ID, req.ProductID).First(&existingItem).Error == nil
+		newQuantity := req.Quantity
+		if hasExisting {
+			newQuantity = existingItem.Quantity + req.Quantity
+		}
+
 		if warehouse != nil {
 			if err := services.ReserveStock(tx, userID, req.ProductID, warehouse.ID, newQuantity); err != nil {
 				return err
@@ -163,6 +170,8 @@ func AddToCart(c *gin.Context) {
 	if txErr != nil {
 		if txErr == services.ErrInsufficientStock {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient stock for this product"})
+		} else if txErr == services.ErrNotAvailableAtWarehouse {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This product is not available in your area yet"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add item to cart"})
 		}
@@ -229,6 +238,8 @@ func UpdateCartItem(c *gin.Context) {
 	if txErr != nil {
 		if txErr == services.ErrInsufficientStock {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient stock for this product"})
+		} else if txErr == services.ErrNotAvailableAtWarehouse {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This product is not available in your area yet"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update cart item"})
 		}

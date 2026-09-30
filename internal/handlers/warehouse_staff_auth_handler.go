@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "net/http"
@@ -8,6 +8,7 @@ import (
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
+"gorm.io/gorm"
 )
 
 // SendWarehouseStaffOTP godoc
@@ -65,15 +66,24 @@ return
 
 var otp models.OTP
 err := database.DB.
-Where("phone = ? AND code = ? AND verified = ?", req.Phone, req.OTP, false).
+Where("phone = ? AND verified = ?", req.Phone, false).
 Order("created_at DESC").
 First(&otp).Error
 if err != nil {
 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP"})
 return
 }
+if otp.Attempts >= 5 {
+c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many incorrect attempts. Please request a new OTP."})
+return
+}
 if time.Now().After(otp.ExpiresAt) {
 c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP has expired, please request a new one"})
+return
+}
+if otp.Code != req.OTP {
+database.DB.Model(&models.OTP{}).Where("id = ?", otp.ID).Update("attempts", gorm.Expr("attempts + 1"))
+c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP"})
 return
 }
 database.DB.Model(&otp).Update("verified", true)
@@ -81,6 +91,10 @@ database.DB.Model(&otp).Update("verified", true)
 var staff models.WarehouseStaff
 if err := database.DB.Preload("Warehouse").Where("phone = ?", req.Phone).First(&staff).Error; err != nil {
 c.JSON(http.StatusNotFound, gin.H{"error": "Warehouse staff not found"})
+return
+}
+if !staff.IsActive {
+c.JSON(http.StatusForbidden, gin.H{"error": "This warehouse staff account is inactive"})
 return
 }
 

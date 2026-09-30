@@ -2,7 +2,7 @@
 
 import (
 "log"
-	"net/http"
+"net/http"
 
 "github.com/gin-gonic/gin"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
@@ -27,6 +27,16 @@ if radius <= 0 {
 radius = 5
 }
 
+warehouseType := req.WarehouseType
+if warehouseType == "" {
+warehouseType = "dark_store"
+}
+
+status := req.Status
+if status == "" {
+status = "open"
+}
+
 warehouse := models.Warehouse{
 Name:            req.Name,
 City:            req.City,
@@ -35,6 +45,11 @@ Lat:             req.Lat,
 Lng:             req.Lng,
 ServiceRadiusKm: radius,
 IsActive:        true,
+WarehouseType:   warehouseType,
+Status:          status,
+Capacity:        req.Capacity,
+OpeningTime:     req.OpeningTime,
+ClosingTime:     req.ClosingTime,
 }
 if req.IsActive != nil {
 warehouse.IsActive = *req.IsActive
@@ -68,8 +83,8 @@ if len(warehouses) == 0 {
 return
 }
 type row struct {
-ID       uint
-GeoJSON  string
+ID      uint
+GeoJSON string
 }
 var rows []row
 if err := database.DB.Raw(
@@ -132,6 +147,15 @@ warehouse.ServiceRadiusKm = req.ServiceRadiusKm
 if req.IsActive != nil {
 warehouse.IsActive = *req.IsActive
 }
+if req.WarehouseType != "" {
+warehouse.WarehouseType = req.WarehouseType
+}
+if req.Status != "" {
+warehouse.Status = req.Status
+}
+warehouse.Capacity = req.Capacity
+warehouse.OpeningTime = req.OpeningTime
+warehouse.ClosingTime = req.ClosingTime
 
 if err := database.DB.Save(&warehouse).Error; err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update warehouse"})
@@ -158,6 +182,7 @@ return
 
 c.JSON(http.StatusOK, gin.H{"message": "Warehouse deleted"})
 }
+
 // SetWarehouseServiceArea sets the polygon geofence for a warehouse using GeoJSON.
 // Body: {"geojson": "{\"type\":\"Polygon\",\"coordinates\":[[[lng,lat],[lng,lat],...]]}"}
 func SetWarehouseServiceArea(c *gin.Context) {

@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 "fmt"
@@ -69,6 +69,18 @@ lines = append(lines, line{"5002", "debit", invoice.DiscountAmount, fmt.Sprintf(
 lines = append(lines, line{"4001", "credit", invoice.TaxableAmount, fmt.Sprintf("Sale for order #%d", orderID)})
 if totalGST > 0 {
 lines = append(lines, line{"2002", "credit", totalGST, fmt.Sprintf("GST on order #%d", orderID)})
+}
+var orderItems []models.OrderItem
+database.DB.Preload("Product").Where("order_id = ?", orderID).Find(&orderItems)
+var totalCOGS float64
+for _, it := range orderItems {
+if it.Product.CostPrice > 0 {
+totalCOGS += it.Product.CostPrice * float64(it.Quantity)
+}
+}
+if totalCOGS > 0 {
+lines = append(lines, line{"5001", "debit", totalCOGS, fmt.Sprintf("COGS for order #%d", orderID)})
+lines = append(lines, line{"1004", "credit", totalCOGS, fmt.Sprintf("Inventory reduction for order #%d", orderID)})
 }
 
 return database.DB.Transaction(func(tx *gorm.DB) error {
@@ -351,6 +363,12 @@ return fmt.Errorf("chart of accounts missing code 1002 (Bank): %w", err)
 
 transactionRef := fmt.Sprintf("EXPENSE-%d", expenseID)
 
+var existingCount int64
+database.DB.Model(&models.LedgerEntry{}).Where("transaction_ref = ?", transactionRef).Count(&existingCount)
+if existingCount > 0 {
+return nil
+}
+
 return database.DB.Transaction(func(tx *gorm.DB) error {
 debit := models.LedgerEntry{
 TransactionRef: transactionRef,
@@ -377,6 +395,78 @@ EntryDate:      expense.ExpenseDate,
 }
 if err := tx.Create(&credit).Error; err != nil {
 return fmt.Errorf("failed to create credit ledger entry: %w", err)
+}
+return nil
+})
+}
+
+// PostExpenseAdjustmentLedgerEntry posts an adjusting double-entry line
+// when a paid expense's amount is edited after PostExpenseLedgerEntry has
+// already run for it, so the general ledger stays in sync with the
+// Expense record instead of going stale. deltaAmount is
+// newAmount-oldAmount: positive means the expense grew (post an extra
+// Debit Opex / Credit Bank for the increase), negative means it shrank
+// (post the reverse - Debit Bank / Credit Opex - for the decrease).
+// No-op if deltaAmount is zero.
+func PostExpenseAdjustmentLedgerEntry(expenseID uint, deltaAmount float64) error {
+if deltaAmount == 0 {
+return nil
+}
+
+var expense models.Expense
+if err := database.DB.First(&expense, expenseID).Error; err != nil {
+return fmt.Errorf("expense not found: %w", err)
+}
+
+var opex, bank models.Account
+if err := database.DB.Where("code = ?", "5003").First(&opex).Error; err != nil {
+return fmt.Errorf("chart of accounts missing code 5003 (Operating Expenses): %w", err)
+}
+if err := database.DB.Where("code = ?", "1002").First(&bank).Error; err != nil {
+return fmt.Errorf("chart of accounts missing code 1002 (Bank): %w", err)
+}
+
+amount := deltaAmount
+increased := true
+if amount < 0 {
+amount = -amount
+increased = false
+}
+
+transactionRef := fmt.Sprintf("EXPENSEADJ-%d-%d", expenseID, time.Now().UnixNano())
+now := time.Now()
+
+return database.DB.Transaction(func(tx *gorm.DB) error {
+opexEntry := models.LedgerEntry{
+TransactionRef: transactionRef,
+AccountID:      opex.ID,
+Type:           "debit",
+Amount:         amount,
+Description:    fmt.Sprintf("Adjustment for expense: %s", expense.Category),
+ReferenceType:  "expense_adjustment",
+ReferenceID:    &expenseID,
+EntryDate:      now,
+}
+bankEntry := models.LedgerEntry{
+TransactionRef: transactionRef,
+AccountID:      bank.ID,
+Type:           "credit",
+Amount:         amount,
+Description:    fmt.Sprintf("Adjustment for expense: %s", expense.Category),
+ReferenceType:  "expense_adjustment",
+ReferenceID:    &expenseID,
+EntryDate:      now,
+}
+if !increased {
+// Expense amount decreased - reverse the direction: Debit Bank, Credit Opex.
+opexEntry.Type = "credit"
+bankEntry.Type = "debit"
+}
+if err := tx.Create(&opexEntry).Error; err != nil {
+return fmt.Errorf("failed to create opex adjustment ledger entry: %w", err)
+}
+if err := tx.Create(&bankEntry).Error; err != nil {
+return fmt.Errorf("failed to create bank adjustment ledger entry: %w", err)
 }
 return nil
 })

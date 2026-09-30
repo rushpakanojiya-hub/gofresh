@@ -47,7 +47,12 @@ func TestMain(m *testing.M) {
 	}
 
 	// Also migrates the models needed by delivery_assignment_handler_test.go
-	// (Phase 3, same package - only one TestMain is allowed per package).
+	// (Phase 3, same package - only one TestMain is allowed per package),
+	// plus Invoice/InvoiceItem/Account/LedgerEntry for invoicing/ledger
+	// tests (e.g. BE-14 ConfirmDelivery tests). Deliberately NOT calling
+	// database.AutoMigrate() here - that also runs production-only raw
+	// SQL patches (e.g. a PostGIS "geometry" column) that fatal out on a
+	// plain test DB without the PostGIS extension.
 	if err := db.AutoMigrate(
 		&models.DeliveryPartner{},
 		&models.User{},
@@ -56,12 +61,38 @@ func TestMain(m *testing.M) {
 		&models.Address{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.DeliveryNotification{},
+		&models.Invoice{},
+		&models.InvoiceItem{},
+		&models.Account{},
+		&models.LedgerEntry{},
+		&models.RiderCODDeposit{},
+		&models.RiderPayout{},
 	); err != nil {
 		fmt.Printf("[delivery_profile_handler_test] skipping package: migration failed: %v\n", err)
 		os.Exit(0)
 	}
 
+	_ = db.Exec("TRUNCATE TABLE orders, order_items, delivery_partners, addresses, users, delivery_zones, delivery_notifications, rider_cod_deposits, rider_payouts RESTART IDENTITY CASCADE").Error
+
 	database.DB = db
+
+	// Minimal chart of accounts needed by ledger_posting.go for the COD
+	// sale + refund + wallet-refund + discount paths exercised in tests.
+	for _, acc := range []models.Account{
+		{Code: "1001", Name: "Cash", Type: "asset", IsActive: true},
+		{Code: "1002", Name: "Bank", Type: "asset", IsActive: true},
+		{Code: "2002", Name: "GST Payable", Type: "liability", IsActive: true},
+		{Code: "2004", Name: "Customer Refund Payable", Type: "liability", IsActive: true},
+		{Code: "2005", Name: "Customer Wallet Liability", Type: "liability", IsActive: true},
+		{Code: "4001", Name: "Product Sales", Type: "revenue", IsActive: true},
+		{Code: "5002", Name: "Discount Given", Type: "expense", IsActive: true},
+	} {
+		var existing models.Account
+		if err := db.Where("code = ?", acc.Code).First(&existing).Error; err != nil {
+			db.Create(&acc)
+		}
+	}
 	gin.SetMode(gin.TestMode)
 	os.Exit(m.Run())
 }
@@ -91,7 +122,7 @@ func seedDeliveryPartner(t *testing.T, phone string) models.DeliveryPartner {
 	t.Helper()
 	partner := models.DeliveryPartner{
 		Name:          "Test Partner",
-		Phone:         phone,
+		Phone:         uniquePhone("91111"),
 		VehicleNumber: "GJ01AB1234",
 		IsActive:      true,
 	}
@@ -207,12 +238,12 @@ func TestUpdateDeliveryProfile_IgnoresProtectedFields(t *testing.T) {
 	token := deliveryPartnerToken(t, partner)
 
 	w := doRequest(r, http.MethodPut, "/api/v1/delivery/profile", token, gin.H{
-		"name":       "Still Allowed",
-		"is_active":  false,
-		"role":       "admin",
-		"id":         9999,
-		"warehouse":  "Warehouse X",
-		"is_online":  true,
+		"name":      "Still Allowed",
+		"is_active": false,
+		"role":      "admin",
+		"id":        9999,
+		"warehouse": "Warehouse X",
+		"is_online": true,
 	})
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())

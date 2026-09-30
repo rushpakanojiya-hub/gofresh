@@ -16,6 +16,11 @@ const ReservationTTL = 10 * time.Minute
 
 var ErrInsufficientStock = errors.New("insufficient stock for this product")
 
+// ErrNotAvailableAtWarehouse means the product has no inventory row at all
+// for the user's resolved warehouse (as opposed to a row with 0 stock),
+// which is a normal "not stocked here yet" case, not a server error.
+var ErrNotAvailableAtWarehouse = errors.New("this product is not available at your nearest warehouse")
+
 // expireStaleReservations deletes reservation rows (for one product+warehouse)
 // whose hold has already run out. Called right before every availability
 // check/reserve so expired holds never block a genuinely free purchase -
@@ -45,7 +50,7 @@ func ReserveStock(tx *gorm.DB, userID, productID, warehouseID uint, quantity int
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("product_id = ? AND warehouse_id = ?", productID, warehouseID).
 		First(&inventory).Error; err != nil {
-		return errors.New("this product is not available at your nearest warehouse")
+		return ErrNotAvailableAtWarehouse
 	}
 	if !inventory.InStock {
 		return ErrInsufficientStock

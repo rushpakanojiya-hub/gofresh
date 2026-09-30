@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "net/http"
@@ -8,6 +8,7 @@ import (
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
+	"gorm.io/gorm/clause"
 )
 
 type RegisterDeviceTokenRequest struct {
@@ -39,32 +40,27 @@ userID = &id
 }
 }
 
-var existing models.DeviceToken
-result := database.DB.Where("token = ?", req.Token).First(&existing)
-if result.Error == nil {
-existing.Platform = req.Platform
-// Always set both fields from the current auth context - clearing
-// whichever role ID is NOT present this time - so a token reused across
-// roles (e.g. same device logged in as customer, then later as a
-// delivery partner) never keeps a stale pointer to the previous role
-// and leaks push notifications to the wrong recipient.
-existing.UserID = userID
-existing.DeliveryPartnerID = deliveryPartnerID
-database.DB.Save(&existing)
-c.JSON(http.StatusOK, gin.H{"message": "Token refreshed"})
-return
-}
-
+// Atomic upsert: two near-simultaneous requests for the same token
+// (e.g. PushService.start() and a post-login re-register both firing at
+// once) must not race on a select-then-insert - that let the second
+// request lose a duplicate-key error instead of updating the row. On
+// conflict we overwrite user_id/delivery_partner_id from the CURRENT
+// auth context (nil included), so a token reused across roles never
+// keeps a stale pointer to the previous role.
 token := models.DeviceToken{
 Token:             req.Token,
 Platform:          req.Platform,
 UserID:            userID,
 DeliveryPartnerID: deliveryPartnerID,
 }
-if err := database.DB.Create(&token).Error; err != nil {
+err := database.DB.Clauses(clause.OnConflict{
+Columns:   []clause.Column{{Name: "token"}},
+DoUpdates: clause.AssignmentColumns([]string{"platform", "user_id", "delivery_partner_id", "updated_at"}),
+}).Create(&token).Error
+if err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save device token"})
 return
 }
-c.JSON(http.StatusCreated, gin.H{"message": "Token registered"})
+c.JSON(http.StatusOK, gin.H{"message": "Token registered"})
 }
 

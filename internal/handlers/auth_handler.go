@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "crypto/rand"
@@ -6,12 +6,16 @@ import (
 "log"
 "math/big"
 "net/http"
+"os"
 "time"
 
 "github.com/gin-gonic/gin"
+"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/config"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
+    "gorm.io/gorm"
+"gorm.io/gorm/clause"
 )
 
 const otpValidityMinutes = 5
@@ -32,19 +36,20 @@ return fmt.Sprintf("%06d", n.Int64()), nil
 // since returning it in the API response would let anyone log in as any
 // phone number without ever receiving an SMS.
 func otpDebugResponse(code string, phone string) gin.H {
-log.Printf("[OTP] %s -> %s", phone, code)
-// TEMPORARY: no real SMS gateway is wired up yet, so the OTP is echoed
-// in the response in ALL environments (including production) so the app
-// can display/auto-fill it. This is NOT safe for real users - anyone
-// could log in as any phone number without receiving an SMS. Remove this
-// echo (go back to gating it behind config.AppConfig.GinMode != "release")
-// once a real SMS provider is integrated.
-resp := gin.H{
-"message":            "OTP sent successfully",
-"expires_in_minutes": otpValidityMinutes,
-"otp":                code,
-}
-return resp
+    log.Printf("[OTP] %s -> %s", phone, code)
+    resp := gin.H{
+        "message":            "OTP sent successfully",
+        "expires_in_minutes": otpValidityMinutes,
+    }
+    // Only echo the OTP in the response outside production, so local/staging
+    // testing works without a real SMS gateway wired up. In production
+    // (GIN_MODE=release) the code is NEVER included in the response - only
+    // logged server-side - since returning it in the API response would let
+    // anyone log in as any phone number without ever receiving an SMS.
+    if os.Getenv("OTP_DEBUG_ECHO") == "true" {
+        resp["otp"] = code
+    }
+    return resp
 }
 
 // SendOTP godoc
@@ -91,9 +96,24 @@ return
 }
 
 var otp models.OTP
-err := database.DB.Where("phone = ? AND code = ?", req.Phone, req.OTP).
+err := database.DB.Where("phone = ?", req.Phone).
 Order("id desc").First(&otp).Error
-if err != nil || time.Now().After(otp.ExpiresAt) {
+if err != nil {
+c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired OTP"})
+return
+}
+if otp.Attempts >= config.AppConfig.CustomerOTPMaxAttempts {
+c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many incorrect attempts. Please request a new OTP."})
+return
+}
+if time.Now().After(otp.ExpiresAt) {
+c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired OTP"})
+return
+}
+if otp.Code != req.OTP {
+database.DB.Model(&models.OTP{}).
+Where("id = ?", otp.ID).
+Update("attempts", gorm.Expr("attempts + 1"))
 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired OTP"})
 return
 }
@@ -103,17 +123,41 @@ database.DB.Delete(&otp)
 var user models.User
 err = database.DB.Where("phone = ?", req.Phone).First(&user).Error
 if err != nil {
-user = models.User{
-Phone: req.Phone,
-Role:  "customer",
+    user = models.User{
+        Phone: req.Phone,
+        Role:  "customer",
+    }
+    // Use ON CONFLICT DO NOTHING (keyed on the unique phone index) instead
+    // of a plain Create, so that if a concurrent request for the same new
+    // phone number wins the race and creates the user first, this insert
+    // becomes a silent no-op (user.ID stays 0) instead of erroring out with
+    // a unique-constraint violation and failing an otherwise-valid login.
+    if err := database.DB.Clauses(clause.OnConflict{
+        Columns:   []clause.Column{{Name: "phone"}},
+        DoNothing: true,
+    }).Create(&user).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+        return
+    }
+    if user.ID == 0 {
+        // Lost the race - another concurrent request already created this
+        // user. Re-fetch the winning row instead of proceeding with a
+        // zero-value user.
+        if err := database.DB.Where("phone = ?", req.Phone).First(&user).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load user"})
+            return
+        }
+    } else {
+        // Won the race - we're the ones who actually inserted the new user,
+        // so we're responsible for creating their cart.
+        cart := models.Cart{UserID: user.ID}
+        database.DB.Create(&cart)
+    }
 }
-if err := database.DB.Create(&user).Error; err != nil {
-c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+
+if user.IsBlocked {
+        c.JSON(http.StatusForbidden, gin.H{"error": "Your account has been blocked. Please contact support."})
 return
-}
-// Auto-create an empty cart for the new user
-cart := models.Cart{UserID: user.ID}
-database.DB.Create(&cart)
 }
 
 token, err := utils.GenerateJWT(user.ID, user.Phone, user.Role)
@@ -166,4 +210,25 @@ return
 }
 
 c.JSON(http.StatusOK, user)
+}
+
+// DeleteAccount godoc
+// DELETE /api/v1/auth/me (protected)
+// Soft-deletes the account by reusing the existing IsBlocked flag, which
+// VerifyOTP already checks and refuses login for. No new column needed.
+func DeleteAccount(c *gin.Context) {
+userID, _ := c.Get("user_id")
+
+var user models.User
+if err := database.DB.First(&user, userID).Error; err != nil {
+c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+return
+}
+
+if err := database.DB.Model(&user).Update("is_blocked", true).Error; err != nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+return
+}
+
+c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }

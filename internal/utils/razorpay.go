@@ -90,3 +90,14 @@ func VerifyRazorpaySignature(razorpayOrderID, razorpayPaymentID, signature strin
 
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
+
+// VerifyRazorpayWebhookSignature verifies the X-Razorpay-Signature header against the raw body.
+func VerifyRazorpayWebhookSignature(body []byte, signature, secret string) bool {
+	if secret == "" || signature == "" {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}

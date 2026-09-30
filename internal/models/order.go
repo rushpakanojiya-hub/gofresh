@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import "time"
 
@@ -74,6 +74,24 @@ const (
 	DeliveryStatusOutForDelivery = "out_for_delivery"
 	DeliveryStatusArrived        = "arrived"
 	DeliveryStatusDelivered      = "delivered"
+// New granular pickup/delivery states (added for operations analytics -
+// distance/time between accept, store arrival, pickup, and customer
+// arrival). DeliveryStatusArrived above is kept for backward
+// compatibility with orders created before this change; new code should
+// use DeliveryStatusArrivedAtCustomer instead.
+DeliveryStatusGoingToStore      = "going_to_store"
+DeliveryStatusArrivedAtStore    = "arrived_at_store"
+DeliveryStatusArrivedAtCustomer = "arrived_at_customer"
+// DeliveryStatusFailedDelivery is a terminal-ish state reached from
+// ArrivedAtCustomer when delivery could not be completed (customer
+// refused COD, unavailable, etc.). Resolution is an explicit operation,
+// not an automatic status change:
+//   - "retry" moves the order back to DeliveryStatusOutForDelivery
+//   - "return" moves the order to DeliveryStatusReturned
+DeliveryStatusFailedDelivery = "failed_delivery"
+// DeliveryStatusReturned is the final state for a failed delivery that
+// was returned to the store rather than retried.
+DeliveryStatusReturned = "returned"
 )
 
 type Order struct {
@@ -107,6 +125,17 @@ CouponDiscount    float64          `gorm:"-" json:"coupon_discount"`
 	// if the partner doesn't respond in time. Nil when there's no pending
 	// offer (before first assignment, or after accept/reject/expiry).
 	DeliveryAssignmentExpiresAt *time.Time `gorm:"index" json:"delivery_assignment_expires_at,omitempty"`
+ // AssignedAt is when a delivery partner was FIRST successfully assigned
+ // to this order (manual or auto-assign). Set once and never overwritten
+ // by later re-assignments, so it reflects the order's original
+ // confirmed-to-assigned duration for operations analytics. Nil until
+ // assigned at least once.
+ AssignedAt *time.Time `gorm:"index" json:"assigned_at,omitempty"`
+ // DeliveredAt is when this order was marked DELIVERED (courier-confirmed,
+ // OTP-verified). Nil until delivered. Used for delivery-time and SLA
+ // analytics - never backfilled or estimated for orders delivered before
+ // this field existed.
+ DeliveredAt *time.Time `gorm:"index" json:"delivered_at,omitempty"`
 	// DeliveryAttemptedPartnerIDs is a comma-separated list of every
 	// partner ID already offered this order (assigned, then
 	// rejected/expired), so automatic reassignment never offers the same
@@ -116,6 +145,7 @@ CouponDiscount    float64          `gorm:"-" json:"coupon_discount"`
 	// state (see the DeliveryStatus* constants above). Nil until a partner
 	// is first assigned.
 	DeliveryStatus *string `gorm:"index;size:20" json:"delivery_status,omitempty"`
+	DeliveryProofURL *string `json:"delivery_proof_url,omitempty"`
 	// Delivery-completion OTP fields. Only the bcrypt hash is ever
 	// persisted - the plaintext code is never stored and is never
 	// serialized to JSON (json:"-"), so it can never leak through any
@@ -175,8 +205,19 @@ type RejectAssignmentRequest struct {
 // Restricted to the states the partner drives themselves after accepting -
 // ASSIGNED and ACCEPTED are set automatically by the existing
 // assign/accept flow and can't be set through this endpoint.
+// ResolveFailedDeliveryRequest is the body for
+// PUT /delivery/orders/:id/resolve-failed (delivery partner only).
+// Failure resolution is always an explicit choice, never automatic - the
+// partner must say whether they are retrying delivery or returning the
+// order to the store, and why the delivery failed in the first place.
+type ResolveFailedDeliveryRequest struct {
+// Action is "retry" (order goes back to DeliveryStatusOutForDelivery)
+// or "return" (order goes to DeliveryStatusReturned).
+Action string `json:"action" binding:"required,oneof=retry return"`
+Reason string `json:"reason" binding:"required"`
+}
 type UpdateDeliveryStatusRequest struct {
-	Status string `json:"status" binding:"required,oneof=picked_up out_for_delivery arrived delivered"`
+	Status string `json:"status" binding:"required,oneof=going_to_store arrived_at_store picked_up out_for_delivery arrived arrived_at_customer delivered failed_delivery"`
 	// OTP is required only when Status is "delivered" - validated in
 	// services.UpdateDeliveryStatus, not by a binding tag here, so the same
 	// request struct still works for every other step.

@@ -1,6 +1,7 @@
 ﻿package handlers
 
 import (
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -157,6 +158,11 @@ func UpdateDeliveryAvailability(c *gin.Context) {
 		return
 	}
 
+	if isOnline {
+		go services.TryAssignPendingOrdersToPartner(partnerID)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": availabilityLabel(isOnline), "is_online": isOnline})
 }
+
 

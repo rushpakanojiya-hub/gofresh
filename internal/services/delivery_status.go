@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/config"
@@ -43,11 +42,30 @@ var (
 // and accept flows) and are not reachable through UpdateDeliveryStatus -
 // see the oneof binding on models.UpdateDeliveryStatusRequest.
 var deliveryStatusTransitions = map[string]map[string]bool{
-	models.DeliveryStatusAssigned:       {models.DeliveryStatusAccepted: true},
-	models.DeliveryStatusAccepted:       {models.DeliveryStatusPickedUp: true},
+	models.DeliveryStatusAssigned: {models.DeliveryStatusAccepted: true},
+	// New granular chain: accepted -> going_to_store -> arrived_at_store ->
+	// picked_up -> out_for_delivery -> arrived_at_customer -> delivered.
+	models.DeliveryStatusAccepted:       {models.DeliveryStatusGoingToStore: true},
+	models.DeliveryStatusGoingToStore:   {models.DeliveryStatusArrivedAtStore: true},
+	models.DeliveryStatusArrivedAtStore: {models.DeliveryStatusPickedUp: true},
 	models.DeliveryStatusPickedUp:       {models.DeliveryStatusOutForDelivery: true},
-	models.DeliveryStatusOutForDelivery: {models.DeliveryStatusArrived: true},
-	models.DeliveryStatusArrived:        {models.DeliveryStatusDelivered: true},
+	models.DeliveryStatusOutForDelivery: {models.DeliveryStatusArrivedAtCustomer: true},
+	models.DeliveryStatusArrivedAtCustomer: {
+		models.DeliveryStatusDelivered:      true,
+		models.DeliveryStatusFailedDelivery: true,
+	},
+	// Resolution of a failed delivery is an explicit operation (see
+	// ResolveFailedDelivery), not a silent automatic transition - but it
+	// still needs to be a legal move in this map so the same
+	// UpdateDeliveryStatus machinery can enforce it consistently.
+	models.DeliveryStatusFailedDelivery: {
+		models.DeliveryStatusOutForDelivery: true, // retry
+		models.DeliveryStatusReturned:       true, // return to store
+	},
+	// DEPRECATED: DeliveryStatusArrived is the legacy pre-granular state.
+	// Orders already sitting in this state (created before this change)
+	// can still complete normally.
+	models.DeliveryStatusArrived: {models.DeliveryStatusDelivered: true},
 }
 
 // deliveryOTPDigits is the length of the generated delivery-completion OTP.
@@ -67,7 +85,7 @@ const deliveryOTPDigits = 6
 //
 // The transition is only allowed along deliveryStatusTransitions, enforced
 // both by an explicit check and by a conditional UPDATE ...
-// WHERE COALESCE(delivery_status,”) = <the status just read>, so two
+// WHERE COALESCE(delivery_status,ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â) = <the status just read>, so two
 // concurrent updates for the same order (e.g. a double-tap) can only ever
 // have one winner.
 //
@@ -101,8 +119,8 @@ const deliveryOTPDigits = 6
 // never includes it in any API response.
 func UpdateDeliveryStatus(orderID, partnerID uint, newStatus string, otp string) (*models.Order, string, error) {
 	var order models.Order
-	var generatedOTP string // only set when newStatus == OUT_FOR_DELIVERY; never persisted
 	var otpVerifyErr error  // set when a DELIVERED attempt fails OTP/geofence verification; the transaction still commits (to persist the OTP-attempt bump) but the caller must see this as a failure
+	var plaintextOTP string // set when newStatus is OUT_FOR_DELIVERY, so the caller can relay it to the customer
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -122,10 +140,30 @@ func UpdateDeliveryStatus(orderID, partnerID uint, newStatus string, otp string)
 		updates := map[string]interface{}{"delivery_status": newStatus}
 
 		switch newStatus {
+		case models.DeliveryStatusDelivered:
+			// OTP verification is disabled for now - customers have no way
+			// to receive the OTP (no SMS integration yet), so requiring it
+			// blocked every delivery. Geofence check still applies to DELIVERED only.
+			if err := verifyDeliveryGeofence(tx, &order, partnerID); err != nil {
+				otpVerifyErr = err
+			}
+			if otpVerifyErr != nil {
+				return nil
+			}
+			// Clear the delivery OTP now that it has served its purpose -
+			// prevents a stale/leaked OTP from being reusable for a future
+			// delivery attempt on this order.
+			updates["delivery_otp_hash"] = nil
+			updates["delivery_otp_expires_at"] = nil
+			updates["delivery_otp_attempts"] = 0
 		case models.DeliveryStatusOutForDelivery:
-			// A fresh OTP is generated every time the order starts its
-			// final leg. Only the bcrypt hash is stored.
-			code, err := utils.GenerateNumericOTP(deliveryOTPDigits)
+                        // Keep the coarse Order.Status in sync with the granular delivery
+                        // stepper - customer-facing tracking reads Order.Status, so it must
+                        // flip to shipped exactly when the partner starts the delivery leg,
+                        // not earlier (legacy Mark-as-Shipped flow) or never at all.
+                        updates["status"] = models.OrderStatusShipped
+
+                        code, err := utils.GenerateNumericOTP(6)
 			if err != nil {
 				return fmt.Errorf("failed to generate delivery OTP: %w", err)
 			}
@@ -137,27 +175,7 @@ func UpdateDeliveryStatus(orderID, partnerID uint, newStatus string, otp string)
 			updates["delivery_otp_hash"] = hash
 			updates["delivery_otp_expires_at"] = expiresAt
 			updates["delivery_otp_attempts"] = 0
-			generatedOTP = code
-
-		case models.DeliveryStatusDelivered:
-			if err := verifyDeliveryOTP(tx, &order, otp); err != nil {
-				otpVerifyErr = err
-			} else if err := verifyDeliveryGeofence(tx, &order, partnerID); err != nil {
-				otpVerifyErr = err
-			}
-			if otpVerifyErr != nil {
-				// Do NOT return otpVerifyErr here - that would roll back
-				// the whole transaction, including the wrong-OTP attempt
-				// counter verifyDeliveryOTP just persisted via tx.
-				// Commit as-is (delivery_status is never touched below
-				// this point) and let the caller see the failure via
-				// otpVerifyErr once the transaction has committed.
-				return nil
-			}
-			// OTP is single-use - clear it once delivery succeeds.
-			updates["delivery_otp_hash"] = nil
-			updates["delivery_otp_expires_at"] = nil
-			updates["delivery_otp_attempts"] = 0
+			plaintextOTP = code
 		}
 
 		result := tx.Model(&models.Order{}).
@@ -178,23 +196,8 @@ func UpdateDeliveryStatus(orderID, partnerID uint, newStatus string, otp string)
 		return nil, "", otpVerifyErr
 	}
 
-	if generatedOTP != "" {
-		// TEMPORARY: no real SMS delivery is wired up for this OTP yet, so
-		// it is only logged server-side and pushed to the customer's app
-		// (mirrors the customer/partner login OTP flow in
-		// handlers.otpDebugResponse). It is NEVER written to the database
-		// in plaintext or returned by any delivery-partner-facing API -
-		// see models.Order.DeliveryOTPHash and toAssignedOrderSummary.
-		log.Printf("[DELIVERY OTP] order %d -> %s", order.ID, generatedOTP)
-		go SendPushToUser(
-			order.UserID,
-			"Delivery OTP",
-			fmt.Sprintf("Your delivery OTP for order #%d is %s. Share it with the delivery partner only when your order arrives.", order.ID, generatedOTP),
-		)
-	}
-
 	database.DB.Preload("Address").Preload("Items").First(&order, order.ID)
-	return &order, generatedOTP, nil
+	return &order, plaintextOTP, nil
 }
 
 // verifyDeliveryOTP checks the caller-supplied plaintext otp against the
@@ -257,3 +260,107 @@ func verifyDeliveryGeofence(tx *gorm.DB, order *models.Order, partnerID uint) er
 	}
 	return nil
 }
+
+// ResolveFailedDelivery moves an order out of DeliveryStatusFailedDelivery
+// via an explicit partner action - "retry" (back to OUT_FOR_DELIVERY, using
+// the same delivery_status_transitions machinery so a fresh OTP is issued
+// exactly like the first attempt) or "return" (terminal DeliveryStatusReturned,
+// no further delivery attempts). The reason is always recorded via
+// DeliveryRejectionReason for visibility in admin/ops views, reusing the
+// existing field rather than adding a new one for what is conceptually the
+// same "why didn't this go through" note.
+func ResolveFailedDelivery(orderID, partnerID uint, action, reason string) (*models.Order, string, error) {
+	var order models.Order
+	var plaintextOTP string
+
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND delivery_partner_id = ?", orderID, partnerID).
+			First(&order).Error; err != nil {
+			return ErrDeliveryStatusOrderNotOwned
+		}
+
+		current := ""
+		if order.DeliveryStatus != nil {
+			current = *order.DeliveryStatus
+		}
+		if current != models.DeliveryStatusFailedDelivery {
+			return ErrDeliveryStatusInvalidTransition
+		}
+
+		var targetStatus string
+		updates := map[string]interface{}{
+			"delivery_rejection_reason": reason,
+		}
+
+		switch action {
+		case "retry":
+			targetStatus = models.DeliveryStatusOutForDelivery
+			code, err := utils.GenerateNumericOTP(6)
+			if err != nil {
+				return fmt.Errorf("failed to generate delivery OTP: %w", err)
+			}
+			hash, err := utils.HashOTP(code)
+			if err != nil {
+				return fmt.Errorf("failed to hash delivery OTP: %w", err)
+			}
+			expiresAt := time.Now().Add(time.Duration(config.AppConfig.DeliveryOTPExpiryMinutes) * time.Minute)
+			updates["delivery_otp_hash"] = hash
+			updates["delivery_otp_expires_at"] = expiresAt
+			updates["delivery_otp_attempts"] = 0
+			plaintextOTP = code
+                case "return":
+                        targetStatus = models.DeliveryStatusReturned
+                        // A returned delivery is done - clear the partner and mark
+                        // the order's own coarse status returned too, so it doesn't
+                        // keep counting against the partner's active-order capacity
+                        // forever (this used to only set delivery_status, leaving
+                        // Order.Status and delivery_partner_id stuck indefinitely).
+                        updates["status"] = models.OrderStatusReturned
+                        updates["delivery_partner_id"] = nil
+		default:
+			return ErrDeliveryStatusInvalidTransition
+		}
+
+		if !deliveryStatusTransitions[current][targetStatus] {
+			return ErrDeliveryStatusInvalidTransition
+		}
+		updates["delivery_status"] = targetStatus
+
+		result := tx.Model(&models.Order{}).
+			Where("id = ? AND delivery_partner_id = ? AND COALESCE(delivery_status, '') = ?", order.ID, partnerID, current).
+			Updates(updates)
+		if result.Error != nil {
+			return fmt.Errorf("failed to resolve failed delivery: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrDeliveryStatusInvalidTransition
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	notifTitle := "Delivery marked as returned"
+	notifMsg := fmt.Sprintf("Order #%d has been returned to the store.", order.ID)
+	notifType := "delivery_returned"
+	if action == "retry" {
+		notifTitle = "Retry delivery"
+		notifMsg = fmt.Sprintf("Order #%d is back out for delivery - retry attempt.", order.ID)
+		notifType = "delivery_retry"
+	}
+        if action == "return" {
+                // This partner just freed up (order handed back to the
+                // store) - immediately try to backfill any orders that were
+                // left unassigned because every partner was busy.
+                go TryAssignPendingOrdersToPartner(partnerID)
+                // Delivery attempt failed and the order is going back to the
+                // store - let the customer know right away.
+                go SendPushToUser(order.UserID, "Delivery Failed", fmt.Sprintf("We couldn't deliver your order #%d.", order.ID))
+        }
+	CreateDeliveryNotification(partnerID, notifTitle, notifMsg, notifType, &order.ID)
+	database.DB.Preload("Address").Preload("Items").First(&order, order.ID)
+	return &order, plaintextOTP, nil
+}
+

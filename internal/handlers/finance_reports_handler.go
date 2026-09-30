@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "math"
@@ -95,7 +95,7 @@ const perDelivery = 30.0
 database.DB.Table("orders").
 Select("orders.delivery_partner_id, delivery_partners.name, delivery_partners.phone, COUNT(*) as delivered_count").
 Joins("JOIN delivery_partners ON delivery_partners.id = orders.delivery_partner_id").
-Where("orders.status = ? AND orders.updated_at >= ? AND orders.updated_at < ?", "delivered", start, end).
+Where("orders.status = ? AND COALESCE(orders.delivered_at, orders.updated_at) >= ? AND COALESCE(orders.delivered_at, orders.updated_at) < ?", "delivered", start, end).
 Group("orders.delivery_partner_id, delivery_partners.name, delivery_partners.phone").
 Scan(&rows)
 for i := range rows {

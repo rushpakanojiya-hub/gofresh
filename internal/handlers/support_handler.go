@@ -1,8 +1,9 @@
-﻿package handlers
+package handlers
 
 import (
 "net/http"
 "strconv"
+"strings"
 
 "github.com/gin-gonic/gin"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
@@ -21,12 +22,43 @@ c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 return
 }
 
+issueType := req.IssueType
+if issueType == "" || !models.ValidIssueTypes[issueType] {
+issueType = "other"
+}
+
+    // Order-linked tickets: order must belong to this customer and, except for
+    // payment/refund issues, must still be inside the complaint window.
+    if req.OrderID != nil {
+        order, err := complaintLoadOwnedOrder(userID, *req.OrderID)
+        if err != nil {
+            c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+            return
+        }
+        if !complaintWindowExempt[issueType] {
+            info, err := computeOrderComplaintWindow(order)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check complaint window"})
+                return
+            }
+            if !info.Open {
+                c.JSON(http.StatusForbidden, gin.H{
+                    "error":    "The time to report a problem with this order has ended.",
+                    "code":     "complaint_window_closed",
+                    "deadline": info.Deadline,
+                })
+                return
+            }
+        }
+    }
+
 ticket := models.SupportTicket{
 UserID:   userID,
 OrderID:  req.OrderID,
 Subject:  req.Subject,
 Status:   "open",
 Priority: "normal",
+IssueType: issueType,
 }
 
 if err := database.DB.Create(&ticket).Error; err != nil {
@@ -257,5 +289,77 @@ adminID := c.MustGet("user_id").(uint)
 adminPhone := c.MustGet("phone").(string)
 utils.LogAudit(adminID, adminPhone, "update_ticket_status", "support_ticket", strconv.Itoa(id), "status: "+body.Status)
 
+c.JSON(http.StatusOK, ticket)
+}
+
+
+// UpdateTicket godoc
+// PUT /api/v1/admin/support/tickets/:id (admin only)
+func UpdateTicket(c *gin.Context) {
+id, err := strconv.Atoi(c.Param("id"))
+if err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
+return
+}
+
+var ticket models.SupportTicket
+if err := database.DB.First(&ticket, id).Error; err != nil {
+c.JSON(http.StatusNotFound, gin.H{"error": "Ticket not found"})
+return
+}
+
+var req models.UpdateTicketRequest
+if err := c.ShouldBindJSON(&req); err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+return
+}
+
+changes := []string{}
+
+if req.IssueType != nil {
+if !models.ValidIssueTypes[*req.IssueType] {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid issue_type"})
+return
+}
+ticket.IssueType = *req.IssueType
+changes = append(changes, "issue_type: "+*req.IssueType)
+}
+
+if req.Priority != nil {
+if !models.ValidPriorities[*req.Priority] {
+c.JSON(http.StatusBadRequest, gin.H{"error": "invalid priority, must be one of: low, normal, high, urgent"})
+return
+}
+ticket.Priority = *req.Priority
+changes = append(changes, "priority: "+*req.Priority)
+}
+
+if req.AssignedToStaffID != nil && *req.AssignedToStaffID == 0 {
+ticket.AssignedToStaffID = nil
+changes = append(changes, "assigned_to_staff_id: unassigned")
+} else if req.AssignedToStaffID != nil {
+var staff models.User
+if err := database.DB.First(&staff, *req.AssignedToStaffID).Error; err != nil {
+c.JSON(http.StatusBadRequest, gin.H{"error": "assigned_to_staff_id does not match a valid user"})
+return
+}
+if staff.Role != "admin" {
+c.JSON(http.StatusBadRequest, gin.H{"error": "assigned_to_staff_id must be an admin staff member"})
+return
+}
+ticket.AssignedToStaffID = req.AssignedToStaffID
+changes = append(changes, "assigned_to_staff_id: "+strconv.Itoa(int(*req.AssignedToStaffID)))
+}
+
+if err := database.DB.Save(&ticket).Error; err != nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update ticket"})
+return
+}
+
+adminID := c.MustGet("user_id").(uint)
+adminPhone := c.MustGet("phone").(string)
+utils.LogAudit(adminID, adminPhone, "update_ticket", "support_ticket", strconv.Itoa(id), strings.Join(changes, ", "))
+
+database.DB.Preload("AssignedToStaff").First(&ticket, id)
 c.JSON(http.StatusOK, ticket)
 }

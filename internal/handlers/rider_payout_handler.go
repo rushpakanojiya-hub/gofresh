@@ -1,6 +1,7 @@
-﻿package handlers
+package handlers
 
 import (
+"fmt"
 "net/http"
 "time"
 
@@ -39,6 +40,13 @@ if err := database.DB.Create(&deposit).Error; err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record COD deposit"})
 return
 }
+services.CreateDeliveryNotification(
+deposit.DeliveryPartnerID,
+"Cash deposit recorded",
+fmt.Sprintf("Your cash deposit of Rs.%.2f has been recorded and is pending verification.", deposit.Amount),
+"cod_deposit_recorded",
+nil,
+)
 adminPhone := c.MustGet("phone").(string)
 utils.LogAudit(adminID, adminPhone, "create_rider_cod_deposit", "rider_cod_deposit", "", "pending")
 c.JSON(http.StatusCreated, deposit)
@@ -85,6 +93,13 @@ if err := services.PostRiderCODDepositLedgerEntry(deposit.ID); err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Deposit verified but ledger posting failed: " + err.Error()})
 return
 }
+services.CreateDeliveryNotification(
+deposit.DeliveryPartnerID,
+"COD settlement verified",
+fmt.Sprintf("Your cash deposit of Rs.%.2f has been verified.", deposit.Amount),
+"cod_settlement_verified",
+nil,
+)
 adminPhone := c.MustGet("phone").(string)
 utils.LogAudit(adminID, adminPhone, "verify_rider_cod_deposit", "rider_cod_deposit", id, "verified")
 c.JSON(http.StatusOK, deposit)
@@ -131,7 +146,7 @@ return
 
 var deliveredCount int64
 database.DB.Model(&models.Order{}).
-Where("delivery_partner_id = ? AND status = ? AND updated_at >= ? AND updated_at < ?",
+Where("delivery_partner_id = ? AND status = ? AND COALESCE(delivered_at, updated_at) >= ? AND COALESCE(delivered_at, updated_at) < ?",
 req.DeliveryPartnerID, "delivered", periodFrom, periodToExclusive).
 Count(&deliveredCount)
 
@@ -217,6 +232,10 @@ if payout.Status != "approved" {
 c.JSON(http.StatusBadRequest, gin.H{"error": "Only approved payouts can be paid"})
 return
 }
+if err := services.PostRiderPayoutSettlementLedgerEntry(payout.ID); err != nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post ledger entry: " + err.Error()})
+return
+}
 now := time.Now()
 payout.Status = "paid"
 payout.PaidAt = &now
@@ -224,8 +243,8 @@ if err := database.DB.Save(&payout).Error; err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark payout paid"})
 return
 }
-if err := services.PostRiderPayoutSettlementLedgerEntry(payout.ID); err != nil {
-c.JSON(http.StatusInternalServerError, gin.H{"error": "Payout marked paid but ledger posting failed: " + err.Error()})
+if false {
+// ledger posting already performed before save
 return
 }
 adminID := c.MustGet("user_id").(uint)

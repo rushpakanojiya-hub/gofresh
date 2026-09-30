@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "net/http"
@@ -71,7 +71,7 @@ WarehouseID:   inv.WarehouseID,
 WarehouseName: inv.Warehouse.Name,
 Stock:         inv.Stock,
 Reserved:      reserved,
-Available:     inv.Stock - reserved,
+Available:     max(0, inv.Stock - reserved),
 InStock:       inv.InStock,
 })
 }
@@ -94,14 +94,25 @@ database.DB.Model(&models.Inventory{}).Where("stock > 0 AND stock < ?", lowStock
 var outOfStockCount int64
 database.DB.Model(&models.Inventory{}).Where("stock <= 0").Count(&outOfStockCount)
 
+damagedCutoff := time.Now().AddDate(0, 0, -30)
+var damagedCount int64
+database.DB.Model(&models.StockMovement{}).
+Where("reason = ? AND created_at >= ?", models.AdjustReasonDamaged, damagedCutoff).
+Distinct("product_id").Count(&damagedCount)
+
+var expiredCount int64
+database.DB.Model(&models.Batch{}).
+Where("expiry_date < ? AND quantity > 0", time.Now()).
+Distinct("product_id").Count(&expiredCount)
+
 c.JSON(http.StatusOK, models.InventoryOverviewResponse{
 TotalSKUs:       totalSKUs,
 TotalAvailable:  totalAvailable,
 TotalReserved:   totalReserved,
 LowStockCount:   lowStockCount,
 OutOfStockCount: outOfStockCount,
-DamagedStock:    0,
-ExpiredStock:    0,
+DamagedStock:    damagedCount,
+ExpiredStock:    expiredCount,
 Rows:            rows,
 Page:            query.Page,
 Limit:           query.Limit,

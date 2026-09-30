@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import "time"
 
@@ -11,7 +11,7 @@ Name            string    `gorm:"not null" json:"name"` // e.g. "Ahmedabad Local
 City            string    `json:"city"`
 Pincodes        string    `json:"pincodes"` // comma-separated, e.g. "380001,380002,380015"
 DeliveryCharge  float64   `gorm:"default:0" json:"delivery_charge"`
-IsCODAvailable  bool      `gorm:"default:true" json:"is_cod_available"`
+IsCODAvailable  bool      `json:"is_cod_available"`
 EstimatedDays   int       `gorm:"default:3" json:"estimated_days"`
 IsActive        bool      `gorm:"default:true" json:"is_active"`
 CreatedAt       time.Time `json:"created_at"`

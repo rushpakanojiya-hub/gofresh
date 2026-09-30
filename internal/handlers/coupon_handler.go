@@ -52,7 +52,7 @@ func ValidateCoupon(db *gorm.DB, code string, orderAmount float64, userID uint) 
 	var userUsage int64
 	db.Table("order_coupons").
 		Joins("JOIN orders ON orders.id = order_coupons.order_id").
-		Where("order_coupons.coupon_id = ? AND orders.user_id = ?", coupon.ID, userID).
+		Where("order_coupons.coupon_id = ? AND orders.user_id = ? AND orders.status != ?", coupon.ID, userID, models.OrderStatusCancelled).
 		Count(&userUsage)
 	if int(userUsage) >= perUserLimit {
 		return nil, 0, ErrCouponUserLimitReached

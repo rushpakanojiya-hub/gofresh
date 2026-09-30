@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
     "fmt"
@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
         os.Exit(0)
     }
 
-    if err := db.AutoMigrate(&models.User{}, &models.Address{}, &models.DeliveryPartner{}, &models.Order{}, &models.DeliveryZone{}); err != nil {
+    if err := db.AutoMigrate(&models.User{}, &models.Address{}, &models.DeliveryPartner{}, &models.Order{}, &models.DeliveryZone{}, &models.DeliveryNotification{}); err != nil {
         fmt.Printf("[delivery_assignment_test] skipping package: migration failed: %v\n", err)
         os.Exit(0)
     }
@@ -60,7 +60,7 @@ func envOr(key, fallback string) string {
 // clean, predictable slate regardless of what earlier tests inserted.
 func resetDeliveryAssignmentTables(t *testing.T) {
     t.Helper()
-    if err := database.DB.Exec("TRUNCATE TABLE orders, delivery_partners, addresses, users, delivery_zones RESTART IDENTITY CASCADE").Error; err != nil {
+    if err := database.DB.Exec("TRUNCATE TABLE orders, delivery_partners, addresses, users, delivery_zones, delivery_notifications, rider_cod_deposits, rider_payouts RESTART IDENTITY CASCADE").Error; err != nil {
         t.Fatalf("failed to reset tables: %v", err)
     }
 }

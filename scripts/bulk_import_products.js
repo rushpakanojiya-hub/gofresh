@@ -20,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const BASE_URL = 'https://ecommerce-backend-dd4u.onrender.com/api/v1';
+const BASE_URL = 'https://gofresh-evl7.onrender.com/api/v1';
 
 function parseArgs() {
   const args = process.argv.slice(2);

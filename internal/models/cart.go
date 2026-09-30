@@ -13,8 +13,8 @@ type Cart struct {
 
 type CartItem struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	CartID    uint      `gorm:"not null;index" json:"cart_id"`
-	ProductID uint      `gorm:"not null" json:"product_id"`
+	CartID    uint      `gorm:"not null;index;uniqueIndex:idx_cart_product" json:"cart_id"`
+	ProductID uint      `gorm:"not null;uniqueIndex:idx_cart_product" json:"product_id"`
 	Product   Product   `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Quantity  int       `gorm:"default:1" json:"quantity"`
 	CreatedAt time.Time `json:"created_at"`

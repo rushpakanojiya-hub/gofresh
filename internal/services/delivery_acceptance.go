@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 	"errors"
@@ -21,6 +21,7 @@ import (
 var (
 	ErrAssignmentOrderNotOwned = errors.New("order not found or not assigned to you")
 	ErrAssignmentNotPending    = errors.New("assignment is not pending")
+	AutoReassignOnReject       = true
 )
 
 // AssignmentTimeout returns the configured acceptance window (how long a
@@ -119,9 +120,16 @@ func RespondToAssignment(orderID, partnerID uint, newStatus string, reason strin
 		return nil, err
 	}
 
-	database.DB.Preload("Address").Preload("Items").First(&order, order.ID)
+	// Re-fetch into a fresh struct rather than reusing the existing `order`
+	// variable - GORM's scanner does not overwrite an already non-nil pointer
+	// field (like DeliveryAssignmentExpiresAt) with nil when scanning a SQL
+	// NULL back into a reused struct, so a stale expiry would otherwise
+	// survive in the in-memory value even though the DB column was cleared.
+	var freshOrder models.Order
+	database.DB.Preload("Address").Preload("Items").First(&freshOrder, order.ID)
+	order = freshOrder
 
-	if newStatus == models.DeliveryAssignmentStatusRejected {
+	if newStatus == models.DeliveryAssignmentStatusRejected && AutoReassignOnReject {
 		go TryAssignNextPartner(order.ID)
 	}
 
@@ -158,7 +166,7 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 	var loads []loadRow
 	if err := tx.Model(&models.Order{}).
 		Select("delivery_partner_id, count(*) as cnt").
-		Where("delivery_partner_id IS NOT NULL AND status IN ?", []string{models.OrderStatusConfirmed, models.OrderStatusPicking, models.OrderStatusPicked, models.OrderStatusPacking, models.OrderStatusPacked, models.OrderStatusReadyForDispatch, models.OrderStatusHandedOver, models.OrderStatusShipped}).
+		Where("delivery_partner_id IS NOT NULL AND status IN ? AND updated_at > ?", []string{models.OrderStatusConfirmed, models.OrderStatusPicking, models.OrderStatusPicked, models.OrderStatusPacking, models.OrderStatusPacked, models.OrderStatusReadyForDispatch, models.OrderStatusHandedOver, models.OrderStatusShipped}, time.Now().Add(-12*time.Hour)).
 		Group("delivery_partner_id").
 		Scan(&loads).Error; err != nil {
 		return nil, fmt.Errorf("failed to load partner workloads: %w", err)
@@ -239,7 +247,18 @@ func TryAssignNextPartner(orderID uint) {
 			return err
 		}
 		if !serviceable {
-			return errAutoAssignSkipped
+			// Persist the clear (not a rollback-triggering skip) - returning
+			// errAutoAssignSkipped here used to roll back this very update,
+			// since gorm.DB.Transaction rolls back on ANY non-nil closure
+			// return, sentinel or not.
+			result := tx.Model(&models.Order{}).
+				Where("id = ? AND delivery_assignment_status = ?", order.ID, *order.DeliveryAssignmentStatus).
+				Update("delivery_partner_id", nil)
+			if result.Error != nil {
+				return fmt.Errorf("failed to clear unserviceable order %d: %w", order.ID, result.Error)
+			}
+			exhausted = true
+			return nil
 		}
 
 		exclude := parseAttemptedIDs(order.DeliveryAttemptedPartnerIDs)
@@ -308,11 +327,7 @@ func TryAssignNextPartner(orderID uint) {
 
 	log.Printf("[reassign] order %d reassigned to delivery partner %d (%s)", orderID, newPartnerID, newPartnerName)
 
-	go SendPushToPartner(
-		newPartnerID,
-		"New delivery assigned",
-		fmt.Sprintf("Order #%d has been assigned to you", orderID),
-	)
+	go SendPushToPartnerWithData(newPartnerID, "New Order Assigned", "You have a new delivery order. Tap to view and accept it.", map[string]string{"type": "new_assignment", "order_id": fmt.Sprint(orderID)})
 }
 
 // ExpireStaleAssignments finds every order whose current acceptance window
@@ -347,4 +362,3 @@ func ExpireStaleAssignments() {
 		TryAssignNextPartner(id)
 	}
 }
-

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/middleware"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
 )
 
@@ -26,6 +28,7 @@ func newAssignmentTestRouter() *gin.Engine {
 	admin := r.Group("/api/v1/admin")
 	admin.Use(middleware.AuthMiddleware(), middleware.AdminOnly())
 	admin.PUT("/orders/:id/assign-delivery", AssignDeliveryPartner)
+	admin.DELETE("/delivery-partners/:id", DeleteDeliveryPartner)
 
 	delivery := r.Group("/api/v1/delivery")
 	delivery.GET("/orders", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), GetMyDeliveries)
@@ -42,7 +45,8 @@ var assignmentSeedSeq int
 // uniqueIndex on phone.
 func uniquePhone(prefix string) string {
 	assignmentSeedSeq++
-	return prefix + fmt.Sprintf("%05d", assignmentSeedSeq)[:5]
+	n := (time.Now().UnixNano()/1000 + int64(assignmentSeedSeq)) % 1000000000
+	return fmt.Sprintf("9%09d", n)
 }
 
 func seedAssignPartner(t *testing.T, online bool) models.DeliveryPartner {
@@ -297,6 +301,8 @@ func TestAcceptAssignment_AnotherPartnersOrderRejected(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRejectAssignment_OwnAssignmentSucceeds(t *testing.T) {
+	services.AutoReassignOnReject = false
+	defer func() { services.AutoReassignOnReject = true }()
 	r := newAssignmentTestRouter()
 	adminAssignTokenCache = adminAssignToken(t)
 	partner := seedAssignPartner(t, true)
@@ -499,6 +505,8 @@ func TestAssignDeliveryPartner_UnknownPartnerReturns404(t *testing.T) {
 // legitimate re-assignment path this phase allows (no auto-reassignment,
 // but an admin/dispatcher can do it manually).
 func TestAssignDeliveryPartner_ReassignAfterRejectionAllowed(t *testing.T) {
+	services.AutoReassignOnReject = false
+	defer func() { services.AutoReassignOnReject = true }()
 	r := newAssignmentTestRouter()
 	adminAssignTokenCache = adminAssignToken(t)
 	partnerA := seedAssignPartner(t, true)
@@ -521,5 +529,65 @@ func TestAssignDeliveryPartner_ReassignAfterRejectionAllowed(t *testing.T) {
 	}
 	if fresh.DeliveryAssignmentStatus == nil || *fresh.DeliveryAssignmentStatus != models.DeliveryAssignmentStatusAssigned {
 		t.Errorf("expected fresh 'assigned' status after reassignment, got %v", fresh.DeliveryAssignmentStatus)
+	}
+}
+
+func TestAssignDeliveryPartner_ReassignAfterExpiryAllowed(t *testing.T) {
+	r := newAssignmentTestRouter()
+	adminAssignTokenCache = adminAssignToken(t)
+	partnerA := seedAssignPartner(t, true)
+	partnerB := seedAssignPartner(t, true)
+	order := seedAssignOrder(t, models.OrderStatusConfirmed)
+
+	assignOrder(r, order.ID, partnerA.ID)
+
+	// Simulate the periodic expiry sweep (services.ExpireStaleAssignments)
+	// marking this assignment as expired, rather than the partner
+	// explicitly rejecting it.
+	database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+		Update("delivery_assignment_status", models.DeliveryAssignmentStatusExpired)
+
+	resp := assignOrder(r, order.ID, partnerB.ID)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected re-assignment after expiry to succeed, got %d: %s", resp.Code, resp.Body)
+	}
+
+	var fresh models.Order
+	database.DB.First(&fresh, order.ID)
+	if fresh.DeliveryPartnerID == nil || *fresh.DeliveryPartnerID != partnerB.ID {
+		t.Errorf("expected order reassigned to partnerB, got %+v", fresh.DeliveryPartnerID)
+	}
+	if fresh.DeliveryAssignmentStatus == nil || *fresh.DeliveryAssignmentStatus != models.DeliveryAssignmentStatusAssigned {
+		t.Errorf("expected fresh 'assigned' status after reassignment, got %v", fresh.DeliveryAssignmentStatus)
+	}
+}
+
+func TestDeleteDeliveryPartner_WithActiveOrderRejected(t *testing.T) {
+	r := newAssignmentTestRouter()
+	adminAssignTokenCache = adminAssignToken(t)
+	partner := seedAssignPartner(t, true)
+	order := seedAssignOrder(t, models.OrderStatusConfirmed)
+
+	assignOrder(r, order.ID, partner.ID)
+
+	w := doRequest(r, http.MethodDelete, fmt.Sprintf("/api/v1/admin/delivery-partners/%d", partner.ID), adminAssignTokenCache, nil)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 when deleting a partner with an active order, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var stillExists models.DeliveryPartner
+	if err := database.DB.First(&stillExists, partner.ID).Error; err != nil {
+		t.Errorf("expected partner to still exist after rejected deletion, got error: %v", err)
+	}
+}
+
+func TestDeleteDeliveryPartner_NoActiveOrdersSucceeds(t *testing.T) {
+	r := newAssignmentTestRouter()
+	adminAssignTokenCache = adminAssignToken(t)
+	partner := seedAssignPartner(t, true)
+
+	w := doRequest(r, http.MethodDelete, fmt.Sprintf("/api/v1/admin/delivery-partners/%d", partner.ID), adminAssignTokenCache, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 when deleting a partner with no active orders, got %d: %s", w.Code, w.Body.String())
 	}
 }

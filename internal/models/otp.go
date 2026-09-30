@@ -11,5 +11,6 @@ type OTP struct {
 	Code      string    `gorm:"not null" json:"-"`
 	ExpiresAt time.Time `json:"-"`
 	Verified  bool      `gorm:"default:false" json:"-"`
+	Attempts  int       `gorm:"not null;default:0" json:"-"`
 	CreatedAt time.Time `json:"-"`
 }
