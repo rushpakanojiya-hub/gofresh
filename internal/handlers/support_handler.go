@@ -8,6 +8,7 @@ import (
 "github.com/gin-gonic/gin"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
+"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
 )
 
@@ -247,6 +248,13 @@ ticket.Status = "in_progress"
 database.DB.Save(&ticket)
 }
 
+// Notify the customer that support has replied.
+preview := []rune(req.Message)
+previewText := req.Message
+if len(preview) > 100 {
+previewText = string(preview[:100]) + "..."
+}
+go services.SendPushToUser(ticket.UserID, "Support replied", previewText)
 c.JSON(http.StatusCreated, msg)
 }
 
