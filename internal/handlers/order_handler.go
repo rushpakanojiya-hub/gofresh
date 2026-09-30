@@ -264,9 +264,11 @@ return
 
 database.DB.Preload("Items.Product").Preload("Address").Preload("Warehouse").First(&order, order.ID)
 
-message := "Your order #" + strconv.Itoa(int(order.ID)) + " has been placed successfully!"
-utils.SendNotification(order.Address.Phone, message, "order_placed", &order.ID)
-services.SendPushToUser(order.UserID, "Order Placed", message)
+// Online-payment orders are only "placed" once payment is verified
+// (see VerifyPayment). COD and already-confirmed orders notify now.
+if order.Status == models.OrderStatusConfirmed || order.PaymentMethod != models.PaymentMethodOnline {
+    sendOrderPlacedNotification(order.ID)
+}
 if order.Status == models.OrderStatusConfirmed {
                 // Order confirmed at checkout time (COD, or zero-total) -
                 // try to auto-assign the nearest available delivery
@@ -599,6 +601,16 @@ utils.SendNotification(order.DeliveryPartner.Phone, "Order #"+orderID+" was canc
 c.JSON(http.StatusOK, order)
 }
 
-
-
-
+// sendOrderPlacedNotification notifies the customer that their order is placed.
+// For online-payment orders call it only after payment is confirmed (from
+// VerifyPayment, and from the Razorpay webhook once that exists).
+func sendOrderPlacedNotification(orderID uint) {
+    var order models.Order
+    if err := database.DB.Preload("Address").First(&order, orderID).Error; err != nil {
+        log.Printf("order placed notification: failed to load order %d: %v", orderID, err)
+        return
+    }
+    message := "Your order #" + strconv.Itoa(int(order.ID)) + " has been placed successfully!"
+    utils.SendNotification(order.Address.Phone, message, "order_placed", &order.ID)
+    services.SendPushToUser(order.UserID, "Order Placed", message)
+}

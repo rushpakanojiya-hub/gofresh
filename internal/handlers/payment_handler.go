@@ -184,6 +184,10 @@ func VerifyPayment(c *gin.Context) {
         return
     }
 
+    // Payment confirmed: this is the moment an online order is really placed,
+    // so the customer is notified now, not at checkout time.
+    sendOrderPlacedNotification(order.ID)
+
     // Auto-assign the nearest available delivery partner now that
     // payment is confirmed, same as the COD checkout-time flow.
     if order.Status == models.OrderStatusConfirmed {
