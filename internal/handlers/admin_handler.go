@@ -479,7 +479,7 @@ func UpdateOrderStatus(c *gin.Context) {
 
 	message := "Your order #" + orderID + " status is now: " + req.Status
 	utils.SendNotification(order.Address.Phone, message, "order_status_"+req.Status, &order.ID)
-	services.SendPushToUser(order.UserID, "Order Update", message)
+	services.SendPushToUserWithData(order.UserID, "Order Update", message, services.OrderPushData(order.ID))
 
 	adminID := c.MustGet("user_id").(uint)
 	adminPhone := c.MustGet("phone").(string)

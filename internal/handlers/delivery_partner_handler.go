@@ -590,11 +590,7 @@ func UpdateDeliveryOrderStatus(c *gin.Context) {
 	}
 
 	// Notify the customer that their order is out for delivery.
-	go services.SendPushToUser(
-		order.UserID,
-		"Order out for delivery",
-		fmt.Sprintf("Your order #%d is on its way", order.ID),
-	)
+	go services.SendPushToUserWithData(order.UserID, "Order out for delivery", fmt.Sprintf("Your order #%d is on its way", order.ID), services.OrderPushData(order.ID))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Order status updated", "order": order})
 }
@@ -723,11 +719,7 @@ func ConfirmDelivery(c *gin.Context) {
 	}
 
 	// Notify the customer that their order has been delivered.
-	go services.SendPushToUser(
-		order.UserID,
-		"Order delivered",
-		fmt.Sprintf("Your order #%d has been delivered. Enjoy!", order.ID),
-	)
+	go services.SendPushToUserWithData(order.UserID, "Order delivered", fmt.Sprintf("Your order #%d has been delivered. Enjoy!", order.ID), services.OrderPushData(order.ID))
 
         // This partner just freed up - immediately try to backfill any
         // orders that were left unassigned because every partner was busy.

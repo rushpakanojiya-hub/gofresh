@@ -285,8 +285,8 @@ order.PaymentStatus = models.OrderPaymentStatusPartiallyRefunded
 database.DB.Save(&order)
 
 if refundDelta > 0 && (req.Status == models.PaymentStatusRefunded || req.Status == models.PaymentStatusPartiallyRefunded) {
-go services.SendPushToUser(order.UserID, "Refund Initiated", "Your refund has been initiated.")
-go services.SendPushToUser(order.UserID, "Refund Completed", "Your refund has been completed.")
+go services.SendPushToUserWithData(order.UserID, "Refund Initiated", "Your refund has been initiated.", services.OrderPushData(order.ID))
+go services.SendPushToUserWithData(order.UserID, "Refund Completed", "Your refund has been completed.", services.OrderPushData(order.ID))
 }
 
 adminID := c.MustGet("user_id").(uint)

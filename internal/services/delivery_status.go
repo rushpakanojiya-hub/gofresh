@@ -363,7 +363,7 @@ func ResolveFailedDelivery(orderID, partnerID uint, action, reason string) (*mod
                 go TryAssignPendingOrdersToPartner(partnerID)
                 // Delivery attempt failed and the order is going back to the
                 // store - let the customer know right away.
-                go SendPushToUser(order.UserID, "Delivery Failed", fmt.Sprintf("We couldn't deliver your order #%d.", order.ID))
+                go SendPushToUserWithData(order.UserID, "Delivery Failed", fmt.Sprintf("We couldn't deliver your order #%d.", order.ID), OrderPushData(order.ID))
         }
 	CreateDeliveryNotification(partnerID, notifTitle, notifMsg, notifType, &order.ID)
 	database.DB.Preload("Address").Preload("Items").First(&order, order.ID)

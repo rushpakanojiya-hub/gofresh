@@ -215,7 +215,7 @@ func VerifyPayment(c *gin.Context) {
     database.DB.First(&addr, order.AddressID)
     message := "Payment received for order #" + orderID + ". Your order is now confirmed."
     utils.SendNotification(addr.Phone, message, "payment_received", &order.ID)
-    services.SendPushToUser(order.UserID, "Payment Received", message)
+    services.SendPushToUserWithData(order.UserID, "Payment Received", message, services.OrderPushData(order.ID))
 
     c.JSON(http.StatusOK, gin.H{
         "message": "Payment verified successfully",

@@ -584,7 +584,7 @@ order.Status = models.OrderStatusCancelled
 
 message := "Your order #" + orderID + " has been cancelled."
 utils.SendNotification(order.Address.Phone, message, "order_cancelled", &order.ID)
-services.SendPushToUser(order.UserID, "Order Cancelled", message)
+services.SendPushToUserWithData(order.UserID, "Order Cancelled", message, services.OrderPushData(order.ID))
 if order.WarehouseID != nil {
 services.NotifyWarehouse(*order.WarehouseID, models.WhNotifyOrderCancelled,
 "Order #"+orderID+" cancelled",
@@ -612,5 +612,5 @@ func sendOrderPlacedNotification(orderID uint) {
     }
     message := "Your order #" + strconv.Itoa(int(order.ID)) + " has been placed successfully!"
     utils.SendNotification(order.Address.Phone, message, "order_placed", &order.ID)
-    services.SendPushToUser(order.UserID, "Order Placed", message)
+    services.SendPushToUserWithData(order.UserID, "Order Placed", message, services.OrderPushData(order.ID))
 }

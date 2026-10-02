@@ -51,6 +51,36 @@ func SendPushToAll(title string, body string) {
 // SendPushToUser sends a push notification to all device tokens linked to
 // a specific user (e.g. for order status updates). If the user has no
 // linked tokens (never registered one while logged in), this is a no-op.
+// SendPushToUserWithData is SendPushToUser plus a data payload (for example
+// {"type": "order_status", "order_id": "20"}) so the app can open the right
+// screen when the notification is tapped.
+func SendPushToUserWithData(userID uint, title string, body string, data map[string]string) {
+    if fb.Client == nil {
+        log.Println("Firebase not initialized, skipping push notification")
+        return
+    }
+    var tokens []models.DeviceToken
+    if err := database.DB.Where("user_id = ?", userID).Find(&tokens).Error; err != nil {
+        log.Printf("Failed to load device tokens for user %d: %v", userID, err)
+        return
+    }
+    ctx := context.Background()
+    for _, t := range tokens {
+        msg := &messaging.Message{
+            Notification: &messaging.Notification{Title: title, Body: body},
+            Data:         data,
+            Token:        t.Token,
+        }
+        if _, err := fb.Client.Send(ctx, msg); err != nil {
+            log.Printf("Push failed for token %s: %v", t.Token, err)
+            if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
+                database.DB.Delete(&t)
+            }
+            continue
+        }
+    }
+}
+
 func SendPushToUser(userID uint, title string, body string) {
 	if fb.Client == nil {
 		log.Println("Firebase not initialized, skipping push notification")
