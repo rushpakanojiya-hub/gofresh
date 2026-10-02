@@ -189,3 +189,19 @@ func GetDeliveryOrderRating(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"rated": true, "rating": rec.Rating, "review": rec.Review})
 }
+
+// GetMyDeliveryRatings: GET /delivery/ratings  (delivery partner only)
+// Every rating this partner received, newest first, with the order id.
+func GetMyDeliveryRatings(c *gin.Context) {
+	partnerID := c.MustGet("user_id").(uint)
+	var recs []DeliveryRatingRecord
+	if err := database.DB.
+		Where("delivery_partner_id = ?", partnerID).
+		Order("created_at DESC").
+		Limit(200).
+		Find(&recs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load ratings"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ratings": recs})
+}
