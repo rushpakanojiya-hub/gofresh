@@ -426,7 +426,11 @@ func UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
-	allowed := validOrderTransitions[order.Status]
+	if req.Status == models.OrderStatusDelivered && order.PaymentMethod == models.PaymentMethodCOD {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "COD orders must be marked delivered by the delivery partner (cash collection and ledger are recorded there)"})
+        return
+    }
+    allowed := validOrderTransitions[order.Status]
 	if !allowed[req.Status] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Cannot change status from '" + order.Status + "' to '" + req.Status + "'",

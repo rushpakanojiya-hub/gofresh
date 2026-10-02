@@ -615,6 +615,12 @@ func UploadDeliveryProof(c *gin.Context) {
 		return
 	}
 
+	// Photo upload is only allowed when the partner is at the delivery address.
+	if err := services.VerifyDeliveryGeofenceForOrder(&order, partnerID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
 	file, err := c.FormFile("image")
 	if err != nil {

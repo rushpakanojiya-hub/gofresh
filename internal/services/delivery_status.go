@@ -261,6 +261,12 @@ func verifyDeliveryGeofence(tx *gorm.DB, order *models.Order, partnerID uint) er
 	return nil
 }
 
+// VerifyDeliveryGeofenceForOrder lets handlers run the same geofence check
+// (used before accepting the delivery proof photo) without a transaction.
+func VerifyDeliveryGeofenceForOrder(order *models.Order, partnerID uint) error {
+	return verifyDeliveryGeofence(database.DB, order, partnerID)
+}
+
 // ResolveFailedDelivery moves an order out of DeliveryStatusFailedDelivery
 // via an explicit partner action - "retry" (back to OUT_FOR_DELIVERY, using
 // the same delivery_status_transitions machinery so a fresh OTP is issued
