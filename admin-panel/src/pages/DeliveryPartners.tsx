@@ -7,6 +7,8 @@ import {
   updateDeliveryPartner,
   deleteDeliveryPartner,
   getPartnerOnboarding,
+  getRiderWorkload,
+  recordAndVerifyCODDeposit,
 } from '../api/admin'
 import type { DeliveryPartner } from '../types/admin'
 
@@ -37,6 +39,11 @@ export default function DeliveryPartners() {
   const [detailsError, setDetailsError] = useState<string | null>(null)
 
   const [form, setForm] = useState(emptyForm)
+  const [cash, setCash] = useState<Record<number, { pending: number; limit: number; reached: boolean }>>({})
+  const [depositFor, setDepositFor] = useState<DeliveryPartner | null>(null)
+  const [depositAmount, setDepositAmount] = useState('')
+  const [depositError, setDepositError] = useState<string | null>(null)
+  const [depositSaving, setDepositSaving] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -46,6 +53,16 @@ export default function DeliveryPartners() {
     try {
       const res = await listDeliveryPartners()
       setPartners(res.delivery_partners ?? res.partners ?? res ?? [])
+      try {
+        const w = await getRiderWorkload()
+        const m: Record<number, { pending: number; limit: number; reached: boolean }> = {}
+        for (const r of w.riders ?? []) {
+          m[r.partner_id] = { pending: r.pending_cod ?? 0, limit: r.cod_limit ?? 1500, reached: !!r.cod_limit_reached }
+        }
+        setCash(m)
+      } catch {
+        // cash column is optional; ignore failures
+      }
     } catch (err: any) {
       setError(err.response?.data?.error ?? 'Failed to load delivery partners.')
     } finally {
@@ -136,6 +153,33 @@ export default function DeliveryPartners() {
     }
   }
 
+  function openDeposit(p: DeliveryPartner) {
+    setDepositFor(p)
+    setDepositAmount(String(Math.round((cash[p.id]?.pending ?? 0) * 100) / 100))
+    setDepositError(null)
+  }
+
+  async function handleDeposit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!depositFor) return
+    const amt = parseFloat(depositAmount)
+    if (!(amt > 0)) {
+      setDepositError('Enter a valid amount.')
+      return
+    }
+    setDepositSaving(true)
+    setDepositError(null)
+    try {
+      await recordAndVerifyCODDeposit(depositFor.id, amt, 'Recorded from admin panel')
+      setDepositFor(null)
+      load()
+    } catch (err: any) {
+      setDepositError(err.response?.data?.error ?? 'Failed to record deposit.')
+    } finally {
+      setDepositSaving(false)
+    }
+  }
+
   async function handleDelete(id: number) {
     if (!confirm('Delete this delivery partner? This cannot be undone.')) return
     try {
@@ -184,6 +228,7 @@ export default function DeliveryPartners() {
                   <th className="px-4 py-3 font-medium">Rating</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Approval</th>
+                  <th className="px-4 py-3 font-medium">Cash in hand</th>
                   <th className="px-4 py-3 font-medium"></th>
                 </tr>
               </thead>
@@ -213,6 +258,34 @@ export default function DeliveryPartners() {
                       >
                         {(p as any).approval_status ?? 'approved'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {cash[p.id] ? (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full ${
+                              cash[p.id].reached
+                                ? 'bg-red-500/15 text-red-300'
+                                : cash[p.id].pending >= cash[p.id].limit * 0.8
+                                ? 'bg-amber-500/15 text-amber-300'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {'\u20B9'}{Math.round(cash[p.id].pending)} / {'\u20B9'}{Math.round(cash[p.id].limit)}
+                            {cash[p.id].reached ? ' - COD blocked' : ''}
+                          </span>
+                          {cash[p.id].pending > 0 && (
+                            <button
+                              onClick={() => openDeposit(p)}
+                              className="text-emerald-400 hover:text-emerald-300 text-xs"
+                            >
+                              Record deposit
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        '-'
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
                       <button
@@ -303,6 +376,32 @@ export default function DeliveryPartners() {
                 : editingPartner
                 ? 'Save changes'
                 : 'Add partner'}
+            </button>
+          </form>
+        </Modal>
+      )}
+      {depositFor && (
+        <Modal title={`Record cash deposit: ${depositFor.name}`} onClose={() => setDepositFor(null)}>
+          <form onSubmit={handleDeposit} className="space-y-3">
+            <p className="text-xs text-slate-400">
+              Pending cash: {'\u20B9'}{(cash[depositFor.id]?.pending ?? 0).toFixed(2)}. This records the deposit and verifies it immediately.
+            </p>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Amount received</label>
+              <input
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                inputMode="decimal"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            {depositError && <p className="text-red-400 text-xs">{depositError}</p>}
+            <button
+              type="submit"
+              disabled={depositSaving}
+              className="w-full py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-medium transition-colors mt-2"
+            >
+              {depositSaving ? 'Saving...' : 'Record and verify deposit'}
             </button>
           </form>
         </Modal>

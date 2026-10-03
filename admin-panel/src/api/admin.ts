@@ -108,6 +108,21 @@ export const updateDeliveryPartner = (id: number, data: Partial<DeliveryPartner>
 export const deleteDeliveryPartner = (id: number) =>
   apiClient.delete(`/admin/delivery-partners/${id}`).then((r) => r.data)
 
+// Records a rider COD cash deposit and verifies it right away.
+export const recordAndVerifyCODDeposit = async (partnerId: number, amount: number, note: string) => {
+  const created = await apiClient
+    .post('/admin/finance/rider-cod-deposits', {
+      delivery_partner_id: partnerId,
+      amount,
+      deposit_date: new Date().toLocaleDateString('en-CA'),
+      note,
+    })
+    .then((r) => r.data)
+  return apiClient
+    .post(`/admin/finance/rider-cod-deposits/${created.id}/verify`)
+    .then((r) => r.data)
+}
+
 // ---- Warehouses ----
 export const listWarehouses = () =>
   apiClient.get('/admin/warehouses').then((r) => r.data)
