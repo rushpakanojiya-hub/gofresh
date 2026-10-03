@@ -329,6 +329,8 @@ type AssignedOrderSummary struct {
 	DeliveryStatus      *string            `json:"delivery_status,omitempty"`
 	DeliveryAddress     string             `json:"delivery_address"`
 	CustomerName        string             `json:"customer_name"`
+	PickupName          string             `json:"pickup_name"`
+	PickupAddress       string             `json:"pickup_address"`
 	CustomerPhone       string             `json:"customer_phone"`
 	TotalAmount         float64            `json:"total_amount"`
 	PaymentMethod       string             `json:"payment_method"`
@@ -352,6 +354,14 @@ func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
 			Price:       it.Price,
 		})
 	}
+	pickupName, pickupAddr := "", ""
+	if o.Warehouse != nil {
+		pickupName = o.Warehouse.Name
+		pickupAddr = o.Warehouse.Address
+		if pickupAddr == "" {
+			pickupAddr = o.Warehouse.City
+		}
+	}
 	return AssignedOrderSummary{
 		OrderID:             o.ID,
 		Status:              o.Status,
@@ -361,6 +371,8 @@ func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
 		DeliveryStatus:      o.DeliveryStatus,
 		DeliveryAddress:     addr,
 		CustomerName:        o.Address.FullName,
+		PickupName:          pickupName,
+		PickupAddress:       pickupAddr,
 		CustomerPhone:       o.Address.Phone,
 		TotalAmount:         o.TotalAmount,
 		PaymentMethod:       o.PaymentMethod,
@@ -385,6 +397,7 @@ func GetMyDeliveries(c *gin.Context) {
 
 	query := database.DB.
 		Preload("Address").
+		Preload("Warehouse").
 		Preload("Items.Product").
 		Where("delivery_partner_id = ?", partnerID)
 
