@@ -247,7 +247,7 @@ func SaveOnboardingPayout(c *gin.Context) {
             return
         }
         holder, acct, ifsc = "", "", ""
-    } else {
+    } else if holder != "" || acct != "" || ifsc != "" {
         if holder == "" || len(holder) > 120 || !accountRe.MatchString(acct) || !ifscRe.MatchString(ifsc) {
             c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a UPI ID, or account holder, account number and IFSC"})
             return
