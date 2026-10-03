@@ -129,6 +129,21 @@ seedChartOfAccounts()
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
+if err := DB.Exec(`ALTER TABLE delivery_partners
+    ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS warehouse_id BIGINT,
+    ADD COLUMN IF NOT EXISTS licence_url TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS rc_url TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS aadhaar_url TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS selfie_url TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS bank_account_holder VARCHAR(120) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS bank_account_no VARCHAR(40) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS bank_ifsc VARCHAR(20) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS upi_id VARCHAR(80) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS onboarding_step INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'`).Error; err != nil {
+log.Fatalf("Failed to add onboarding columns to delivery_partners: %v", err)
+}
 if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_percent DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
 log.Fatalf("Failed to add gst_percent column: %v", err)
 }

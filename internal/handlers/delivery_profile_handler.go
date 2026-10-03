@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
@@ -45,6 +45,10 @@ func GetDeliveryProfile(c *gin.Context) {
 		// the current delivery-partner architecture (no warehouse_id,
 		// email, or photo column exists on this model), so they're
 		// intentionally omitted rather than fabricated here.
+		"vehicle_type":     partner.VehicleType,
+		"warehouse_id":      partner.WarehouseID,
+		"onboarding_step":  partner.OnboardingStep,
+		"approval_status":  partner.ApprovalStatus,
 		"account_status": accountStatusLabel(partner.IsActive),
 		"is_online":      partner.IsOnline,
 		"created_at":     partner.CreatedAt,

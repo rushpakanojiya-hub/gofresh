@@ -19,6 +19,22 @@ type DeliveryPartner struct {
     CurrentLat         *float64   `json:"current_lat,omitempty"`
     CurrentLng         *float64   `json:"current_lng,omitempty"`
     LastLocationUpdate *time.Time `json:"last_location_update,omitempty"`
+
+    // Onboarding (self-signup). Existing admin-created partners default to
+    // onboarding_step=5 / approval_status=approved. Bank fields are never
+    // serialised (json:"-"); admin gets a dedicated endpoint later.
+    VehicleType       string `json:"vehicle_type"`
+    WarehouseID       *uint  `json:"warehouse_id,omitempty"`
+    LicenceURL        string `json:"licence_url,omitempty"`
+    RCURL             string `json:"rc_url,omitempty"`
+    AadhaarURL        string `json:"aadhaar_url,omitempty"`
+    SelfieURL         string `json:"selfie_url,omitempty"`
+    BankAccountHolder string `json:"-"`
+    BankAccountNo     string `json:"-"`
+    BankIFSC          string `json:"-"`
+    UPIID             string `json:"-"`
+    OnboardingStep    int    `gorm:"not null;default:5" json:"onboarding_step"`
+    ApprovalStatus    string `gorm:"not null;default:approved;index" json:"approval_status"`
     // MaxActiveOrders caps how many confirmed/shipped orders this partner
     // can be carrying at once. Auto-assign (and manual assign) must skip a
     // partner whose current active order count has reached this limit.
