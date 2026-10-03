@@ -24,11 +24,13 @@ func SendPartnerOTP(c *gin.Context) {
 	}
 
 	var partner models.DeliveryPartner
-	if err := database.DB.Where("phone = ?", req.Phone).First(&partner).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No delivery partner found with this phone number"})
-		return
-	}
-	if !partner.IsActive {
+	err := database.DB.Where("phone = ?", req.Phone).First(&partner).Error
+    if err != nil && err != gorm.ErrRecordNotFound {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to look up partner"})
+        return
+    }
+    // Unknown numbers may self-signup (partner row is created after OTP verify).
+    if err == nil && partnerLoginBlocked(partner) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This delivery partner account is inactive"})
 		return
 	}
@@ -90,10 +92,20 @@ func VerifyPartnerOTP(c *gin.Context) {
 
 	var partner models.DeliveryPartner
 	if err := database.DB.Where("phone = ?", req.Phone).First(&partner).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Delivery partner not found"})
-		return
-	}
-	if !partner.IsActive {
+        if err != gorm.ErrRecordNotFound {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to look up partner"})
+            return
+        }
+        partner = models.DeliveryPartner{Name: "New Partner", Phone: req.Phone, IsActive: false, ApprovalStatus: approvalOnboarding}
+        if err := database.DB.Create(&partner).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create partner"})
+            return
+        }
+        // gorm applies the column default (5) to a zero value on Create.
+        database.DB.Model(&partner).Update("onboarding_step", 0)
+        partner.OnboardingStep = 0
+    }
+    if partnerLoginBlocked(partner) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This delivery partner account is inactive"})
 		return
 	}

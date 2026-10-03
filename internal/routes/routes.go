@@ -78,6 +78,14 @@ func SetupRoutes(router *gin.Engine) {
 		{
 			delivery.POST("/send-otp", middleware.RateLimit(5, time.Minute), handlers.SendPartnerOTP)
 			delivery.POST("/verify-otp", middleware.RateLimit(10, time.Minute), handlers.VerifyPartnerOTP)
+            delivery.GET("/onboarding", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.GetOnboarding)
+            delivery.GET("/stores", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.GetDeliveryStores)
+            delivery.PUT("/onboarding/vehicle", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.SaveOnboardingVehicle)
+            delivery.PUT("/onboarding/store", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.SaveOnboardingStore)
+            delivery.PUT("/onboarding/documents", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.SaveOnboardingDocuments)
+            delivery.PUT("/onboarding/selfie", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.SaveOnboardingSelfie)
+            delivery.PUT("/onboarding/payout", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.SaveOnboardingPayout)
+            delivery.POST("/onboarding/upload", middleware.RateLimit(20, time.Minute), middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.UploadImage)
 			delivery.PUT("/location", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateLocation)
 			delivery.GET("/status", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetDeliveryAvailability)
 			delivery.PUT("/status", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateDeliveryAvailability)
@@ -449,6 +457,8 @@ func SetupRoutes(router *gin.Engine) {
 				adminDeliveryPartners.GET("", handlers.GetDeliveryPartners)
 				adminDeliveryPartners.PUT("/:id", handlers.UpdateDeliveryPartner)
 				adminDeliveryPartners.DELETE("/:id", handlers.DeleteDeliveryPartner)
+        adminDeliveryPartners.GET("/:id/onboarding", handlers.GetPartnerOnboardingAdmin)
+        adminDeliveryPartners.PUT("/:id/onboarding/review", handlers.ReviewPartnerOnboarding)
 				adminDeliveryPartners.GET("/:id/location", handlers.GetDeliveryPartnerLocation)
 			}
 
