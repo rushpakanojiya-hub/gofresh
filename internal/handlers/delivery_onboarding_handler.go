@@ -44,6 +44,9 @@ func onboardingView(p models.DeliveryPartner) gin.H {
         "rc_url":          p.RCURL,
         "aadhaar_url":     p.AadhaarURL,
         "selfie_url":      p.SelfieURL,
+        "id_doc_type":     p.IDDocType,
+        "voter_url":       p.VoterURL,
+        "pan_url":         p.PANURL,
         "payout_added":    p.UPIID != "" || p.BankAccountNo != "",
     }
 }
@@ -155,33 +158,53 @@ func SaveOnboardingStore(c *gin.Context) {
 }
 
 // PUT /delivery/onboarding/documents  (step 3)
+// Any one of: aadhaar | driving_licence | voter_pan (voter ID + PAN).
 func SaveOnboardingDocuments(c *gin.Context) {
     p, ok := loadOnboardingPartner(c)
     if !ok || !requireEditable(c, p, 2) {
         return
     }
     var req struct {
-        LicenceURL string `json:"licence_url"`
-        RCURL      string `json:"rc_url"`
+        IDDocType  string `json:"id_doc_type"`
         AadhaarURL string `json:"aadhaar_url"`
+        LicenceURL string `json:"licence_url"`
+        VoterURL   string `json:"voter_url"`
+        PANURL     string `json:"pan_url"`
     }
     if err := c.ShouldBindJSON(&req); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
-    if !validURL(req.AadhaarURL) {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Aadhaar photo is required"})
+    t := strings.ToLower(strings.TrimSpace(req.IDDocType))
+    updates := map[string]interface{}{
+        "id_doc_type": t, "aadhaar_url": "", "licence_url": "", "voter_url": "", "pan_url": "",
+    }
+    switch t {
+    case "aadhaar":
+        if !validURL(req.AadhaarURL) {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Aadhaar photo is required"})
+            return
+        }
+        updates["aadhaar_url"] = req.AadhaarURL
+    case "driving_licence":
+        if !validURL(req.LicenceURL) {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Driving licence photo is required"})
+            return
+        }
+        updates["licence_url"] = req.LicenceURL
+    case "voter_pan":
+        if !validURL(req.VoterURL) || !validURL(req.PANURL) {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Voter ID and PAN card photos are required"})
+            return
+        }
+        updates["voter_url"] = req.VoterURL
+        updates["pan_url"] = req.PANURL
+    default:
+        c.JSON(http.StatusBadRequest, gin.H{"error": "id_doc_type must be aadhaar, driving_licence or voter_pan"})
         return
     }
-    if p.VehicleType != "bicycle" && (!validURL(req.LicenceURL) || !validURL(req.RCURL)) {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Driving licence and RC photos are required"})
-        return
-    }
-    saveOnboardingStep(c, p, 3, map[string]interface{}{
-        "licence_url": req.LicenceURL, "rc_url": req.RCURL, "aadhaar_url": req.AadhaarURL,
-    })
+    saveOnboardingStep(c, p, 3, updates)
 }
-
 // PUT /delivery/onboarding/selfie  (step 4)
 func SaveOnboardingSelfie(c *gin.Context) {
     p, ok := loadOnboardingPartner(c)

@@ -144,6 +144,12 @@ if err := DB.Exec(`ALTER TABLE delivery_partners
     ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'`).Error; err != nil {
 log.Fatalf("Failed to add onboarding columns to delivery_partners: %v", err)
 }
+if err := DB.Exec(`ALTER TABLE delivery_partners
+    ADD COLUMN IF NOT EXISTS id_doc_type VARCHAR(20) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS voter_url TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS pan_url TEXT NOT NULL DEFAULT ''`).Error; err != nil {
+log.Fatalf("Failed to add id document columns to delivery_partners: %v", err)
+}
 if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_percent DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
 log.Fatalf("Failed to add gst_percent column: %v", err)
 }

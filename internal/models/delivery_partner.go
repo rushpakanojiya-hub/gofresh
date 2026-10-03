@@ -29,6 +29,9 @@ type DeliveryPartner struct {
     RCURL             string `json:"rc_url,omitempty"`
     AadhaarURL        string `json:"aadhaar_url,omitempty"`
     SelfieURL         string `json:"selfie_url,omitempty"`
+    IDDocType         string `gorm:"column:id_doc_type" json:"id_doc_type"`
+    VoterURL          string `gorm:"column:voter_url" json:"voter_url,omitempty"`
+    PANURL            string `gorm:"column:pan_url" json:"pan_url,omitempty"`
     BankAccountHolder string `json:"-"`
     BankAccountNo     string `json:"-"`
     BankIFSC          string `json:"-"`
