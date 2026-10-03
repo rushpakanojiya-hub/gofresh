@@ -40,7 +40,7 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
   Future<void> _next() async {
     if (_busy) return;
     if (_pick(widget.order, ['payment_method']).toLowerCase() == 'cod' && !_cashCollected) {
-      setState(() => _error = 'Pehle cash collect karke tick karo');
+      setState(() => _error = 'Please collect the cash and tick the box first');
       return;
     }
     setState(() {
@@ -223,7 +223,7 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         subtitle: const Text(
-                          'Customer se cash lekar tick karo',
+                          'Tick after collecting cash from the customer',
                           style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ),

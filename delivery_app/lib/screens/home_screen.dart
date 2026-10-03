@@ -718,8 +718,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 8),
             Text(
               full
-                  ? 'Cash limit poori. Admin ko cash jama karo, tab naye COD orders milenge.'
-                  : 'Limit ke paas ho. Jaldi admin ko cash jama karo.',
+                  ? 'Cash limit reached. Deposit your cash with admin to receive new COD orders.'
+                  : 'Close to the limit. Please deposit your cash with admin soon.',
               style: TextStyle(fontSize: 12, color: color),
             ),
           ],
