@@ -397,3 +397,6 @@ export const updateProductReorderLevel = (productId: number, reorderLevel: numbe
   apiClient
     .put(`/admin/products/${productId}/reorder-level`, { reorder_level: reorderLevel })
     .then((r) => r.data)
+
+export const getPartnerOnboarding = (id: number) =>
+  apiClient.get(`/admin/delivery-partners/${id}/onboarding`).then((r) => r.data)

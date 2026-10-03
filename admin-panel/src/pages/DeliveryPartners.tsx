@@ -6,8 +6,16 @@ import {
   createDeliveryPartner,
   updateDeliveryPartner,
   deleteDeliveryPartner,
+  getPartnerOnboarding,
 } from '../api/admin'
 import type { DeliveryPartner } from '../types/admin'
+
+function approvalClass(s: string) {
+  if (s === 'approved') return 'bg-emerald-500/15 text-emerald-400'
+  if (s === 'pending') return 'bg-amber-500/15 text-amber-400'
+  if (s === 'rejected') return 'bg-red-500/15 text-red-400'
+  return 'bg-slate-700 text-slate-300'
+}
 
 const emptyForm = {
   name: '',
@@ -23,6 +31,10 @@ export default function DeliveryPartners() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [editingPartner, setEditingPartner] = useState<DeliveryPartner | null>(null)
+  const [viewing, setViewing] = useState<DeliveryPartner | null>(null)
+  const [details, setDetails] = useState<any>(null)
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsError, setDetailsError] = useState<string | null>(null)
 
   const [form, setForm] = useState(emptyForm)
   const [isSaving, setIsSaving] = useState(false)
@@ -44,6 +56,20 @@ export default function DeliveryPartners() {
   useEffect(() => {
     load()
   }, [])
+
+  async function openView(p: DeliveryPartner) {
+    setViewing(p)
+    setDetails(null)
+    setDetailsError(null)
+    setDetailsLoading(true)
+    try {
+      setDetails(await getPartnerOnboarding(p.id))
+    } catch (err: any) {
+      setDetailsError(err.response?.data?.error ?? 'Failed to load details.')
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
 
   function openCreate() {
     setForm(emptyForm)
@@ -157,6 +183,7 @@ export default function DeliveryPartners() {
                   <th className="px-4 py-3 font-medium">Vehicle No.</th>
                   <th className="px-4 py-3 font-medium">Rating</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Approval</th>
                   <th className="px-4 py-3 font-medium"></th>
                 </tr>
               </thead>
@@ -178,7 +205,22 @@ export default function DeliveryPartners() {
                         {p.is_active ? 'active' : 'inactive'}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${approvalClass(
+                          (p as any).approval_status ?? 'approved'
+                        )}`}
+                      >
+                        {(p as any).approval_status ?? 'approved'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right space-x-3">
+                      <button
+                        onClick={() => openView(p)}
+                        className="text-slate-300 hover:text-white text-xs"
+                      >
+                        View
+                      </button>
                       <button
                         onClick={() => openEdit(p)}
                         className="text-indigo-400 hover:text-indigo-300 text-xs"
@@ -263,6 +305,57 @@ export default function DeliveryPartners() {
                 : 'Add partner'}
             </button>
           </form>
+        </Modal>
+      )}
+      {viewing && (
+        <Modal title={`Partner details: ${viewing.name}`} onClose={() => setViewing(null)}>
+          {detailsLoading && <p className="text-slate-400 text-sm">Loading...</p>}
+          {detailsError && <p className="text-red-400 text-sm">{detailsError}</p>}
+          {details && (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['Phone', details.phone],
+                  ['Approval', details.approval_status],
+                  ['Vehicle type', details.vehicle_type],
+                  ['Vehicle number', details.vehicle_number],
+                  ['Store ID', details.warehouse_id],
+                  ['ID document', details.id_doc_type],
+                  ['UPI ID', details.upi_id],
+                  ['Account holder', details.bank_account_holder],
+                  ['Account number', details.bank_account_no],
+                  ['IFSC', details.bank_ifsc],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs text-slate-400">{label}</p>
+                    <p>{value || '-'}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['Aadhaar', 'aadhaar_url'],
+                  ['Driving licence', 'licence_url'],
+                  ['Voter ID', 'voter_url'],
+                  ['PAN card', 'pan_url'],
+                  ['Selfie', 'selfie_url'],
+                ]
+                  .filter(([, key]) => details[key])
+                  .map(([label, key]) => (
+                    <div key={key}>
+                      <p className="text-xs text-slate-400 mb-1">{label}</p>
+                      <a href={details[key]} target="_blank" rel="noreferrer">
+                        <img
+                          src={details[key]}
+                          alt={label}
+                          className="h-32 w-full rounded-lg border border-slate-700 object-cover"
+                        />
+                      </a>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </Layout>
