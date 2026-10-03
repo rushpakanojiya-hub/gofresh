@@ -255,6 +255,17 @@ func SaveOnboardingPayout(c *gin.Context) {
     }
     saveOnboardingStep(c, p, 5, map[string]interface{}{
         "upi_id": upi, "bank_account_holder": holder, "bank_account_no": acct, "bank_ifsc": ifsc,
-        "approval_status": approvalPending,
+        "approval_status": payoutStatus(), "is_active": autoApproveOnboarding,
     })
+}
+
+// TEMPORARY: true = partner is approved and active as soon as step 5 is done.
+// Set to false once the joining-fee payment is added, to restore admin review.
+const autoApproveOnboarding = true
+
+func payoutStatus() string {
+    if autoApproveOnboarding {
+        return approvalApproved
+    }
+    return approvalPending
 }
