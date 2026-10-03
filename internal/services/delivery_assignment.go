@@ -176,6 +176,16 @@ func AutoAssignDeliveryPartner(orderID uint) {
             loadByPartner[l.DeliveryPartnerID] = l.Cnt
         }
 
+        isCOD := order.PaymentMethod == models.PaymentMethodCOD
+        var pendingCOD map[uint]float64
+        if isCOD {
+            var pErr error
+            pendingCOD, pErr = PendingCODByPartner(tx)
+            if pErr != nil {
+                return pErr
+            }
+        }
+
         custLat, custLng := *order.Address.Lat, *order.Address.Lng
         staleCutoff := time.Now().Add(-staleLocationWindow)
 
@@ -194,6 +204,10 @@ func AutoAssignDeliveryPartner(orderID uint) {
             }
             if loadByPartner[p.ID] >= int64(maxActive) {
                 continue
+            }
+
+            if isCOD && pendingCOD[p.ID] >= CODCashLimit {
+                continue // partner already holds the cash limit
             }
 
             hasFreshLocation := p.LastLocationUpdate != nil && p.LastLocationUpdate.After(staleCutoff)
@@ -266,13 +280,6 @@ func AutoAssignDeliveryPartner(orderID uint) {
     log.Printf("[auto-assign] order %d assigned to delivery partner %d (%s)", orderID, assignedPartnerID, assignedPartnerName)
 
     go SendPushToPartnerWithData(assignedPartnerID, "New Order Assigned", "You have a new delivery order. Tap to view and accept it.", map[string]string{"type": "new_assignment", "order_id": fmt.Sprint(orderID)})
-CreateDeliveryNotification(
-assignedPartnerID,
-"New delivery assigned",
-fmt.Sprintf("Order #%d has been assigned to you", orderID),
-"new_assignment",
-&orderID,
-)
 CreateDeliveryNotification(
 assignedPartnerID,
 "New delivery assigned",

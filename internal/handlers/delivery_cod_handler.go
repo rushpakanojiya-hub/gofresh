@@ -52,7 +52,9 @@ if summary.PendingSettlement < 0 {
 summary.PendingSettlement = 0
 }
 
-todayStart := time.Now().Truncate(24 * time.Hour)
+ist := time.FixedZone("IST", 5*3600+1800)
+nowIST := time.Now().In(ist)
+todayStart := time.Date(nowIST.Year(), nowIST.Month(), nowIST.Day(), 0, 0, 0, 0, ist)
 database.DB.Model(&models.Order{}).
 Where("delivery_partner_id = ? AND status = ? AND payment_method = ? AND updated_at >= ?", partnerID, models.OrderStatusDelivered, models.PaymentMethodCOD, todayStart).
 Select("COALESCE(SUM(total_amount), 0)").

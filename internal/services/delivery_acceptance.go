@@ -176,7 +176,17 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 		loadByPartner[l.DeliveryPartnerID] = l.Cnt
 	}
 
-	custLat, custLng := *order.Address.Lat, *order.Address.Lng
+	isCOD := order.PaymentMethod == models.PaymentMethodCOD
+        var pendingCOD map[uint]float64
+        if isCOD {
+                var pErr error
+                pendingCOD, pErr = PendingCODByPartner(tx)
+                if pErr != nil {
+                        return nil, pErr
+                }
+        }
+
+        custLat, custLng := *order.Address.Lat, *order.Address.Lng
 	staleCutoff := time.Now().Add(-staleLocationWindow)
 
 	var best *models.DeliveryPartner
@@ -195,7 +205,10 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 		if loadByPartner[p.ID] >= int64(maxActive) {
 			continue
 		}
-		fresh := p.LastLocationUpdate != nil && p.LastLocationUpdate.After(staleCutoff)
+		if isCOD && pendingCOD[p.ID] >= CODCashLimit {
+                        continue
+                }
+                fresh := p.LastLocationUpdate != nil && p.LastLocationUpdate.After(staleCutoff)
 		distanceKm := haversineKm(custLat, custLng, *p.CurrentLat, *p.CurrentLng)
 		const loadPenaltyKm = 3.0
 		score := distanceKm + float64(loadByPartner[p.ID])*loadPenaltyKm
