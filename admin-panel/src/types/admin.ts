@@ -542,6 +542,9 @@ export interface RiderWorkload {
   is_active: boolean
   active_orders: number
   max_active_orders: number
+  pending_cod: number
+  cod_limit: number
+  cod_limit_reached: boolean
 }
 
 export interface FailedDelivery {

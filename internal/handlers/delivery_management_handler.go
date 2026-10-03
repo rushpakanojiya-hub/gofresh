@@ -6,6 +6,7 @@ import (
 "github.com/gin-gonic/gin"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 "github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
+"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 )
 
 // ActiveDeliverySummary is one row in the admin's active-deliveries view -
@@ -87,6 +88,9 @@ IsOnline        bool   `json:"is_online"`
 IsActive        bool   `json:"is_active"`
 ActiveOrders    int64  `json:"active_orders"`
 MaxActiveOrders int    `json:"max_active_orders"`
+	PendingCOD       float64 `json:"pending_cod"`
+	CODLimit         float64 `json:"cod_limit"`
+	CODLimitReached  bool    `json:"cod_limit_reached"`
 }
 
 // GetRiderWorkload godoc
@@ -112,6 +116,7 @@ models.DeliveryStatusFailedDelivery,
 models.DeliveryStatusArrived,
 }
 
+pendingCOD, _ := services.PendingCODByPartner(database.DB)
 summaries := make([]RiderWorkloadSummary, 0, len(partners))
 for _, p := range partners {
 var count int64
@@ -127,6 +132,9 @@ IsOnline:        p.IsOnline,
 IsActive:        p.IsActive,
 ActiveOrders:    count,
 MaxActiveOrders: p.MaxActiveOrders,
+PendingCOD:       pendingCOD[p.ID],
+CODLimit:         services.CODCashLimit,
+CODLimitReached:  pendingCOD[p.ID] >= services.CODCashLimit,
 })
 }
 

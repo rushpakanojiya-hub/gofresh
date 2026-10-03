@@ -166,6 +166,7 @@ export default function DeliveryManagement() {
                       <th className="px-4 py-3 font-medium">Active Orders</th>
                       <th className="px-4 py-3 font-medium">Capacity</th>
                       <th className="px-4 py-3 font-medium">Load</th>
+                      <th className="px-4 py-3 font-medium">Cash in hand</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -204,7 +205,21 @@ export default function DeliveryManagement() {
                               {loadPct}%
                             </span>
                           </td>
-                        </tr>
+                          <td className="px-4 py-3">
+                            <span
+                              className={
+                                'px-2 py-0.5 rounded-md text-xs font-medium ' +
+                                (r.cod_limit_reached
+                                  ? 'bg-red-500/15 text-red-300'
+                                  : r.pending_cod >= r.cod_limit * 0.8
+                                    ? 'bg-amber-500/15 text-amber-300'
+                                    : 'bg-slate-800 text-slate-400')
+                              }
+                            >
+                              {'\u20B9'}{Math.round(r.pending_cod)} / {'\u20B9'}{Math.round(r.cod_limit)}
+                              {r.cod_limit_reached ? ' - COD blocked' : ''}
+                            </span>
+                          </td>                        </tr>
                       )
                     })}
                   </tbody>
