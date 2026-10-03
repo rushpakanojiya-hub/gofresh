@@ -1,7 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import 'home_shell.dart';
+import 'onboarding_flow.dart';
+import '../services/push_service.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -39,13 +41,24 @@ class _OtpScreenState extends State<OtpScreen> {
       final data = await ApiService.verifyOtp(widget.phone, otp);
       setState(() => _loading = false);
       if (data['token'] != null) {
-        LocationService.startTracking();
+        final partner = data['delivery_partner'];
+        final status = (partner is Map ? partner['approval_status'] : null)?.toString() ?? 'approved';
         if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeShell()),
-          (route) => false,
-        );
+        PushService.registerCurrentToken();
+        if (status == 'approved') {
+          LocationService.startTracking();
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeShell()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => OnboardingFlow(initial: Map<String, dynamic>.from(partner as Map))),
+            (route) => false,
+          );
+        }
       } else {
         setState(() => _error = data['error'] ?? 'Invalid OTP');
       }

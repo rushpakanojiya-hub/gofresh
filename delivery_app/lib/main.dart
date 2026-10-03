@@ -1,10 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'services/push_service.dart';
 import 'services/api_service.dart';
 import 'services/location_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_shell.dart';
+import 'screens/onboarding_flow.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await LocationService.initialize();
   runApp(const MyApp());
 }
 
@@ -13,6 +17,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: PushService.navigatorKey,
       title: 'Delivery Partner',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -42,6 +47,20 @@ class _SplashDeciderState extends State<SplashDecider> {
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     if (token != null) {
+      Map<String, dynamic>? ob;
+      try {
+        ob = await ApiService.getOnboarding();
+      } catch (_) {}
+      if (!mounted) return;
+      final status = ob?['approval_status']?.toString() ?? 'approved';
+      if (ob != null && status != 'approved') {
+        final initial = ob;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => OnboardingFlow(initial: initial)),
+        );
+        return;
+      }
       LocationService.startTracking();
       Navigator.pushReplacement(
         context,

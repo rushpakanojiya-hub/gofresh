@@ -1,9 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import '../services/location_service.dart';
-import 'login_screen.dart';
+import 'notifications_screen.dart';
 import 'order_detail_screen.dart';
+import 'return_pickup_detail_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
@@ -13,83 +13,115 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
+class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver {
   List<dynamic> _orders = [];
-  Map<String, dynamic>? _earnings;
+  List<dynamic> _returns = [];
   bool _loading = true;
   String? _error;
-  String _filter = 'all';
-  bool? _isOnline;
-  bool _togglingOnline = false;
-
-  final Set<int> _actingOrderIds = {};
+  String _filter = 'active';
+  final Set<int> _actingIds = {};
+  Timer? _refreshTimer;
 
   static const Color primaryPurple = Color(0xFF5B2A9E);
   static const Color pageBg = Color(0xFFF7F1FB);
-  static const Color bannerBg = Color(0xFFEDE6F7);
   static const Color cardBg = Color(0xFFF3EDFA);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted) _loadAll(silent: true);
+    });
     _loadAll();
-    _loadAvailability();
   }
 
-  Future<void> _loadAll() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _loadAll(silent: true);
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _loadAll({bool silent = false}) async {
     setState(() {
-      _loading = true;
+      if (!silent) _loading = true;
       _error = null;
     });
     try {
       final orders = await ApiService.getMyDeliveries();
-      Map<String, dynamic>? earnings;
+      List<dynamic> returns = [];
       try {
-        earnings = await ApiService.getEarnings();
+        returns = await ApiService.getMyReturnPickups();
       } catch (_) {
-        earnings = null;
+        returns = [];
       }
+      if (!mounted) return;
       setState(() {
         _orders = orders;
-        _earnings = earnings;
+        _returns = returns;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Failed to load orders';
+        if (!silent) _error = 'Failed to load orders';
         _loading = false;
       });
     }
   }
 
-  Future<void> _loadAvailability() async {
-    try {
-      final data = await ApiService.getAvailability();
-      if (mounted) setState(() => _isOnline = data['is_online'] == true);
-    } catch (_) {
-      // Silently ignore - badge just wont show a definite state yet.
-    }
+  // Merged list: every item is either an order map (no 'type' key) or a
+  // return-pickup map (type == 'return_pickup'). Sorted by created_at desc.
+  List<dynamic> get _merged {
+    final all = [..._orders, ..._returns];
+    all.sort((a, b) {
+      final da = DateTime.tryParse((a['created_at'] ?? '').toString()) ?? DateTime(1970);
+      final db = DateTime.tryParse((b['created_at'] ?? '').toString()) ?? DateTime(1970);
+      return db.compareTo(da);
+    });
+    return all;
   }
 
-  Future<void> _toggleOnline() async {
-    final next = !(_isOnline ?? false);
-    setState(() => _togglingOnline = true);
-    try {
-      final data = await ApiService.updateAvailability(next);
-      if (mounted) setState(() => _isOnline = data['is_online'] == true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _togglingOnline = false);
+  bool _isReturn(dynamic item) => item['type'] == 'return_pickup';
+
+  int _idOf(dynamic item) =>
+      _isReturn(item) ? item['return_request_id'] as int : (item['order_id'] ?? item['id']) as int;
+
+  String _statusOf(dynamic item) =>
+      (_isReturn(item) ? item['pickup_status'] : item['status'])?.toString() ?? '';
+
+  bool _isNew(dynamic item) {
+    if (_isReturn(item)) {
+      final s = item['pickup_status'];
+      return s == null || s == 'assigned';
     }
+    final status = (item['status'] ?? '').toString();
+    return status == 'confirmed' && (item['delivery_status'] == null || item['delivery_status'] == 'assigned');
+  }
+
+  bool _isCompleted(dynamic item) =>
+      _isReturn(item) ? _statusOf(item) == 'handed_over' : _statusOf(item) == 'delivered';
+
+  bool _isCancelled(dynamic item) => !_isReturn(item) && _statusOf(item) == 'cancelled';
+
+  List<dynamic> get _filteredItems {
+    final merged = _merged;
+    if (_filter == 'new') return merged.where(_isNew).toList();
+    if (_filter == 'active') {
+      return merged.where((i) => !_isCompleted(i) && !_isCancelled(i)).toList();
+    }
+    if (_filter == 'completed') return merged.where(_isCompleted).toList();
+    return merged;
   }
 
   Future<void> _acceptOrder(int orderId) async {
-    setState(() => _actingOrderIds.add(orderId));
+    setState(() => _actingIds.add(orderId));
     try {
       await ApiService.acceptAssignment(orderId);
       await _loadAll();
@@ -100,7 +132,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _actingOrderIds.remove(orderId));
+      if (mounted) setState(() => _actingIds.remove(orderId));
     }
   }
 
@@ -125,8 +157,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
     );
     if (confirmed != true) return;
-
-    setState(() => _actingOrderIds.add(orderId));
+    setState(() => _actingIds.add(orderId));
     try {
       await ApiService.rejectAssignment(orderId, reason: reasonController.text);
       await _loadAll();
@@ -137,83 +168,79 @@ class _OrdersScreenState extends State<OrdersScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _actingOrderIds.remove(orderId));
+      if (mounted) setState(() => _actingIds.remove(orderId));
     }
   }
 
-  Future<void> _confirmLogout() async {
+  Future<void> _acceptReturn(int returnRequestId) async {
+    setState(() => _actingIds.add(returnRequestId));
+    try {
+      await ApiService.acceptReturnPickup(returnRequestId);
+      await _loadAll();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _actingIds.remove(returnRequestId));
+    }
+  }
+
+  Future<void> _rejectReturn(int returnRequestId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        title: const Text('Reject this pickup?'),
+        content: const Text('This will open the pickup for reassignment to another partner.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('No'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes', style: TextStyle(color: Colors.red)),
+            child: const Text('Reject', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-    if (confirmed == true) {
-      await ApiService.clearToken();
-      LocationService.stopTracking();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+    if (confirmed != true) return;
+    setState(() => _actingIds.add(returnRequestId));
+    try {
+      await ApiService.rejectReturnPickup(returnRequestId);
+      await _loadAll();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _actingIds.remove(returnRequestId));
     }
-  }
-
-  List<dynamic> get _filteredOrders {
-    if (_filter == 'active') {
-      return _orders.where((o) => (o['status'] ?? '') != 'delivered').toList();
-    }
-    if (_filter == 'completed') {
-      return _orders.where((o) => (o['status'] ?? '') == 'delivered').toList();
-    }
-    return _orders;
   }
 
   Color _statusColor(String status) {
     switch (status) {
       case 'confirmed':
+      case 'accepted':
         return const Color(0xFF3B82F6);
       case 'shipped':
+      case 'en_route':
         return const Color(0xFFF59E0B);
       case 'delivered':
+      case 'handed_over':
         return const Color(0xFF22C55E);
       default:
         return Colors.grey;
     }
   }
 
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'delivered':
-        return Icons.check_circle_outline;
-      case 'shipped':
-        return Icons.local_shipping_outlined;
-      default:
-        return Icons.assignment_outlined;
-    }
-  }
-
-  Color _iconBoxColor(String status) {
-    return status == 'delivered' ? const Color(0xFFE1F5E6) : const Color(0xFFE7DEF6);
-  }
-
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good Morning, Partner!';
-    if (h < 17) return 'Good Afternoon, Partner!';
-    return 'Good Evening, Partner!';
+  IconData _statusIcon(dynamic item) {
+    if (_isReturn(item)) return Icons.assignment_return_outlined;
+    final status = _statusOf(item);
+    if (status == 'delivered') return Icons.check_circle_outline;
+    if (status == 'shipped') return Icons.local_shipping_outlined;
+    return Icons.assignment_outlined;
   }
 
   String? _formatTime(dynamic raw) {
@@ -232,419 +259,217 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
+  void _openDetail(dynamic item) {
+    if (_isReturn(item)) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ReturnPickupDetailScreen(pickup: item)),
+      ).then((_) => _loadAll());
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => OrderDetailScreen(order: item)),
+      ).then((_) => _loadAll());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final items = _filteredItems;
     return Scaffold(
       backgroundColor: pageBg,
       body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(child: Text(_error!))
-                : RefreshIndicator(
-                    onRefresh: _loadAll,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                      children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.menu, color: Colors.black87),
-                              onPressed: _confirmLogout,
-                              tooltip: 'Logout',
-                            ),
-                            const Text(
-                              'My Deliveries',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.notifications_none, color: Colors.black87),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('No new notifications')),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: bannerBg,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _greeting(),
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryPurple,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'Stay safe, deliver smiles.',
-                                style: TextStyle(fontSize: 13, color: Colors.black54),
-                              ),
-                              const SizedBox(height: 14),
-                              GestureDetector(
-                                onTap: _togglingOnline ? null : _toggleOnline,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.circle,
-                                        color: _isOnline == true ? const Color(0xFF22C55E) : Colors.grey,
-                                        size: 10,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _isOnline == true ? 'Online' : 'Offline',
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                      ),
-                                      if (_togglingOnline) ...[
-                                        const SizedBox(width: 6),
-                                        const SizedBox(
-                                          height: 10,
-                                          width: 10,
-                                          child: CircularProgressIndicator(strokeWidth: 1.5),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            _FilterChip(
-                              label: 'All Orders',
-                              selected: _filter == 'all',
-                              onTap: () => setState(() => _filter = 'all'),
-                            ),
-                            const SizedBox(width: 8),
-                            _FilterChip(
-                              label: 'Active',
-                              selected: _filter == 'active',
-                              onTap: () => setState(() => _filter = 'active'),
-                            ),
-                            const SizedBox(width: 8),
-                            _FilterChip(
-                              label: 'Completed',
-                              selected: _filter == 'completed',
-                              onTap: () => setState(() => _filter = 'completed'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        if (_filteredOrders.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 40),
-                            child: Center(child: Text('No orders here')),
-                          )
-                        else
-                          ...List.generate(_filteredOrders.length, (index) {
-                            final order = _filteredOrders[index];
-                            final status = (order['status'] ?? '').toString();
-                            final orderId = order['order_id'] as int;
-                            final assignmentStatus = order['assignment_status'];
-                            final isPendingResponse = assignmentStatus == 'assigned';
-                            final isActing = _actingOrderIds.contains(orderId);
-                            final city = order['address']?['city'];
-                            final state = order['address']?['state'];
-                            final location = [city, state].where((e) => e != null && e.toString().isNotEmpty).join(', ');
-                            final time = _formatTime(order['created_at'] ?? order['updated_at']);
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isPendingResponse ? Colors.orange.shade200 : cardBg,
-                                  width: isPendingResponse ? 1.6 : 1.2,
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(16),
-                                      onTap: () async {
-                                        await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
-                                        );
-                                        _loadAll();
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(14),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Container(
-                                              width: 44,
-                                              height: 44,
-                                              decoration: BoxDecoration(
-                                                color: _iconBoxColor(status),
-                                                borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'My Deliveries',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.notifications_none, color: Colors.black87),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  _filterChip('New', 'new'),
+                  const SizedBox(width: 8),
+                  _filterChip('Active', 'active'),
+                  const SizedBox(width: 8),
+                  _filterChip('Completed', 'completed'),
+                  const SizedBox(width: 8),
+                  _filterChip('All', 'all'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!))
+                      : items.isEmpty
+                          ? const Center(child: Text('No deliveries here', style: TextStyle(color: Colors.black45)))
+                          : RefreshIndicator(
+                              onRefresh: _loadAll,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                itemCount: items.length,
+                                itemBuilder: (context, index) {
+                                  final item = items[index];
+                                  final isReturn = _isReturn(item);
+                                  final id = _idOf(item);
+                                  final status = _statusOf(item);
+                                  final isActing = _actingIds.contains(id);
+                                  final isNewItem = _isNew(item);
+
+                                  return GestureDetector(
+                                    onTap: () => _openDetail(item),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 10),
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: Icon(_statusIcon(item), size: 18, color: _statusColor(status)),
                                               ),
-                                              child: Icon(_statusIcon(status), color: primaryPurple, size: 22),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Row(
-                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                    children: [
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      isReturn ? 'Return - Order #${item['order_id']}' : 'Order #$id',
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                                    ),
+                                                    if (_formatTime(item['created_at']) != null)
                                                       Text(
-                                                        'Order #$orderId',
-                                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                                        _formatTime(item['created_at'])!,
+                                                        style: const TextStyle(fontSize: 11, color: Colors.black45),
                                                       ),
-                                                      if (isPendingResponse)
-                                                        _CountdownBadge(expiresAt: order['assignment_expires_at']?.toString())
-                                                      else
-                                                        Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                          decoration: BoxDecoration(
-                                                            color: _statusColor(status),
-                                                            borderRadius: BorderRadius.circular(20),
-                                                          ),
-                                                          child: Text(
-                                                            status.isEmpty
-                                                              ? ''
-                                                              : status.split('_').map((w) => w.isEmpty ? '' : w[0].toUpperCase() + w.substring(1)).join(' '),
-                                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                                                          ),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  if (location.isNotEmpty)
-                                                    Text(location, style: const TextStyle(fontSize: 13, color: Colors.black54)),
-                                                  const SizedBox(height: 2),
-                                                  Row(
-                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                    children: [
-                                                      Text(
-                                                        '\u20B9${order['total_amount']} \u2022 ${order['payment_method']?.toString().toUpperCase() ?? ''}',
-                                                        style: const TextStyle(fontSize: 13, color: Colors.black54),
-                                                      ),
-                                                      Row(
-                                                        children: [
-                                                          if (time != null)
-                                                            Text(time, style: const TextStyle(fontSize: 12, color: Colors.black45)),
-                                                          const SizedBox(width: 4),
-                                                          const Icon(Icons.chevron_right, size: 18, color: Colors.black38),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: _statusColor(status).withValues(alpha: 0.12),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  (isReturn ? (status.isEmpty ? 'ASSIGNED' : status) : status).toUpperCase(),
+                                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _statusColor(status)),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (!isReturn && item['total_amount'] != null) ...[
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              '\u20B9${_money(item['total_amount'])} \u00B7 ${(item['payment_method'] ?? '').toString().toUpperCase()}',
+                                              style: const TextStyle(fontSize: 13, color: Colors.black54),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  if (isPendingResponse)
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: OutlinedButton(
-                                              onPressed: isActing ? null : () => _rejectOrder(orderId),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: Colors.red,
-                                                side: const BorderSide(color: Colors.red),
-                                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                              ),
-                                              child: const Text('Reject'),
+                                          if (isReturn && item['refund_amount'] != null) ...[
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Refund: \u20B9${_money(item['refund_amount'])}',
+                                              style: const TextStyle(fontSize: 13, color: Colors.black54),
                                             ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: ElevatedButton(
-                                              onPressed: isActing ? null : () => _acceptOrder(orderId),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green,
-                                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                              ),
-                                              child: isActing
-                                                  ? const SizedBox(
-                                                      height: 16,
-                                                      width: 16,
-                                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                                    )
-                                                  : const Text('Accept'),
+                                          ],
+                                          if (isNewItem) ...[
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: OutlinedButton(
+                                                    onPressed: isActing
+                                                        ? null
+                                                        : () => isReturn ? _rejectReturn(id) : _rejectOrder(id),
+                                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                                                    child: const Text('Reject'),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: ElevatedButton(
+                                                    onPressed: isActing
+                                                        ? null
+                                                        : () => isReturn ? _acceptReturn(id) : _acceptOrder(id),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: primaryPurple,
+                                                      foregroundColor: Colors.white,
+                                                    ),
+                                                    child: isActing
+                                                        ? const SizedBox(
+                                                            height: 16,
+                                                            width: 16,
+                                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                                          )
+                                                        : const Text('Accept'),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ),
+                                          ],
                                         ],
                                       ),
                                     ),
-                                ],
+                                  );
+                                },
                               ),
-                            );
-                          }),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                          decoration: BoxDecoration(
-                            color: bannerBg,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text("Today's Deliveries", style: TextStyle(fontSize: 12, color: primaryPurple, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${_earnings?['today_deliveries'] ?? 0}',
-                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text("Today's Earnings", style: TextStyle(fontSize: 12, color: primaryPurple, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '\u20B9${_earnings?['today_earnings'] ?? 0}',
-                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                            ),
+            ),
+          ],
+        ),
       ),
     );
   }
-}
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
-
-  static const Color primaryPurple = Color(0xFF5B2A9E);
-  static const Color chipUnselectedBg = Color(0xFFE9E1F5);
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+  Widget _filterChip(String label, String value) {
+    final selected = _filter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _filter = value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? primaryPurple : chipUnselectedBg,
+          color: selected ? primaryPurple : Colors.white,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.black87,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : Colors.black54),
         ),
       ),
     );
   }
 }
 
-class _CountdownBadge extends StatefulWidget {
-  final String? expiresAt;
-  const _CountdownBadge({required this.expiresAt});
-
-  @override
-  State<_CountdownBadge> createState() => _CountdownBadgeState();
+String _money(dynamic v) {
+  final n = v is num ? v : num.tryParse('${v ?? ''}');
+  if (n == null) return '-';
+  return n.toStringAsFixed(2);
 }
-
-class _CountdownBadgeState extends State<_CountdownBadge> {
-  Timer? _timer;
-  Duration? _remaining;
-
-  @override
-  void initState() {
-    super.initState();
-    _tick();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
-  }
-
-  void _tick() {
-    if (widget.expiresAt == null) {
-      if (mounted) setState(() => _remaining = null);
-      return;
-    }
-    try {
-      final expiry = DateTime.parse(widget.expiresAt!).toLocal();
-      final diff = expiry.difference(DateTime.now());
-      if (mounted) setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
-    } catch (_) {
-      if (mounted) setState(() => _remaining = null);
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    String label = 'Pending';
-    if (_remaining != null) {
-      final m = _remaining!.inMinutes;
-      final s = _remaining!.inSeconds % 60;
-      label = _remaining! == Duration.zero ? 'Expiring' : '${m}m ${s.toString().padLeft(2, '0')}s';
-    }
-    final urgent = _remaining != null && _remaining!.inSeconds < 30;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: urgent ? const Color(0xFFFDEAEA) : const Color(0xFFFFF4E5),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: urgent ? Colors.red : Colors.orange.shade800,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-

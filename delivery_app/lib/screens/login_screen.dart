@@ -43,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       setState(() {
         _loading = false;
-        _error = 'Network error. Please try again.';
+        _error = e.toString();
       });
     }
   }
@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Container(
                         height: 90,
                         decoration: BoxDecoration(
-                          color: _purple.withOpacity(0.06),
+                          color: _purple.withValues(alpha: 0.06),
                           borderRadius: const BorderRadius.only(
                             topLeft: Radius.elliptical(400, 60),
                             topRight: Radius.elliptical(400, 30),
@@ -90,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 6,
                             ),
                           ],
@@ -155,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: Colors.black.withValues(alpha: 0.06),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: _purple.withOpacity(0.1),
+                        color: _purple.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.local_shipping,
@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
                     Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: _purple.withOpacity(0.4)),
+                        border: Border.all(color: _purple.withValues(alpha: 0.4)),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
@@ -312,7 +312,7 @@ class _TrustBadge extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _purple.withOpacity(0.1),
+              color: _purple.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: _purple, size: 18),
