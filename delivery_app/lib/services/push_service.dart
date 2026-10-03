@@ -2,7 +2,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../screens/order_detail_screen.dart';
 import '../screens/new_order_sheet.dart';
 import 'api_service.dart';
 
@@ -57,11 +56,15 @@ class PushService {
     final ctx = navigatorKey.currentContext;
     if (id == null || ctx == null || sheetOpen || popupShown.contains(id)) return;
     try {
-      final list = await ApiService.getMyDeliveries();
-      final item = list.firstWhere(
-        (o) => o is Map && '${o['order_id'] ?? o['id']}' == '$id',
-        orElse: () => null,
-      );
+      dynamic item;
+      for (var attempt = 0; attempt < 4 && item == null; attempt++) {
+        if (attempt > 0) await Future.delayed(const Duration(milliseconds: 1500));
+        final list = await ApiService.getMyDeliveries();
+        item = list.firstWhere(
+          (o) => o is Map && '${o['order_id'] ?? o['id']}' == '$id',
+          orElse: () => null,
+        );
+      }
       final ctx2 = navigatorKey.currentContext;
       if (item == null || ctx2 == null || !ctx2.mounted) return;
       sheetOpen = true;
@@ -90,9 +93,7 @@ class PushService {
         tabRequest.value = fallbackTab;
         return;
       }
-      nav.push(MaterialPageRoute(
-        builder: (_) => OrderDetailScreen(order: Map<String, dynamic>.from(item as Map)),
-      ));
+      tabRequest.value = fallbackTab;
     } catch (e) {
       debugPrint('openOrder failed: $e');
       tabRequest.value = fallbackTab;

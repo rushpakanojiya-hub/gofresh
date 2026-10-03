@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
 import 'delivery_map_screen.dart';
 
 const Color _green = Color(0xFF1ED760);
@@ -41,7 +40,6 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
       _error = null;
     });
     try {
-      await ApiService.markShipped(_id);
       if (!mounted) return;
       final updated = Map<String, dynamic>.from(widget.order)..['status'] = 'shipped';
       Navigator.of(context).pushReplacement(

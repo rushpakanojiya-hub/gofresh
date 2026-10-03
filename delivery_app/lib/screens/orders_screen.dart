@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'delivery_complete_screen.dart';
+import 'delivery_handover_screen.dart';
+import 'delivery_map_screen.dart';
 import 'notifications_screen.dart';
-import 'order_detail_screen.dart';
+import 'order_pickup_screen.dart';
 import 'return_pickup_detail_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -24,7 +27,6 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
 
   static const Color primaryPurple = Color(0xFF5B2A9E);
   static const Color pageBg = Color(0xFFF7F1FB);
-  static const Color cardBg = Color(0xFFF3EDFA);
 
   @override
   void initState() {
@@ -76,8 +78,6 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
     }
   }
 
-  // Merged list: every item is either an order map (no 'type' key) or a
-  // return-pickup map (type == 'return_pickup'). Sorted by created_at desc.
   List<dynamic> get _merged {
     final all = [..._orders, ..._returns];
     all.sort((a, b) {
@@ -110,15 +110,17 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
 
   bool _isCancelled(dynamic item) => !_isReturn(item) && _statusOf(item) == 'cancelled';
 
-  List<dynamic> get _filteredItems {
+  List<dynamic> _itemsFor(String filter) {
     final merged = _merged;
-    if (_filter == 'new') return merged.where(_isNew).toList();
-    if (_filter == 'active') {
+    if (filter == 'new') return merged.where(_isNew).toList();
+    if (filter == 'active') {
       return merged.where((i) => !_isCompleted(i) && !_isCancelled(i)).toList();
     }
-    if (_filter == 'completed') return merged.where(_isCompleted).toList();
+    if (filter == 'completed') return merged.where(_isCompleted).toList();
     return merged;
   }
+
+  List<dynamic> get _filteredItems => _itemsFor(_filter);
 
   Future<void> _acceptOrder(int orderId) async {
     setState(() => _actingIds.add(orderId));
@@ -230,6 +232,8 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
       case 'delivered':
       case 'handed_over':
         return const Color(0xFF22C55E);
+      case 'cancelled':
+        return const Color(0xFFEF4444);
       default:
         return Colors.grey;
     }
@@ -240,20 +244,31 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
     final status = _statusOf(item);
     if (status == 'delivered') return Icons.check_circle_outline;
     if (status == 'shipped') return Icons.local_shipping_outlined;
+    if (status == 'cancelled') return Icons.cancel_outlined;
     return Icons.assignment_outlined;
+  }
+
+  DateTime? _dateOf(dynamic item) {
+    final raw = item['created_at'];
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString())?.toLocal();
+  }
+
+  bool _isToday(DateTime? dt) {
+    if (dt == null) return false;
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
   }
 
   String? _formatTime(dynamic raw) {
     if (raw == null) return null;
     try {
       final dt = DateTime.parse(raw.toString()).toLocal();
-      final now = DateTime.now();
-      final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
       final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
       final min = dt.minute.toString().padLeft(2, '0');
       final ampm = dt.hour >= 12 ? 'PM' : 'AM';
       final time = '$hour:$min $ampm';
-      return isToday ? 'Today, $time' : '${dt.day}/${dt.month}, $time';
+      return _isToday(dt) ? 'Today, $time' : '${dt.day}/${dt.month}, $time';
     } catch (_) {
       return null;
     }
@@ -266,16 +281,41 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
         MaterialPageRoute(builder: (_) => ReturnPickupDetailScreen(pickup: item)),
       ).then((_) => _loadAll());
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => OrderDetailScreen(order: item)),
-      ).then((_) => _loadAll());
+      final m = Map<String, dynamic>.from(item as Map);
+      final ds = m['delivery_status']?.toString();
+      Widget? next;
+      if (ds == 'accepted' || ds == 'going_to_store' || ds == 'arrived_at_store') {
+        next = OrderPickupScreen(order: m);
+      } else if (ds == 'picked_up' || ds == 'out_for_delivery') {
+        next = DeliveryMapScreen(order: m);
+      } else if (ds == 'arrived' || ds == 'arrived_at_customer') {
+        next = DeliveryHandoverScreen(order: m);
+      } else if (m['status']?.toString() == 'delivered') {
+        next = DeliveryCompleteScreen(order: m);
+      } else if (ds == 'delivered') {
+        next = DeliveryHandoverScreen(order: m);
+      }
+      if (next != null) {
+        final screen = next;
+        Navigator.push(context, MaterialPageRoute(builder: (_) => screen))
+            .then((_) => _loadAll());
+      }
     }
+  }
+
+  // Flat list: String entries are section headers, others are items.
+  List<dynamic> _withHeaders(List<dynamic> items) {
+    final today = items.where((i) => _isToday(_dateOf(i))).toList();
+    final earlier = items.where((i) => !_isToday(_dateOf(i))).toList();
+    return [
+      if (today.isNotEmpty) ...['Today', ...today],
+      if (earlier.isNotEmpty) ...[today.isNotEmpty ? 'Earlier' : 'All orders', ...earlier],
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _filteredItems;
+    final entries = _withHeaders(_filteredItems);
     return Scaffold(
       backgroundColor: pageBg,
       body: SafeArea(
@@ -288,7 +328,7 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                   const Expanded(
                     child: Text(
                       'My Deliveries',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                   ),
                   IconButton(
@@ -303,8 +343,9 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Row(
                 children: [
                   _filterChip('New', 'new'),
@@ -322,126 +363,43 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
                       ? Center(child: Text(_error!))
-                      : items.isEmpty
-                          ? const Center(child: Text('No deliveries here', style: TextStyle(color: Colors.black45)))
-                          : RefreshIndicator(
-                              onRefresh: _loadAll,
-                              child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                itemCount: items.length,
-                                itemBuilder: (context, index) {
-                                  final item = items[index];
-                                  final isReturn = _isReturn(item);
-                                  final id = _idOf(item);
-                                  final status = _statusOf(item);
-                                  final isActing = _actingIds.contains(id);
-                                  final isNewItem = _isNew(item);
-
-                                  return GestureDetector(
-                                    onTap: () => _openDetail(item),
-                                    child: Container(
-                                      margin: const EdgeInsets.only(bottom: 10),
-                                      padding: const EdgeInsets.all(14),
-                                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.all(8),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius: BorderRadius.circular(10),
-                                                ),
-                                                child: Icon(_statusIcon(item), size: 18, color: _statusColor(status)),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      isReturn ? 'Return - Order #${item['order_id']}' : 'Order #$id',
-                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                                    ),
-                                                    if (_formatTime(item['created_at']) != null)
-                                                      Text(
-                                                        _formatTime(item['created_at'])!,
-                                                        style: const TextStyle(fontSize: 11, color: Colors.black45),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: _statusColor(status).withValues(alpha: 0.12),
-                                                  borderRadius: BorderRadius.circular(10),
-                                                ),
-                                                child: Text(
-                                                  (isReturn ? (status.isEmpty ? 'ASSIGNED' : status) : status).toUpperCase(),
-                                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _statusColor(status)),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          if (!isReturn && item['total_amount'] != null) ...[
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              '\u20B9${_money(item['total_amount'])} \u00B7 ${(item['payment_method'] ?? '').toString().toUpperCase()}',
-                                              style: const TextStyle(fontSize: 13, color: Colors.black54),
-                                            ),
-                                          ],
-                                          if (isReturn && item['refund_amount'] != null) ...[
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'Refund: \u20B9${_money(item['refund_amount'])}',
-                                              style: const TextStyle(fontSize: 13, color: Colors.black54),
-                                            ),
-                                          ],
-                                          if (isNewItem) ...[
-                                            const SizedBox(height: 10),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: OutlinedButton(
-                                                    onPressed: isActing
-                                                        ? null
-                                                        : () => isReturn ? _rejectReturn(id) : _rejectOrder(id),
-                                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                                                    child: const Text('Reject'),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: ElevatedButton(
-                                                    onPressed: isActing
-                                                        ? null
-                                                        : () => isReturn ? _acceptReturn(id) : _acceptOrder(id),
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: primaryPurple,
-                                                      foregroundColor: Colors.white,
-                                                    ),
-                                                    child: isActing
-                                                        ? const SizedBox(
-                                                            height: 16,
-                                                            width: 16,
-                                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                                          )
-                                                        : const Text('Accept'),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ],
-                                      ),
+                      : RefreshIndicator(
+                          onRefresh: _loadAll,
+                          child: entries.isEmpty
+                              ? ListView(
+                                  children: [
+                                    SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                                    const Icon(Icons.inbox_outlined, size: 64, color: Colors.black26),
+                                    const SizedBox(height: 12),
+                                    const Center(
+                                      child: Text('No orders here',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black45)),
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
+                                    const SizedBox(height: 4),
+                                    const Center(
+                                      child: Text('Pull down to refresh', style: TextStyle(fontSize: 12, color: Colors.black38)),
+                                    ),
+                                  ],
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                  itemCount: entries.length,
+                                  itemBuilder: (context, index) {
+                                    final entry = entries[index];
+                                    if (entry is String) {
+                                      return Padding(
+                                        padding: const EdgeInsets.fromLTRB(2, 12, 0, 8),
+                                        child: Text(
+                                          entry.toUpperCase(),
+                                          style: const TextStyle(
+                                              fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45, letterSpacing: 0.8),
+                                        ),
+                                      );
+                                    }
+                                    return _orderCard(entry);
+                                  },
+                                ),
+                        ),
             ),
           ],
         ),
@@ -449,8 +407,166 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
     );
   }
 
+  Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color)),
+    );
+  }
+
+  Widget _orderCard(dynamic item) {
+    final isReturn = _isReturn(item);
+    final id = _idOf(item);
+    final status = _statusOf(item);
+    final color = _statusColor(status);
+    final isActing = _actingIds.contains(id);
+    final isNewItem = _isNew(item);
+    final statusLabel = (status.isEmpty ? 'assigned' : status).replaceAll('_', ' ').toUpperCase();
+    final pay = (item['payment_method'] ?? '').toString().toLowerCase();
+
+    return GestureDetector(
+      onTap: () => _openDetail(item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 5, color: color),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(_statusIcon(item), size: 20, color: color),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    isReturn ? 'Return - Order #${item['order_id']}' : 'Order #$id',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                  if (_formatTime(item['created_at']) != null)
+                                    Text(
+                                      _formatTime(item['created_at'])!,
+                                      style: const TextStyle(fontSize: 12, color: Colors.black45),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            _chip(statusLabel, color),
+                          ],
+                        ),
+                        if (!isReturn && item['total_amount'] != null) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Text(
+                                '\u20B9${_money(item['total_amount'])}',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                              ),
+                              const SizedBox(width: 8),
+                              if (pay == 'cod')
+                                _chip('COD', const Color(0xFFF59E0B))
+                              else if (pay.isNotEmpty)
+                                _chip('PAID', const Color(0xFF22C55E)),
+                              const Spacer(),
+                              const Icon(Icons.chevron_right, color: Colors.black26),
+                            ],
+                          ),
+                        ],
+                        if (isReturn && item['refund_amount'] != null) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Text(
+                                'Refund \u20B9${_money(item['refund_amount'])}',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                              ),
+                              const Spacer(),
+                              const Icon(Icons.chevron_right, color: Colors.black26),
+                            ],
+                          ),
+                        ],
+                        if (isNewItem) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: isActing
+                                      ? null
+                                      : () => isReturn ? _rejectReturn(id) : _rejectOrder(id),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  child: const Text('Reject'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: isActing
+                                      ? null
+                                      : () => isReturn ? _acceptReturn(id) : _acceptOrder(id),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryPurple,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  child: isActing
+                                      ? const SizedBox(
+                                          height: 16,
+                                          width: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : const Text('Accept'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _filterChip(String label, String value) {
     final selected = _filter == value;
+    final count = _itemsFor(value).length;
     return GestureDetector(
       onTap: () => setState(() => _filter = value),
       child: Container(
@@ -459,9 +575,28 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
           color: selected ? primaryPurple : Colors.white,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : Colors.black54),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : Colors.black54),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: selected ? Colors.white.withValues(alpha: 0.25) : primaryPurple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: selected ? Colors.white : primaryPurple),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

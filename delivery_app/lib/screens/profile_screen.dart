@@ -6,7 +6,6 @@ import '../services/location_service.dart';
 import 'login_screen.dart';
 import 'notifications_screen.dart';
 import 'support_screen.dart';
-import 'cod_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -37,6 +36,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _editName(String current) async {
+    final ctrl = TextEditingController(text: current == 'Delivery Partner' ? '' : current);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit name'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'Your name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (newName == null || newName.isEmpty || newName == current) return;
+    try {
+      await ApiService.updateProfile({'name': newName});
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -149,14 +178,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black45, letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 8),
-                    _tile(Icons.person_outline, 'Name', subtitle: name.toString()),
+                    _tile(Icons.person_outline, 'Name', subtitle: name.toString(), onTap: () => _editName(name.toString())),
                     _tile(Icons.phone_outlined, 'Mobile', subtitle: phone.toString().isNotEmpty ? phone.toString() : '-'),
                     _tile(Icons.star_outline, 'Rating', subtitle: (_rating != null && ((_rating!['rating_count'] ?? 0) as num) > 0) ? '${_rating!['avg_rating']} / 5  (${_rating!['rating_count']} ratings)' : 'No ratings yet', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RatingsScreen())).then((_) => _load())),
                     _tile(
                       Icons.two_wheeler_outlined,
                       'Vehicle',
                       subtitle: vehicleType != null
-                          ? '$vehicleType${vehicleNumber != null ? ' Ã‚Â· $vehicleNumber' : ''}'
+                          ? '$vehicleType${vehicleNumber != null ? ' \u00B7 $vehicleNumber' : ''}'
                           : 'Not set',
                     ),
                     const SizedBox(height: 20),
@@ -165,13 +194,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black45, letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 8),
-                    _tile(
-                      Icons.account_balance_wallet_outlined,
-                      'Cash Management',
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CODScreen()));
-                      },
-                    ),
                     _tile(
                       Icons.notifications_none,
                       'Notifications',

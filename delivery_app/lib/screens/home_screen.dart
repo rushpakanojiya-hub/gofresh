@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'order_pickup_screen.dart';
+import 'delivery_map_screen.dart';
+import 'delivery_handover_screen.dart';
 import '../services/api_service.dart';
-import 'order_detail_screen.dart';
 import 'return_pickup_detail_screen.dart';
 import '../services/location_service.dart';
 import '../services/push_service.dart';
@@ -15,7 +18,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const Color primaryPurple = Color(0xFF5B2A9E);
   static const Color pageBg = Color(0xFFF7F1FB);
   static const Color bannerBg = Color(0xFFEDE6F7);
@@ -38,15 +41,26 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadAll();
     _loadAvailability();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _loadAll(silent: true);
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _loadAll(silent: true).then((_) {
+        if (mounted) _maybeShowNewOrderPopup();
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     super.dispose();
   }
@@ -132,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadAvailability() async {
     try {
       final data = await ApiService.getAvailability();
-      if (mounted) setState(() => _isOnline = data['is_online'] == true);
+      if (mounted) { setState(() => _isOnline = data['is_online'] == true); _syncWorking(data['is_online'] == true); }
     } catch (_) {
       // Badge just won't show a definite state yet.
     }
@@ -143,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _togglingOnline = true);
     try {
       final data = await ApiService.updateAvailability(next);
-      if (mounted) setState(() => _isOnline = data['is_online'] == true);
+      if (mounted) { setState(() => _isOnline = data['is_online'] == true); _syncWorking(data['is_online'] == true); }
       if (data['is_online'] == true) {
         LocationService.startTracking();
       } else {
@@ -336,10 +350,21 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => ReturnPickupDetailScreen(pickup: item)),
       ).then((_) => _loadAll());
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => OrderDetailScreen(order: item)),
-      ).then((_) => _loadAll());
+      final m = Map<String, dynamic>.from(item as Map);
+      final ds = m['delivery_status']?.toString();
+      Widget? next;
+      if (ds == 'accepted' || ds == 'going_to_store' || ds == 'arrived_at_store') {
+        next = OrderPickupScreen(order: m);
+      } else if (ds == 'picked_up' || ds == 'out_for_delivery') {
+        next = DeliveryMapScreen(order: m);
+      } else if (ds == 'arrived' || ds == 'arrived_at_customer') {
+        next = DeliveryHandoverScreen(order: m);
+      }
+      if (next != null) {
+        final screen = next;
+        Navigator.push(context, MaterialPageRoute(builder: (_) => screen))
+            .then((_) => _loadAll());
+      }
     }
   }
 
@@ -412,6 +437,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+
+                        _summaryCard(todayDeliveries, todayEarnings),
                         const SizedBox(height: 16),
 
                         // Active delivery (orders + return pickups)
@@ -548,6 +576,100 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  int _workAccumMs = 0;
+  int _workSinceMs = 0;
+
+  String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+
+  Future<void> _syncWorking(bool online) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      final nowMs = now.millisecondsSinceEpoch;
+      final midnight = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+      var accum = p.getInt('work_accum_ms') ?? 0;
+      var since = p.getInt('work_since_ms') ?? 0;
+      if ((p.getString('work_day') ?? '') != _dayKey(now)) {
+        accum = 0;
+        if (since > 0) since = midnight;
+      }
+      if (online && since == 0) since = nowMs;
+      if (!online && since > 0) {
+        accum += nowMs - since;
+        since = 0;
+      }
+      await p.setString('work_day', _dayKey(now));
+      await p.setInt('work_accum_ms', accum);
+      await p.setInt('work_since_ms', since);
+      if (mounted) {
+        setState(() {
+          _workAccumMs = accum;
+          _workSinceMs = since;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String get _workingLabel {
+    var ms = _workAccumMs;
+    if (_workSinceMs > 0) ms += DateTime.now().millisecondsSinceEpoch - _workSinceMs;
+    final mins = (ms / 60000).floor();
+    return '${mins ~/ 60}h ${mins % 60}m';
+  }
+
+  Widget _summaryItem(IconData icon, Color color, String label, String value) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryCard(dynamic deliveries, dynamic earnings) {
+    final count = deliveries is num ? deliveries.toInt() : 0;
+    final amount = earnings is num ? earnings.toStringAsFixed(0) : '0';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Today's Summary", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                _summaryItem(Icons.inventory_2_outlined, Colors.blue, 'Completed Orders', '$count'),
+                Container(width: 1, color: Colors.black12),
+                _summaryItem(Icons.currency_rupee, Colors.green, 'Earnings', '\u20B9$amount'),
+                Container(width: 1, color: Colors.black12),
+                _summaryItem(Icons.access_time, Colors.deepPurple, 'Working Hours', _workingLabel),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _statTile(String label, String value) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),

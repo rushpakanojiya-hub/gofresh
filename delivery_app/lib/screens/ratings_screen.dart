@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/push_service.dart';
-import 'order_detail_screen.dart';
 
 class RatingsScreen extends StatefulWidget {
   const RatingsScreen({super.key});
@@ -74,12 +73,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
         );
         return;
       }
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OrderDetailScreen(order: Map<String, dynamic>.from(item as Map)),
-        ),
-      );
+      // Order detail screen now opens only after the handover step.
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

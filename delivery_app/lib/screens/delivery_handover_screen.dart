@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'order_detail_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/api_service.dart';
+import 'delivery_complete_screen.dart';
 
 const Color _green = Color(0xFF1ED760);
 const Color _pageBg = Color(0xFFF7F1FB);
@@ -20,14 +23,87 @@ String _money(dynamic v) {
 
 /// Shown after "Reached drop": payment status, items and customer details,
 /// then a swipe to move on to the delivery confirmation screen.
-class DeliveryHandoverScreen extends StatelessWidget {
+class DeliveryHandoverScreen extends StatefulWidget {
   final Map<String, dynamic> order;
   const DeliveryHandoverScreen({super.key, required this.order});
 
-  void _next(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
-    );
+  @override
+  State<DeliveryHandoverScreen> createState() => _DeliveryHandoverScreenState();
+}
+
+class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
+  bool _busy = false;
+  String? _error;
+  String? _step;
+
+  Future<void> _next() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _step = 'started';
+    });
+    try {
+      final id = ((widget.order['order_id'] ?? widget.order['id']) as num).toInt();
+      const chain = [
+        'accepted',
+        'going_to_store',
+        'arrived_at_store',
+        'picked_up',
+        'out_for_delivery',
+        'arrived_at_customer',
+        'delivered',
+      ];
+      final list = await ApiService.getMyDeliveries();
+      dynamic cur;
+      for (final o in list) {
+        if (o is Map && '${o['order_id'] ?? o['id']}' == '$id') {
+          cur = o;
+          break;
+        }
+      }
+      var status =
+          (cur is Map ? cur['delivery_status'] : widget.order['delivery_status'])?.toString();
+      if (status == null || status.isEmpty || status == 'assigned') {
+        await ApiService.acceptAssignment(id);
+        status = 'accepted';
+      }
+      if (status == 'arrived') status = 'arrived_at_customer';
+      final from = chain.indexOf(status);
+      if (from < 0) throw Exception('Unexpected delivery status: $status');
+      for (var i = from + 1; i < chain.length; i++) {
+        if (mounted) setState(() => _step = '${chain[i]}');
+        debugPrint('handover step: ${chain[i]}');
+        await ApiService.updateDeliveryStatus(id, chain[i]);
+      }
+      if (mounted) setState(() => _step = 'confirmDelivery');
+      debugPrint('handover step: confirmDelivery');
+      final shot = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+        maxWidth: 1280,
+      );
+      if (shot == null) throw Exception('Delivery proof photo is required');
+      if (mounted) setState(() => _step = 'uploading photo');
+      await ApiService.uploadDeliveryProof(id, shot.path);
+      if (mounted) setState(() => _step = 'confirmDelivery');
+      final confirm = await ApiService.confirmDelivery(id);
+      if (!mounted) return;
+      final updated = Map<String, dynamic>.from(widget.order);
+      final o = confirm['order'];
+      if (o is Map) updated.addAll(Map<String, dynamic>.from(o));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => DeliveryCompleteScreen(order: updated)),
+      );
+    } catch (e) {
+      debugPrint('handover failed: $e');
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    }
   }
 
   Widget _section(
@@ -61,7 +137,7 @@ class DeliveryHandoverScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final o = order;
+    final o = widget.order;
     final id = _pick(o, ['order_id', 'id']);
     final items = (o['items'] is List) ? o['items'] as List : const [];
     final isCod = _pick(o, ['payment_method']).toLowerCase() == 'cod';
@@ -168,7 +244,22 @@ class DeliveryHandoverScreen extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(16),
-              child: _SwipeButton(label: 'Hand over order', onConfirm: () => _next(context)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_busy && _step != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('Step: $_step'),
+                    ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                    ),
+                  _SwipeButton(label: 'Order delivered', busy: _busy, onConfirm: _next),
+                ],
+              ),
             ),
           ],
         ),
@@ -180,8 +271,9 @@ class DeliveryHandoverScreen extends StatelessWidget {
 /// Green pill with a black knob the partner drags to the right to confirm.
 class _SwipeButton extends StatefulWidget {
   final String label;
+  final bool busy;
   final VoidCallback onConfirm;
-  const _SwipeButton({required this.label, required this.onConfirm});
+  const _SwipeButton({required this.label, required this.busy, required this.onConfirm});
 
   @override
   State<_SwipeButton> createState() => _SwipeButtonState();
@@ -190,6 +282,12 @@ class _SwipeButton extends StatefulWidget {
 class _SwipeButtonState extends State<_SwipeButton> {
   static const double _knob = 52;
   double _dx = 0;
+
+  @override
+  void didUpdateWidget(_SwipeButton old) {
+    super.didUpdateWidget(old);
+    if (old.busy && !widget.busy) setState(() => _dx = 0);
+  }
 
   @override
   Widget build(BuildContext context) {
