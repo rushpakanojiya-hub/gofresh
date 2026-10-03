@@ -440,6 +440,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         const SizedBox(height: 16),
 
                         _summaryCard(todayDeliveries, todayEarnings),
+                        const SizedBox(height: 12),
+                        _cashCard(pendingSettlement),
                         const SizedBox(height: 16),
 
                         // Active delivery (orders + return pickups)
@@ -666,6 +668,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+  static const double _cashLimit = 1500;
+
+  Widget _cashCard(dynamic pending) {
+    final held = pending is num ? pending.toDouble() : 0.0;
+    final ratio = (held / _cashLimit).clamp(0.0, 1.0).toDouble();
+    final full = held >= _cashLimit;
+    final warn = held >= _cashLimit * 0.8;
+    final color = full ? Colors.red : (warn ? Colors.orange : Colors.green);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: full ? Colors.red.withValues(alpha: 0.4) : Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.payments_outlined, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Cash in hand', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              Text(
+                '\u20B9${held.toStringAsFixed(0)} / \u20B9${_cashLimit.toStringAsFixed(0)}',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 8,
+              backgroundColor: Colors.black12,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          if (warn) ...[
+            const SizedBox(height: 8),
+            Text(
+              full
+                  ? 'Cash limit poori. Admin ko cash jama karo, tab naye COD orders milenge.'
+                  : 'Limit ke paas ho. Jaldi admin ko cash jama karo.',
+              style: TextStyle(fontSize: 12, color: color),
+            ),
+          ],
         ],
       ),
     );

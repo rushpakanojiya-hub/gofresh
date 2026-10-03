@@ -35,9 +35,14 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
   bool _busy = false;
   String? _error;
   String? _step;
+  bool _cashCollected = false;
 
   Future<void> _next() async {
     if (_busy) return;
+    if (_pick(widget.order, ['payment_method']).toLowerCase() == 'cod' && !_cashCollected) {
+      setState(() => _error = 'Pehle cash collect karke tick karo');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -201,6 +206,28 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                       ],
                     ),
                   ),
+                  if (isCod)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: Colors.white,
+                      child: CheckboxListTile(
+                        value: _cashCollected,
+                        onChanged: _busy ? null : (v) => setState(() {
+                          _cashCollected = v ?? false;
+                          _error = null;
+                        }),
+                        controlAffinity: ListTileControlAffinity.trailing,
+                        activeColor: Colors.green,
+                        title: Text(
+                          'Collected \u20B9${_money(o['total_amount'])} cash',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: const Text(
+                          'Customer se cash lekar tick karo',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ),
+                    ),
                   _section(
                     context,
                     icon: Icons.shopping_bag_outlined,
@@ -257,7 +284,13 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(_error!, style: const TextStyle(color: Colors.red)),
                     ),
-                  _SwipeButton(label: 'Order delivered', busy: _busy, onConfirm: _next),
+                  Opacity(
+                    opacity: (isCod && !_cashCollected) ? 0.4 : 1,
+                    child: IgnorePointer(
+                      ignoring: isCod && !_cashCollected,
+                      child: _SwipeButton(label: 'Order delivered', busy: _busy, onConfirm: _next),
+                    ),
+                  ),
                 ],
               ),
             ),
