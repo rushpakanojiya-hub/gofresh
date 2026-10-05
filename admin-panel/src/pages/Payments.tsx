@@ -288,6 +288,9 @@ export default function Payments() {
                         <td className="px-4 py-3 text-right text-slate-200">{fmtMoney(r.amount)}</td>
                         <td className="px-4 py-3">
                           <span className="text-xs uppercase text-slate-400">{r.payment_method}</span>
+                          {r.collected_via === 'upi' && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-500/15 text-indigo-300">UPI</span>
+                          )}
                           <p className="text-xs text-slate-600">{r.gateway}</p>
                         </td>
                         <td className="px-4 py-3">

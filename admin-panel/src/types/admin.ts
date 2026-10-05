@@ -606,6 +606,7 @@ export interface AdminPaymentRow {
   amount: number
   refunded_amount: number
   payment_method: 'cod' | 'online'
+  collected_via?: 'cash' | 'upi' | null
   gateway: string
   status: 'pending' | 'paid' | 'failed' | 'refunded' | 'partially_refunded'
   created_at: string
