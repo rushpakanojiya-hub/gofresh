@@ -169,6 +169,14 @@ log.Fatalf("Failed to add platform_fee column to invoices: %v", err)
 if err := DB.Exec(`ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
 log.Fatalf("Failed to add is_online column to delivery_partners: %v", err)
 }
+if err := DB.Exec(`ALTER TABLE delivery_partners
+    ADD COLUMN IF NOT EXISTS checked_in_warehouse_id BIGINT,
+    ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ`).Error; err != nil {
+log.Fatalf("Failed to add store check-in columns to delivery_partners: %v", err)
+}
+if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_delivery_partners_checked_in_warehouse_id ON delivery_partners (checked_in_warehouse_id)`).Error; err != nil {
+log.Fatalf("Failed to add check-in index to delivery_partners: %v", err)
+}
 if err := DB.Exec(`CREATE TABLE IF NOT EXISTS subcategories (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,

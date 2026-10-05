@@ -14,6 +14,7 @@ import Exceptions from './pages/Exceptions'
 import Handover from './pages/Handover'
 import Performance from './pages/Performance'
 import Staff from './pages/Staff'
+import StoreQR from './pages/StoreQR'
 
 function Protected({ children }: { children: React.ReactNode }) {
   return (
@@ -40,6 +41,7 @@ function App() {
           <Route path="/handover" element={<Protected><Handover /></Protected>} />
           <Route path="/performance" element={<Protected><Performance /></Protected>} />
           <Route path="/staff" element={<Protected><Staff /></Protected>} />
+          <Route path="/checkin-qr" element={<Protected><StoreQR /></Protected>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>

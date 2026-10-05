@@ -5,6 +5,8 @@ import 'earnings_screen.dart';
 import 'profile_screen.dart';
 import '../services/push_service.dart';
 import 'qr_scan_screen.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/api_service.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -24,16 +26,26 @@ class _HomeShellState extends State<HomeShell> {
       MaterialPageRoute(builder: (_) => const QrScanScreen()),
     );
     if (code == null || !mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('QR scanned'),
-        content: Text(code),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-        ],
-      ),
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      double? lat;
+      double? lng;
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(timeLimit: Duration(seconds: 8)),
+        );
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {}
+      final res = await ApiService.checkInToStore(code, lat, lng);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Checked in at ${res['warehouse_name'] ?? 'store'}')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   void _onPushTab() {

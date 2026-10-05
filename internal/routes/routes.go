@@ -87,6 +87,8 @@ func SetupRoutes(router *gin.Engine) {
             delivery.PUT("/onboarding/payout", middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.SaveOnboardingPayout)
             delivery.POST("/onboarding/upload", middleware.RateLimit(20, time.Minute), middleware.AuthMiddleware(), middleware.DeliveryPartnerAnyStatus(), handlers.UploadImage)
 			delivery.PUT("/location", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateLocation)
+			delivery.POST("/checkin", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.CheckInToStore)
+			delivery.GET("/checkin", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyCheckin)
 			delivery.GET("/status", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetDeliveryAvailability)
 			delivery.PUT("/status", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateDeliveryAvailability)
 			delivery.GET("/orders", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyDeliveries)
@@ -139,6 +141,7 @@ func SetupRoutes(router *gin.Engine) {
 			warehouseAuthed.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly(), middleware.InjectWarehouseScope())
 			{
 				warehouseAuthed.GET("/dashboard", handlers.GetWarehouseDashboard)
+				warehouseAuthed.GET("/checkin-qr", handlers.GetStoreCheckinQR)
 				warehouseAuthed.GET("/orders", handlers.GetWarehouseOrders)
 				warehouseAuthed.PUT("/orders/:id/accept", handlers.AcceptOrder)
 				warehouseAuthed.GET("/orders/:id/handover", handlers.GetHandover)

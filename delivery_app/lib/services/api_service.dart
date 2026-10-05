@@ -132,6 +132,25 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> checkInToStore(String token, double? lat, double? lng) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/delivery/checkin'),
+      headers: await _headers(),
+      body: jsonEncode({'token': token, 'lat': lat, 'lng': lng}),
+    );
+    final body = jsonDecode(res.body);
+    if (res.statusCode != 200) {
+      throw Exception((body is Map && body['error'] != null) ? body['error'].toString() : 'Check-in failed');
+    }
+    return Map<String, dynamic>.from(body as Map);
+  }
+
+  static Future<Map<String, dynamic>> getCheckin() async {
+    final res = await http.get(Uri.parse('$baseUrl/delivery/checkin'), headers: await _headers());
+    if (res.statusCode != 200) return {'checked_in': false};
+    return Map<String, dynamic>.from(jsonDecode(res.body) as Map);
+  }
+
   static Future<Map<String, dynamic>> getAvailability() async {
     final res = await http.get(Uri.parse('$baseUrl/delivery/availability'), headers: await _headers());
     final data = jsonDecode(res.body);

@@ -11,6 +11,7 @@ const navItems = [
   { to: '/exceptions', label: 'Exceptions' },
   { to: '/handover', label: 'Handover' },
   { to: '/staff', label: 'Staff' },
+  { to: '/checkin-qr', label: 'Store QR' },
   { to: '/performance', label: 'Performance' },
 ]
 

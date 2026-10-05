@@ -312,3 +312,7 @@ export const approveStoreReturn = (id: number) =>
 export const rejectStoreReturn = (id: number, reason?: string) =>
   apiClient.put(`/warehouse/returns/${id}/reject`, { reason }).then((r) => r.data as StoreReturnRequest)
 
+export const getCheckinQR = () =>
+  apiClient
+    .get('/warehouse/checkin-qr')
+    .then((r) => r.data as { token: string; expires_at: string; ttl_seconds: number; warehouse_id: number })

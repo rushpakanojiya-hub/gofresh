@@ -144,7 +144,7 @@ func AutoAssignDeliveryPartner(orderID uint) {
         // distinct from the freshness *preference* applied further down.
         var partners []models.DeliveryPartner
         if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-            Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL", true, true).
+            Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL AND checked_in_warehouse_id IS NOT NULL AND checked_in_at > ?", true, true, time.Now().Add(-StoreCheckinMaxAge)).
             Order("id").
             Find(&partners).Error; err != nil {
             return fmt.Errorf("failed to load delivery partners: %w", err)

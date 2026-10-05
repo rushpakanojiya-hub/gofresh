@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Map<String, dynamic>? _earnings;
   Map<String, dynamic>? _codSummary;
+  Map<String, dynamic>? _checkin;
   List<dynamic> _orders = [];
   List<dynamic> _returns = [];
   final Set<int> _actingIds = {};
@@ -81,6 +82,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {
         returns = [];
       }
+      Map<String, dynamic>? checkin;
+      try {
+        checkin = await ApiService.getCheckin();
+      } catch (_) {
+        checkin = null;
+      }
       Map<String, dynamic>? earnings;
       Map<String, dynamic>? codSummary;
       try {
@@ -95,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       setState(() {
         _orders = orders;
+        _checkin = checkin;
         _returns = returns;
         _earnings = earnings;
         _codSummary = codSummary;
@@ -471,6 +479,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         const SizedBox(height: 16),
 
+                        _checkinBanner(),
                         _summaryCard(todayDeliveries, todayEarnings),
                         const SizedBox(height: 12),
                         _cashCard(pendingSettlement),
@@ -649,6 +658,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_workSinceMs > 0) ms += DateTime.now().millisecondsSinceEpoch - _workSinceMs;
     final mins = (ms / 60000).floor();
     return '${mins ~/ 60}h ${mins % 60}m';
+  }
+
+  Widget _checkinBanner() {
+    if (_isOnline != true) return const SizedBox.shrink();
+    final checkedIn = _checkin?['checked_in'] == true;
+    final color = checkedIn ? const Color(0xFF2E7D32) : const Color(0xFFEF6C00);
+    final text = checkedIn
+        ? 'Checked in at ${_checkin?['warehouse_name'] ?? 'store'}'
+        : 'Scan store QR to receive orders';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(checkedIn ? Icons.check_circle : Icons.qr_code_scanner, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _summaryItem(IconData icon, Color color, String label, String value) {
