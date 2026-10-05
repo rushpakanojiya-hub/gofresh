@@ -4,6 +4,7 @@ import 'orders_screen.dart';
 import 'earnings_screen.dart';
 import 'profile_screen.dart';
 import '../services/push_service.dart';
+import 'qr_scan_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -17,6 +18,23 @@ class _HomeShellState extends State<HomeShell> {
   static const Color primaryPurple = Color(0xFF5B2A9E);
 
   void switchTab(int i) => setState(() => _index = i);
+
+  Future<void> _openScanner() async {
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (code == null || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('QR scanned'),
+        content: Text(code),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
 
   void _onPushTab() {
     final t = PushService.tabRequest.value;
@@ -48,6 +66,13 @@ class _HomeShellState extends State<HomeShell> {
     ];
 
     return PopScope(       canPop: _index == 0,       onPopInvokedWithResult: (didPop, result) {         if (!didPop) {           switchTab(0);         }       },       child: Scaffold(
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openScanner,
+        backgroundColor: primaryPurple,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.qr_code_scanner),
+      ),
       body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
