@@ -22,7 +22,7 @@ func PendingCODByPartner(tx *gorm.DB) (map[uint]float64, error) {
 
 	if err := tx.Model(&models.Order{}).
 		Select("delivery_partner_id AS partner_id, COALESCE(SUM(total_amount), 0) AS amt").
-		Where("delivery_partner_id IS NOT NULL AND status = ? AND payment_method = ?", models.OrderStatusDelivered, models.PaymentMethodCOD).
+		Where("delivery_partner_id IS NOT NULL AND status = ? AND payment_method = ? AND (collected_via IS NULL OR collected_via <> 'upi' OR upi_status = 'rejected')", models.OrderStatusDelivered, models.PaymentMethodCOD).
 		Group("delivery_partner_id").
 		Scan(&collected).Error; err != nil {
 		return nil, err

@@ -56,6 +56,10 @@ export interface Order {
   total_amount: number
   payment_method?: string
   payment_status?: string
+  collected_via?: 'cash' | 'upi' | null
+  upi_status?: 'unverified' | 'verified' | 'rejected' | null
+  upi_utr?: string | null
+  upi_verified_at?: string | null
   created_at: string
   items?: OrderItem[]
   delivery_partner_id?: number | null

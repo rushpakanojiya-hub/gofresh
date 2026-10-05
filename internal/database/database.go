@@ -129,6 +129,13 @@ seedChartOfAccounts()
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
+if err := DB.Exec(`ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS collected_via VARCHAR(10),
+    ADD COLUMN IF NOT EXISTS upi_status VARCHAR(12),
+    ADD COLUMN IF NOT EXISTS upi_verified_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS upi_utr VARCHAR(40)`).Error; err != nil {
+log.Fatalf("Failed to add UPI columns to orders: %v", err)
+}
 if err := DB.Exec(`ALTER TABLE delivery_partners
     ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS warehouse_id BIGINT,

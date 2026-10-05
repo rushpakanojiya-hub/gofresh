@@ -1,9 +1,25 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'delivery_handover_screen.dart';
+
+Future<BitmapDescriptor> _emojiMarker(String emoji, {double size = 60}) async {
+  const double scale = 3.0;
+  final double px = size * scale;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  final painter = TextPainter(
+    text: TextSpan(text: emoji, style: TextStyle(fontSize: px * 0.8)),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  painter.paint(canvas, Offset((px - painter.width) / 2, (px - painter.height) / 2));
+  final img = await recorder.endRecording().toImage(px.toInt(), px.toInt());
+  final data = await img.toByteData(format: ui.ImageByteFormat.png);
+  return BitmapDescriptor.bytes(data!.buffer.asUint8List(), width: size, height: size);
+}
 
 const Color _green = Color(0xFF1ED760);
 const Color _purple = Color(0xFF5B2A9E);
@@ -36,6 +52,8 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
   GoogleMapController? _map;
   LatLng? _drop;
   LatLng? _me;
+  BitmapDescriptor? _homeIcon;
+  BitmapDescriptor? _riderIcon;
 
   @override
   void initState() {
@@ -43,6 +61,7 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
     final lat = num.tryParse('${widget.order['delivery_lat'] ?? ''}');
     final lng = num.tryParse('${widget.order['delivery_lng'] ?? ''}');
     if (lat != null && lng != null) _drop = LatLng(lat.toDouble(), lng.toDouble());
+    _loadIcons();
     _locate();
   }
 
@@ -50,6 +69,16 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
   void dispose() {
     _map?.dispose();
     super.dispose();
+  }
+
+    Future<void> _loadIcons() async {
+    final home = await _emojiMarker('\u{1F3E0}', size: 60);
+    final rider = await _emojiMarker('\u{1F6F5}', size: 42);
+    if (!mounted) return;
+    setState(() {
+      _homeIcon = home;
+      _riderIcon = rider;
+    });
   }
 
   Future<void> _locate() async {
@@ -138,9 +167,18 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
     final me = _me;
 
     final markers = <Marker>{
+      if (me != null && _riderIcon != null)
+        Marker(
+          markerId: const MarkerId('rider'),
+          position: me,
+          icon: _riderIcon!,
+          anchor: const Offset(0.5, 0.5),
+        ),
       if (drop != null)
         Marker(
           markerId: const MarkerId('drop'),
+          icon: _homeIcon ?? BitmapDescriptor.defaultMarker,
+          anchor: const Offset(0.5, 0.5),
           position: drop,
           infoWindow: InfoWindow(title: name.isEmpty ? 'Drop' : name),
         ),
@@ -174,7 +212,7 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
                     },
                     markers: markers,
                     polylines: lines,
-                    myLocationEnabled: me != null,
+                    myLocationEnabled: false,
                     myLocationButtonEnabled: false,
                     zoomControlsEnabled: false,
                     mapToolbarEnabled: false,

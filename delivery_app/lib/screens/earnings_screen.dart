@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
 class EarningsScreen extends StatefulWidget {
@@ -71,14 +71,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                               'Earnings',
                               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.notifications_none, color: Colors.black87),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('No new notifications')),
-                                );
-                              },
-                            ),
+                            const SizedBox(width: 48),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -159,8 +152,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
                                     '+₹${entry['amount']}',
                                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF22C55E), fontSize: 14),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.chevron_right, size: 18, color: Colors.black38),
                                 ],
                               ),
                             );

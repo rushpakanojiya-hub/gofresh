@@ -58,6 +58,7 @@ const navGroups = [
       { to: '/orders', label: 'Orders', icon: '\u25A5' },
       { to: '/returns', label: 'Returns', icon: '\u21BA' },
       { to: '/payments', label: 'Payments', icon: '\u25CA' },
+      { to: '/upi-collections', label: 'UPI Collections', icon: '\u25CA' },
     ],
   },
   {

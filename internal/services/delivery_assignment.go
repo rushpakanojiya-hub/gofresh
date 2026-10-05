@@ -178,7 +178,7 @@ func AutoAssignDeliveryPartner(orderID uint) {
 
         isCOD := order.PaymentMethod == models.PaymentMethodCOD
         var pendingCOD map[uint]float64
-        if isCOD {
+        {
             var pErr error
             pendingCOD, pErr = PendingCODByPartner(tx)
             if pErr != nil {
@@ -206,7 +206,10 @@ func AutoAssignDeliveryPartner(orderID uint) {
                 continue
             }
 
-            if isCOD && pendingCOD[p.ID] >= CODCashLimit {
+            if pendingCOD[p.ID] >= CODHardStopLimit {
+                continue
+            }
+            if isCOD && pendingCOD[p.ID] > 0 && pendingCOD[p.ID]+order.TotalAmount > CODCashLimit {
                 continue // partner already holds the cash limit
             }
 

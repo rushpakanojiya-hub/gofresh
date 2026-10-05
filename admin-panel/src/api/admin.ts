@@ -415,3 +415,11 @@ export const updateProductReorderLevel = (productId: number, reorderLevel: numbe
 
 export const getPartnerOnboarding = (id: number) =>
   apiClient.get(`/admin/delivery-partners/${id}/onboarding`).then((r) => r.data)
+
+
+// UPI collections: COD orders paid by QR at the door, waiting for admin to match against the bank statement.
+export const getUPICollections = (status: string = 'unverified') =>
+  apiClient.get('/admin/upi-collections', { params: { status } }).then((r) => r.data)
+
+export const reviewUPICollection = (id: number, action: 'verify' | 'reject', utr?: string) =>
+  apiClient.put(`/admin/upi-collections/${id}/review`, { action, utr }).then((r) => r.data)

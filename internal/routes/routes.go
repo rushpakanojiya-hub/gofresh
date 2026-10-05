@@ -275,6 +275,8 @@ func SetupRoutes(router *gin.Engine) {
 		admin.GET("/delivery/active", handlers.GetActiveDeliveries)
 		admin.GET("/delivery/rider-workload", handlers.GetRiderWorkload)
 		admin.GET("/delivery/failed", handlers.GetFailedDeliveries)
+            admin.GET("/upi-collections", handlers.GetUPICollections)
+            admin.PUT("/upi-collections/:id/review", handlers.ReviewUPICollection)
 
 		adminProcurement := admin.Group("/procurement")
 		{

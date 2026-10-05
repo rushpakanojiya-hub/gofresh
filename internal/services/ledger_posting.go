@@ -44,7 +44,7 @@ return fmt.Errorf("order not found: %w", err)
 }
 
 cashOrBankCode := "1002" // Bank
-if order.PaymentMethod == models.PaymentMethodCOD {
+if order.PaymentMethod == models.PaymentMethodCOD && !(order.CollectedVia != nil && *order.CollectedVia == "upi") {
 cashOrBankCode = "1001" // Cash
 }
 

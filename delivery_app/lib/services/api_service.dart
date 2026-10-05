@@ -90,10 +90,11 @@ class ApiService {
     return data;
   }
 
-  static Future<Map<String, dynamic>> confirmDelivery(int orderId) async {
+  static Future<Map<String, dynamic>> confirmDelivery(int orderId, {String? collectedVia}) async {
     final res = await http.put(
       Uri.parse('$baseUrl/delivery/orders/$orderId/deliver'),
       headers: await _headers(),
+      body: jsonEncode({if (collectedVia != null) 'collected_via': collectedVia}),
     );
     final data = jsonDecode(res.body);
     if (res.statusCode != 200) throw Exception(data['error'] ?? 'Failed to confirm delivery');

@@ -30,6 +30,7 @@ import DeliveryManagement from './pages/DeliveryManagement'
 import OperationsAnalytics from './pages/OperationsAnalytics'
 import Payments from './pages/Payments'
 import Invoices from './pages/Invoices'
+import UPICollections from './pages/UPICollections'
 import WalletCredit from './pages/WalletCredit'
 import Suppliers from './pages/Suppliers'
 import PurchaseOrders from './pages/PurchaseOrders'
@@ -271,6 +272,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Invoices />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/upi-collections"
+            element={
+              <ProtectedRoute>
+                <UPICollections />
               </ProtectedRoute>
             }
           />

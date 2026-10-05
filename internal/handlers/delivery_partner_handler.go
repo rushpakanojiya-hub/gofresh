@@ -677,6 +677,11 @@ func UploadDeliveryProof(c *gin.Context) {
 func ConfirmDelivery(c *gin.Context) {
 	partnerID := c.MustGet("user_id").(uint)
 	orderID := c.Param("id")
+    // Optional body from the rider app: how the COD amount was collected (cash|upi).
+    var body struct {
+        CollectedVia string `json:"collected_via"`
+    }
+    _ = c.ShouldBindJSON(&body)
 
 	var order models.Order
 	if err := database.DB.Preload("Address").Preload("Items.Product").Where("id = ? AND delivery_partner_id = ?", orderID, partnerID).First(&order).Error; err != nil {
@@ -712,6 +717,15 @@ func ConfirmDelivery(c *gin.Context) {
 	if order.PaymentMethod == models.PaymentMethodCOD {
 		order.PaymentStatus = models.OrderPaymentStatusPaid
 	}
+    if order.PaymentMethod == models.PaymentMethodCOD {
+        via := "cash"
+        if body.CollectedVia == "upi" {
+            via = "upi"
+            st := "unverified"
+            order.UPIStatus = &st
+        }
+        order.CollectedVia = &via
+    }
 
 	if err := database.DB.Save(&order).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm delivery"})
@@ -731,7 +745,12 @@ func ConfirmDelivery(c *gin.Context) {
 		log.Printf("CRITICAL: failed to post sales ledger entry for order %s - revenue untracked: %v", orderID, err)
 	}
 
-	// Notify the customer that their order has been delivered.
+	// COD cash alerts at 80% / 100% of the limit. UPI is not cash held by the rider.
+    if order.PaymentMethod == models.PaymentMethodCOD && body.CollectedVia != "upi" {
+        go services.NotifyCODThresholds(partnerID, order.TotalAmount, order.ID)
+    }
+
+    // Notify the customer that their order has been delivered.
 	go services.SendPushToUserWithData(order.UserID, "Order delivered", fmt.Sprintf("Your order #%d has been delivered. Enjoy!", order.ID), services.OrderPushData(order.ID))
 
         // This partner just freed up - immediately try to backfill any

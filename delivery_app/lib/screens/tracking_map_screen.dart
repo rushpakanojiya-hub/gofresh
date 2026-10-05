@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -54,8 +54,8 @@ class _TrackingMapScreenState extends State<TrackingMapScreen> {
   }
 
   Future<void> _loadIcons() async {
-    final home = await _emojiMarker('\u{1F3E0}', size: 90);
-    final rider = await _emojiMarker('\u{1F6F5}', size: 62);
+    final home = await _emojiMarker('\u{1F3E0}', size: 60);
+    final rider = await _emojiMarker('\u{1F6F5}', size: 42);
     if (mounted) setState(() { _homeIcon = home; _riderIcon = rider; });
   }
 

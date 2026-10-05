@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../services/api_service.dart';
 import 'delivery_complete_screen.dart';
 
@@ -36,10 +37,55 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
   String? _error;
   String? _step;
   bool _cashCollected = false;
+  bool _upiCollected = false;
+
+    static const String _upiId = '9819117133@kotakbank'; // TODO: apna asli UPI ID yahan daalo
+  static const String _upiName = 'GoFresh';
+
+  Future<void> _showUpiQr() async {
+    final id = ((widget.order['order_id'] ?? widget.order['id']) as num).toInt();
+    final amt = double.tryParse('${widget.order['total_amount']}') ?? 0;
+    final upi = 'upi://pay?pa=$_upiId&pn=${Uri.encodeComponent(_upiName)}&am=${amt.toStringAsFixed(2)}&cu=INR&tn=${Uri.encodeComponent('Order #$id')}';
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Scan to pay', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('\u20B9${amt.toStringAsFixed(2)} - Order #$id',
+                style: const TextStyle(fontSize: 14, color: Colors.black54)),
+            const SizedBox(height: 16),
+            QrImageView(data: upi, version: QrVersions.auto, size: 220, backgroundColor: Colors.white),
+            const SizedBox(height: 12),
+            const Text(
+              'Ask the customer to scan with any UPI app. Close this after the payment is done.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Done'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _next() async {
     if (_busy) return;
-    if (_pick(widget.order, ['payment_method']).toLowerCase() == 'cod' && !_cashCollected) {
+    if (_pick(widget.order, ['payment_method']).toLowerCase() == 'cod' && !_cashCollected && !_upiCollected) {
       setState(() => _error = 'Please collect the cash and tick the box first');
       return;
     }
@@ -92,7 +138,7 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
       if (mounted) setState(() => _step = 'uploading photo');
       await ApiService.uploadDeliveryProof(id, shot.path);
       if (mounted) setState(() => _step = 'confirmDelivery');
-      final confirm = await ApiService.confirmDelivery(id);
+      final confirm = await ApiService.confirmDelivery(id, collectedVia: _upiCollected ? 'upi' : (_cashCollected ? 'cash' : null));
       if (!mounted) return;
       final updated = Map<String, dynamic>.from(widget.order);
       final o = confirm['order'];
@@ -214,6 +260,7 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                         value: _cashCollected,
                         onChanged: _busy ? null : (v) => setState(() {
                           _cashCollected = v ?? false;
+                          if (_cashCollected) _upiCollected = false;
                           _error = null;
                         }),
                         controlAffinity: ListTileControlAffinity.trailing,
@@ -224,6 +271,32 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                         ),
                         subtitle: const Text(
                           'Tick after collecting cash from the customer',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ),
+                    ),
+                  if (isCod)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: Colors.white,
+                      child: CheckboxListTile(
+                        value: _upiCollected,
+                        onChanged: _busy ? null : (v) {
+                          setState(() {
+                            _upiCollected = v ?? false;
+                            if (_upiCollected) _cashCollected = false;
+                            _error = null;
+                          });
+                          if (_upiCollected) _showUpiQr();
+                        },
+                        controlAffinity: ListTileControlAffinity.trailing,
+                        activeColor: Colors.green,
+                        title: Text(
+                          'Collected \u20B9${_money(o['total_amount'])} via UPI',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: const Text(
+                          'Tick to show a QR code for the customer to pay',
                           style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ),
@@ -285,9 +358,9 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                       child: Text(_error!, style: const TextStyle(color: Colors.red)),
                     ),
                   Opacity(
-                    opacity: (isCod && !_cashCollected) ? 0.4 : 1,
+                    opacity: (isCod && !_cashCollected && !_upiCollected) ? 0.4 : 1,
                     child: IgnorePointer(
-                      ignoring: isCod && !_cashCollected,
+                      ignoring: isCod && !_cashCollected && !_upiCollected,
                       child: _SwipeButton(label: 'Order delivered', busy: _busy, onConfirm: _next),
                     ),
                   ),

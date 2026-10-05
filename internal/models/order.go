@@ -146,6 +146,11 @@ CouponDiscount    float64          `gorm:"-" json:"coupon_discount"`
 	// is first assigned.
 	DeliveryStatus *string `gorm:"index;size:20" json:"delivery_status,omitempty"`
 	DeliveryProofURL *string `json:"delivery_proof_url,omitempty"`
+        // UPI collection (COD orders paid by QR at the door). collected_via: cash|upi
+        CollectedVia  *string    `gorm:"column:collected_via;size:10" json:"collected_via,omitempty"`
+        UPIStatus     *string    `gorm:"column:upi_status;size:12" json:"upi_status,omitempty"` // unverified|verified|rejected
+        UPIVerifiedAt *time.Time `gorm:"column:upi_verified_at" json:"upi_verified_at,omitempty"`
+        UPIUTR        *string    `gorm:"column:upi_utr;size:40" json:"upi_utr,omitempty"`
 	// Delivery-completion OTP fields. Only the bcrypt hash is ever
 	// persisted - the plaintext code is never stored and is never
 	// serialized to JSON (json:"-"), so it can never leak through any
