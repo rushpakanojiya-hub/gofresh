@@ -43,7 +43,7 @@ type DeliveryPartner struct {
     // partner whose current active order count has reached this limit.
     // Configurable per partner; defaults to config.DefaultMaxActiveOrdersPerPartner
     // when not explicitly set on create.
-    MaxActiveOrders int            `gorm:"not null;default:5" json:"max_active_orders"`
+    MaxActiveOrders int            `gorm:"not null;default:1" json:"max_active_orders"`
     CreatedAt       time.Time      `json:"created_at"`
     UpdatedAt       time.Time      `json:"updated_at"`
     DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`

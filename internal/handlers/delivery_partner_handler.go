@@ -32,7 +32,7 @@ func CreateDeliveryPartner(c *gin.Context) {
 		return
 	}
 
-	maxActiveOrders := 5 // safety net if config wasn't loaded (e.g. some tests)
+	maxActiveOrders := 1 // safety net if config wasn't loaded (e.g. some tests)
 	if config.AppConfig != nil && config.AppConfig.DefaultMaxActiveOrdersPerPartner > 0 {
 		maxActiveOrders = config.AppConfig.DefaultMaxActiveOrdersPerPartner
 	}

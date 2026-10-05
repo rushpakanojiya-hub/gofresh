@@ -122,7 +122,7 @@ func LoadConfig() *Config {
 		SellerState:                           getEnv("SELLER_STATE", ""),
 		SellerStateCode:                       getEnv("SELLER_STATE_CODE", ""),
 		SellerFSSAINumber:                     getEnv("SELLER_FSSAI_NUMBER", ""),
-		DefaultMaxActiveOrdersPerPartner:      getEnvInt("MAX_ACTIVE_ORDERS_PER_PARTNER", 5),
+		DefaultMaxActiveOrdersPerPartner:      getEnvInt("MAX_ACTIVE_ORDERS_PER_PARTNER", 1),
 		DeliveryAssignmentTimeoutMinutes:      getEnvInt("DELIVERY_ASSIGNMENT_TIMEOUT_MINUTES", 5),
 		DeliveryOTPExpiryMinutes:              getEnvInt("DELIVERY_OTP_EXPIRY_MINUTES", 15),
 		DeliveryOTPMaxAttempts:                getEnvInt("DELIVERY_OTP_MAX_ATTEMPTS", 5),
