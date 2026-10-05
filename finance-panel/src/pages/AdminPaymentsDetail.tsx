@@ -178,7 +178,7 @@ export default function AdminPaymentsDetail() {
                 </td>
                 <td className="px-4 py-3 text-white">{formatCurrency(r.amount)}</td>
                 <td className="px-4 py-3 text-gray-300">{formatCurrency(r.refunded_amount)}</td>
-                <td className="px-4 py-3 text-gray-300">{r.payment_method}</td>
+                <td className="px-4 py-3 text-gray-300">{r.payment_method}{r.collected_via === 'upi' ? ' · UPI' : ''}</td>
                 <td className="px-4 py-3 text-gray-300">{r.gateway}</td>
                 <td className="px-4 py-3 text-gray-300">{r.status}</td>
                 <td className="px-4 py-3 text-gray-400">{formatDate(r.created_at)}</td>

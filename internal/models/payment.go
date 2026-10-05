@@ -66,7 +66,8 @@ RefundedAmount float64   `json:"refunded_amount" gorm:"column:refunded_amount"`
 PaymentMethod  string    `json:"payment_method" gorm:"column:payment_method"`
 Gateway        string    `json:"gateway" gorm:"column:gateway"`
 Status         string    `json:"status" gorm:"column:status"`
-CreatedAt      time.Time `json:"created_at" gorm:"column:created_at"`
+	CollectedVia  *string   `json:"collected_via,omitempty" gorm:"column:collected_via"`
+	CreatedAt      time.Time `json:"created_at" gorm:"column:created_at"`
 }
 
 // AdminPaymentListResponse wraps paginated payment rows.

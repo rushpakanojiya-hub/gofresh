@@ -121,6 +121,7 @@ COALESCE(u.phone, '') AS customer_phone,
 COALESCE(p.amount, o.total_amount) AS amount,
 COALESCE(p.refunded_amount, 0) AS refunded_amount,
 o.payment_method AS payment_method,
+o.collected_via AS collected_via,
 COALESCE(p.gateway, CASE WHEN o.payment_method = 'cod' THEN 'cod' ELSE 'razorpay' END) AS gateway,
 CASE
 WHEN p.id IS NOT NULL THEN (CASE WHEN p.status = 'created' THEN 'pending' ELSE p.status END)

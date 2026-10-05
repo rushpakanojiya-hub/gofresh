@@ -353,6 +353,7 @@ export interface AdminPaymentRow {
   amount: number
   refunded_amount: number
   payment_method: string
+  collected_via?: string | null
   gateway: string
   status: string
   created_at: string
