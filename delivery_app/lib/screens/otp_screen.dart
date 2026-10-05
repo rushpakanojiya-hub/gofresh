@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import 'home_shell.dart';
@@ -15,7 +16,9 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
+  static const int _otpLength = 6;
   final _otpController = TextEditingController();
+  final _focusNode = FocusNode();
   bool _loading = false;
   String? _error;
 
@@ -25,6 +28,19 @@ class _OtpScreenState extends State<OtpScreen> {
     if (widget.testOtp != null && widget.testOtp!.isNotEmpty) {
       _otpController.text = widget.testOtp!;
     }
+    _otpController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    _focusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _verifyOtp() async {
@@ -70,6 +86,71 @@ class _OtpScreenState extends State<OtpScreen> {
     }
   }
 
+  Widget _buildOtpBoxes() {
+    final text = _otpController.text;
+    final activeIndex = text.length < _otpLength ? text.length : _otpLength - 1;
+    final primary = Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      height: 56,
+      child: Stack(
+        children: [
+          IgnorePointer(
+            child: Row(
+              children: List.generate(_otpLength, (i) {
+                final ch = i < text.length ? text[i] : '';
+                final focused = _focusNode.hasFocus && i == activeIndex;
+                final borderColor = _error != null
+                    ? Colors.red
+                    : (focused ? primary : Colors.grey.shade400);
+                return Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: borderColor, width: focused || _error != null ? 2 : 1),
+                    ),
+                    child: Text(
+                      ch,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: _error != null ? Colors.red : null,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          Positioned.fill(
+            child: TextField(
+              controller: _otpController,
+              focusNode: _focusNode,
+              autofocus: widget.testOtp == null || widget.testOtp!.isEmpty,
+              keyboardType: TextInputType.number,
+              maxLength: _otpLength,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              autofillHints: const [AutofillHints.oneTimeCode],
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(color: Colors.transparent),
+              cursorColor: Colors.transparent,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                counterText: '',
+                fillColor: Colors.transparent,
+              ),
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -77,9 +158,10 @@ class _OtpScreenState extends State<OtpScreen> {
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 80),
             Text(
               'Enter the OTP sent to ${widget.phone}',
               textAlign: TextAlign.center,
@@ -88,22 +170,13 @@ class _OtpScreenState extends State<OtpScreen> {
             if (widget.testOtp != null && widget.testOtp!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                '(Test mode — auto-filled)',
+                '(Test mode - auto-filled)',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
             const SizedBox(height: 16),
-            TextField(
-              controller: _otpController,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              decoration: const InputDecoration(
-                labelText: 'OTP',
-                border: OutlineInputBorder(),
-                counterText: '',
-              ),
-            ),
+            _buildOtpBoxes(),
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(_error!, style: const TextStyle(color: Colors.red)),
@@ -126,4 +199,3 @@ class _OtpScreenState extends State<OtpScreen> {
     );
   }
 }
-
