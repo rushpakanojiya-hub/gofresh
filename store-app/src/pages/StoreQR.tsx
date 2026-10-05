@@ -20,7 +20,7 @@ export default function StoreQR() {
       )
       setError(null)
     } catch {
-      setError('QR load nahi hua. Internet check karo.')
+      setError('Could not load the QR. Check your internet connection.')
     }
   }, [])
 
@@ -41,8 +41,8 @@ export default function StoreQR() {
       </p>
       <h1 className="font-display text-2xl mb-2">Store QR</h1>
       <p className="text-sm text-slate-400 mb-6">
-        Delivery partner apni app me scan button se ye QR scan karega. Scan ke baad hi use
-        order auto-assign honge. Ye QR har 30 second me badalta hai, photo kaam nahi karegi.
+        Delivery partners scan this QR with the scan button in their app. Only after scanning
+        will they be auto-assigned orders. This QR changes every 30 seconds, so a photo of it will not work.
       </p>
 
       <div className="inline-block bg-white p-5">
@@ -57,7 +57,7 @@ export default function StoreQR() {
 
       <p className="mt-3 text-xs text-slate-400">
         {staff?.warehouse?.name ?? 'Store #' + (staff?.warehouse_id ?? '-')}
-        {token ? ' - badalne me ' + secondsLeft + 's' : ''}
+        {token ? ' - refreshes in ' + secondsLeft + 's' : ''}
       </p>
       {error && token && <p className="mt-2 text-xs text-red-400">{error}</p>}
     </div>

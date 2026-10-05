@@ -25,11 +25,11 @@ const (
 )
 
 var (
-	ErrCheckinInvalidToken = errors.New("QR invalid ya expire ho gaya hai, store screen par naya QR scan karo")
-	ErrCheckinWrongStore   = errors.New("ye QR doosre store ka hai")
-	ErrCheckinNoLocation   = errors.New("aapki location nahi mili, location on karke dobara try karo")
-	ErrCheckinTooFar       = errors.New("aap store se bahut door ho")
-	ErrCheckinNotFound     = errors.New("partner ya store nahi mila")
+	ErrCheckinInvalidToken = errors.New("This QR is invalid or expired. Scan the new QR on the store screen")
+	ErrCheckinWrongStore   = errors.New("This QR belongs to a different store")
+	ErrCheckinNoLocation   = errors.New("Could not get your location. Turn on location and try again")
+	ErrCheckinTooFar       = errors.New("You are too far from the store")
+	ErrCheckinNotFound     = errors.New("Partner or store not found")
 )
 
 func storeCheckinKey() []byte {
