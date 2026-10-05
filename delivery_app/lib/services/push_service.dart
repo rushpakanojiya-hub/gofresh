@@ -3,6 +3,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../screens/new_order_sheet.dart';
+import '../screens/order_pickup_screen.dart';
+import '../screens/delivery_map_screen.dart';
+import '../screens/delivery_handover_screen.dart';
+import '../screens/delivery_complete_screen.dart';
 import 'api_service.dart';
 
 /// FCM setup for the delivery partner app: permission, token registration,
@@ -89,11 +93,29 @@ class PushService {
         (o) => o is Map && '${o['order_id'] ?? o['id']}' == '$id',
         orElse: () => null,
       );
-      if (item == null) {
+      Widget? next;
+      if (item is Map) {
+        final m = Map<String, dynamic>.from(item);
+        final ds = m['delivery_status']?.toString();
+        if (ds == 'accepted' || ds == 'going_to_store' || ds == 'arrived_at_store') {
+          next = OrderPickupScreen(order: m);
+        } else if (ds == 'picked_up' || ds == 'out_for_delivery') {
+          next = DeliveryMapScreen(order: m);
+        } else if (ds == 'arrived' || ds == 'arrived_at_customer') {
+          next = DeliveryHandoverScreen(order: m);
+        } else if (m['status']?.toString() == 'delivered') {
+          next = DeliveryCompleteScreen(order: m);
+        } else if (ds == 'delivered') {
+          next = DeliveryHandoverScreen(order: m);
+        }
+      }
+      if (next == null) {
+        nav.popUntil((r) => r.isFirst);
         tabRequest.value = fallbackTab;
         return;
       }
-      tabRequest.value = fallbackTab;
+      final screen = next;
+      nav.push(MaterialPageRoute(builder: (_) => screen));
     } catch (e) {
       debugPrint('openOrder failed: $e');
       tabRequest.value = fallbackTab;
