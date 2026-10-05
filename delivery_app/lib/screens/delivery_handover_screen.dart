@@ -122,7 +122,7 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
       if (status == 'arrived') status = 'arrived_at_customer';
       final from = chain.indexOf(status);
       if (from < 0) throw Exception('Unexpected delivery status: $status');
-      for (var i = from + 1; i < chain.length; i++) {
+      for (var i = from + 1; i < chain.length - 1; i++) {
         if (mounted) setState(() => _step = '${chain[i]}');
         debugPrint('handover step: ${chain[i]}');
         await ApiService.updateDeliveryStatus(id, chain[i]);
@@ -137,6 +137,9 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
       if (shot == null) throw Exception('Delivery proof photo is required');
       if (mounted) setState(() => _step = 'uploading photo');
       await ApiService.uploadDeliveryProof(id, shot.path);
+      if (from < chain.length - 1) {
+        await ApiService.updateDeliveryStatus(id, 'delivered');
+      }
       if (mounted) setState(() => _step = 'confirmDelivery');
       final confirm = await ApiService.confirmDelivery(id, collectedVia: _upiCollected ? 'upi' : (_cashCollected ? 'cash' : null));
       if (!mounted) return;
@@ -347,11 +350,7 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_busy && _step != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text('Step: $_step'),
-                    ),
+                  
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
