@@ -335,6 +335,7 @@ type AssignedOrderSummary struct {
 	TotalAmount         float64            `json:"total_amount"`
 	PaymentMethod       string             `json:"payment_method"`
 	ItemCount           int                `json:"item_count"`
+	CollectedVia         *string            `json:"collected_via,omitempty"`
 	Items               []OrderItemSummary `json:"items"`
         DeliveryLat *float64 `json:"delivery_lat,omitempty"`
         DeliveryLng *float64 `json:"delivery_lng,omitempty"`
@@ -377,6 +378,7 @@ func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
 		TotalAmount:         o.TotalAmount,
 		PaymentMethod:       o.PaymentMethod,
 		ItemCount:           len(o.Items),
+		CollectedVia:        o.CollectedVia,
 		Items:               itemSummaries,
 		CreatedAt:           o.CreatedAt,
                 DeliveryLat: o.Address.Lat,
