@@ -152,8 +152,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _toggleOnline() async {
-    final next = !(_isOnline ?? false);
+  Future<void> _toggleOnline([bool? target]) async {
+    final next = target ?? !(_isOnline ?? false);
+    if (_isOnline == next) return;
     setState(() => _togglingOnline = true);
     try {
       final data = await ApiService.updateAvailability(next);
@@ -396,43 +397,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
                               ),
                             ),
-                            GestureDetector(
-                              onTap: _togglingOnline ? null : _toggleOnline,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: _isOnline == true ? const Color(0xFFE1F5E6) : const Color(0xFFFDEAEA),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (_togglingOnline)
-                                      const SizedBox(
-                                        width: 10,
-                                        height: 10,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    else
-                                      Container(
-                                        width: 8,
-                                        height: 8,
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEDEDED),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final online in [false, true])
+                                    GestureDetector(
+                                      onTap: _togglingOnline ? null : () => _toggleOnline(online),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: _isOnline == true ? Colors.green : Colors.red,
+                                          color: (_isOnline == true) == online
+                                              ? (online ? const Color(0xFF4CAF50) : const Color(0xFFE53935))
+                                              : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(17),
+                                        ),
+                                        child: Text(
+                                          online ? 'ONLINE' : 'OFFLINE',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: (_isOnline == true) == online ? Colors.white : Colors.black54,
+                                          ),
                                         ),
                                       ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _isOnline == true ? 'ONLINE' : 'OFFLINE',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: _isOnline == true ? Colors.green[800] : Colors.red[800],
-                                      ),
                                     ),
-                                  ],
-                                ),
+                                ],
                               ),
                             ),
                           ],
