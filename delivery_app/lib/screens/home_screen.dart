@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import 'order_pickup_screen.dart';
 import 'delivery_map_screen.dart';
 import 'delivery_handover_screen.dart';
@@ -152,9 +153,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<bool> _ensureLocationOn() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      if (!mounted) return false;
+      final open = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Location is off'),
+          content: const Text('Turn on location to go online.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Open settings')),
+          ],
+        ),
+      );
+      if (open == true) await Geolocator.openLocationSettings();
+      return false;
+    }
+    if (await LocationService.requestPermission()) return true;
+    if (!mounted) return false;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Location permission needed'),
+        content: const Text('Allow location access (Allow all the time) to go online.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Open settings')),
+        ],
+      ),
+    );
+    if (open == true) await Geolocator.openAppSettings();
+    return false;
+  }
+
   Future<void> _toggleOnline([bool? target]) async {
     final next = target ?? !(_isOnline ?? false);
     if (_isOnline == next) return;
+    if (next && !await _ensureLocationOn()) return;
     setState(() => _togglingOnline = true);
     try {
       final data = await ApiService.updateAvailability(next);
