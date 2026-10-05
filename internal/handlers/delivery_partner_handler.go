@@ -721,7 +721,7 @@ func ConfirmDelivery(c *gin.Context) {
         via := "cash"
         if body.CollectedVia == "upi" {
             via = "upi"
-            st := "unverified"
+            st := "verified"
             order.UPIStatus = &st
         }
         order.CollectedVia = &via

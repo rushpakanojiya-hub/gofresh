@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import { getUPICollections, reviewUPICollection } from '../api/admin'
 
-const TABS = ['unverified', 'verified', 'rejected'] as const
+const TABS = ['verified', 'rejected'] as const
 type Tab = (typeof TABS)[number]
 
 function fmtMoney(n: number) {
@@ -16,7 +16,7 @@ function fmtDate(s?: string | null) {
 }
 
 export default function UPICollections() {
-  const [tab, setTab] = useState<Tab>('unverified')
+  const [tab, setTab] = useState<Tab>('verified')
   const [rows, setRows] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +67,7 @@ export default function UPICollections() {
         <div>
           <h1 className="text-xl font-semibold">UPI Collections</h1>
           <p className="text-sm text-slate-400 mt-1">
-            COD orders where the rider collected payment by UPI QR. Match each one with the bank statement, then verify.
+            COD orders paid by UPI QR at the door. If a payment never reached the bank, mark it Not received.
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export default function UPICollections() {
                 tab === t ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              {t}
+              {t === 'verified' ? 'Paid by UPI' : 'Not received'}
             </button>
           ))}
         </div>
@@ -99,15 +99,14 @@ export default function UPICollections() {
                 <th className="px-4 py-3">Rider</th>
                 <th className="px-4 py-3">Amount</th>
                 <th className="px-4 py-3">Delivered</th>
-                <th className="px-4 py-3">UTR</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td className="px-4 py-6 text-slate-400" colSpan={6}>Loading...</td></tr>
+                <tr><td className="px-4 py-6 text-slate-400" colSpan={5}>Loading...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td className="px-4 py-6 text-slate-400" colSpan={6}>Nothing here.</td></tr>
+                <tr><td className="px-4 py-6 text-slate-400" colSpan={5}>Nothing here.</td></tr>
               ) : (
                 rows.map((o) => (
                   <tr key={o.id} className="border-t border-slate-800">
@@ -115,17 +114,9 @@ export default function UPICollections() {
                     <td className="px-4 py-3">{o.delivery_partner?.name ?? (o.delivery_partner_id ? 'Rider #' + o.delivery_partner_id : '-')}</td>
                     <td className="px-4 py-3">{fmtMoney(o.total_amount)}</td>
                     <td className="px-4 py-3">{fmtDate(o.delivered_at)}</td>
-                    <td className="px-4 py-3">{o.upi_utr ?? '-'}</td>
                     <td className="px-4 py-3">
-                      {o.upi_status === 'unverified' ? (
+                      {o.upi_status !== 'rejected' ? (
                         <div className="flex gap-2">
-                          <button
-                            disabled={busyId === o.id}
-                            onClick={() => review(o, 'verify')}
-                            className="px-2 py-1 rounded-md text-xs bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
-                          >
-                            Verify
-                          </button>
                           <button
                             disabled={busyId === o.id}
                             onClick={() => review(o, 'reject')}

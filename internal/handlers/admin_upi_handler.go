@@ -46,7 +46,7 @@ func ReviewUPICollection(c *gin.Context) {
         c.JSON(http.StatusNotFound, gin.H{"error": "UPI collection not found"})
         return
     }
-    if order.UPIStatus != nil && *order.UPIStatus != "unverified" {
+    if order.UPIStatus != nil && *order.UPIStatus == "rejected" {
         c.JSON(http.StatusConflict, gin.H{"error": "Already reviewed: " + *order.UPIStatus})
         return
     }

@@ -177,7 +177,7 @@ export default function Orders() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-md ${o.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
-                        {o.payment_status ?? "-"} ({o.payment_method ?? "-"}{o.collected_via === "upi" ? ` · UPI ${o.upi_status ?? "unverified"}` : o.collected_via === "cash" ? " · cash" : ""})
+                        {o.payment_status ?? "-"} ({o.payment_method ?? "-"}{o.collected_via === "upi" ? ` · UPI${o.upi_status === "rejected" ? " not received" : ""}` : o.collected_via === "cash" ? " · cash" : ""})
                       </span>
                     </td>
                     <td className="px-4 py-3">
