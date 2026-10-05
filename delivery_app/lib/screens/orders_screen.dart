@@ -4,7 +4,6 @@ import '../services/api_service.dart';
 import 'delivery_complete_screen.dart';
 import 'delivery_handover_screen.dart';
 import 'delivery_map_screen.dart';
-import 'notifications_screen.dart';
 import 'order_pickup_screen.dart';
 import 'return_pickup_detail_screen.dart';
 
@@ -331,15 +330,6 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none, color: Colors.black87),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -348,8 +338,6 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Row(
                 children: [
-                  _filterChip('New', 'new'),
-                  const SizedBox(width: 8),
                   _filterChip('Active', 'active'),
                   const SizedBox(width: 8),
                   _filterChip('Completed', 'completed'),
