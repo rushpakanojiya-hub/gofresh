@@ -333,17 +333,20 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
                 ],
               ),
             ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Row(
-                children: [
-                  _filterChip('Active', 'active'),
-                  const SizedBox(width: 8),
-                  _filterChip('Completed', 'completed'),
-                  const SizedBox(width: 8),
-                  _filterChip('All', 'all'),
-                ],
+            SizedBox(
+              width: double.infinity,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  children: [
+                    _filterChip('Active', 'active'),
+                    const SizedBox(width: 8),
+                    _filterChip('Completed', 'completed'),
+                    const SizedBox(width: 8),
+                    _filterChip('All', 'all'),
+                  ],
+                ),
               ),
             ),
             Expanded(
