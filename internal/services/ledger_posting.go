@@ -771,3 +771,50 @@ return fmt.Errorf("failed to create cash ledger entry: %w", err)
 return nil
 })
 }
+
+// PostUPIRejectedLedgerEntry reverses the Bank booking of a UPI-collected COD
+// order when admin marks the payment Not received: the rider is holding the
+// cash again, so it moves Bank -> Cash. Idempotent per order.
+func PostUPIRejectedLedgerEntry(orderID uint) error {
+    var existing models.LedgerEntry
+    if err := database.DB.Where("reference_type = ? AND reference_id = ?", "upi_rejected", orderID).First(&existing).Error; err == nil {
+        return nil
+    }
+
+    var cash, bank models.Account
+    if err := database.DB.Where("code = ?", "1001").First(&cash).Error; err != nil {
+        return fmt.Errorf("chart of accounts missing code 1001 (Cash): %w", err)
+    }
+    if err := database.DB.Where("code = ?", "1002").First(&bank).Error; err != nil {
+        return fmt.Errorf("chart of accounts missing code 1002 (Bank): %w", err)
+    }
+
+    var orig models.LedgerEntry
+    if err := database.DB.Where("reference_type = ? AND reference_id = ? AND account_id = ? AND type = ?", "sale", orderID, bank.ID, "debit").First(&orig).Error; err != nil {
+        // Sale was never booked to Bank, nothing to reverse.
+        return nil
+    }
+
+    transactionRef := fmt.Sprintf("UPIREJECT-%d", orderID)
+    now := time.Now()
+
+    return database.DB.Transaction(func(tx *gorm.DB) error {
+        debit := models.LedgerEntry{
+            TransactionRef: transactionRef, AccountID: cash.ID, Type: "debit", Amount: orig.Amount,
+            Description:   fmt.Sprintf("UPI not received, order #%d (rider holds cash)", orderID),
+            ReferenceType: "upi_rejected", ReferenceID: &orderID, EntryDate: now,
+        }
+        if err := tx.Create(&debit).Error; err != nil {
+            return fmt.Errorf("failed to create cash ledger entry: %w", err)
+        }
+        credit := models.LedgerEntry{
+            TransactionRef: transactionRef, AccountID: bank.ID, Type: "credit", Amount: orig.Amount,
+            Description:   fmt.Sprintf("UPI not received, order #%d (rider holds cash)", orderID),
+            ReferenceType: "upi_rejected", ReferenceID: &orderID, EntryDate: now,
+        }
+        if err := tx.Create(&credit).Error; err != nil {
+            return fmt.Errorf("failed to create bank ledger entry: %w", err)
+        }
+        return nil
+    })
+}

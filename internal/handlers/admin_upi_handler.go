@@ -65,6 +65,11 @@ func ReviewUPICollection(c *gin.Context) {
         return
     }
 
+    if newStatus == "rejected" {
+        if err := services.PostUPIRejectedLedgerEntry(order.ID); err != nil {
+            fmt.Printf("UPI reversal ledger failed for order %d: %v\n", order.ID, err)
+        }
+    }
     if newStatus == "rejected" && order.DeliveryPartnerID != nil {
         oid := order.ID
         services.CreateDeliveryNotification(*order.DeliveryPartnerID, "UPI payment not received",
