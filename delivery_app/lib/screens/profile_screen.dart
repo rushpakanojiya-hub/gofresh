@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/push_service.dart';
 import 'ratings_screen.dart';
 import '../services/api_service.dart';
@@ -21,6 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _profile;
   Map<String, dynamic>? _rating;
   bool _loading = true;
+  bool _uploadingPhoto = false;
   String? _error;
 
   @override
@@ -86,6 +88,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _changePhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, maxWidth: 1024, imageQuality: 80);
+    if (picked == null) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final url = await ApiService.uploadProfilePhoto(picked.path);
+      await ApiService.saveProfilePhoto(url);
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -136,6 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final phone = _profile?['phone'] ?? '';
     final vehicleType = _profile?['vehicle_type'];
     final vehicleNumber = _profile?['vehicle_number'];
+    final String? photoUrl = _profile?['profile_photo_url']?.toString();
 
     return Scaffold(
       backgroundColor: pageBg,
@@ -153,11 +195,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     Center(
-                      child: Container(
-                        width: 84,
-                        height: 84,
-                        decoration: const BoxDecoration(color: Color(0xFFEDE6F7), shape: BoxShape.circle),
-                        child: const Icon(Icons.person, color: primaryPurple, size: 44),
+                      child: GestureDetector(
+                        onTap: _uploadingPhoto ? null : _changePhoto,
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 42,
+                              backgroundColor: const Color(0xFFEDE6F7),
+                              backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                              child: (photoUrl == null || photoUrl.isEmpty)
+                                  ? const Icon(Icons.person, color: primaryPurple, size: 44)
+                                  : null,
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(color: primaryPurple, shape: BoxShape.circle),
+                                child: _uploadingPhoto
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Icon(Icons.camera_alt, size: 14, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),

@@ -151,6 +151,32 @@ class ApiService {
     return Map<String, dynamic>.from(jsonDecode(res.body) as Map);
   }
 
+  static Future<String> uploadProfilePhoto(String imagePath) async {
+    final token = await getToken();
+    final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/delivery/upload'));
+    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    req.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception((data is Map && data['error'] != null) ? data['error'].toString() : 'Upload failed');
+    }
+    return data['image_url'].toString();
+  }
+
+  static Future<void> saveProfilePhoto(String url) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/delivery/profile/photo'),
+      headers: await _headers(),
+      body: jsonEncode({'photo_url': url}),
+    );
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body);
+      throw Exception((data is Map && data['error'] != null) ? data['error'].toString() : 'Failed to save photo');
+    }
+  }
+
   static Future<Map<String, dynamic>> getAvailability() async {
     final res = await http.get(Uri.parse('$baseUrl/delivery/availability'), headers: await _headers());
     final data = jsonDecode(res.body);
