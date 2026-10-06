@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -150,12 +151,12 @@ func DeleteDeliveryPartner(c *gin.Context) {
 // short-circuit the transaction below with a specific, already-decided
 // HTTP response, distinct from an unexpected DB error.
 var (
-	errAssignOrderNotFound   = errors.New("order not found")
-	errAssignBadOrderStatus  = errors.New("order not eligible for assignment")
-	errAssignPartnerNotFound = errors.New("delivery partner not found")
-	errAssignPartnerInactive = errors.New("delivery partner is not active")
-	errAssignPartnerOffline  = errors.New("delivery partner is offline")
-	errAssignAlreadyActive   = errors.New("order already has an active delivery assignment")
+	errAssignOrderNotFound     = errors.New("order not found")
+	errAssignBadOrderStatus    = errors.New("order not eligible for assignment")
+	errAssignPartnerNotFound   = errors.New("delivery partner not found")
+	errAssignPartnerInactive   = errors.New("delivery partner is not active")
+	errAssignPartnerOffline    = errors.New("delivery partner is offline")
+	errAssignAlreadyActive     = errors.New("order already has an active delivery assignment")
 	errAssignPartnerAtCapacity = errors.New("delivery partner is at maximum active order capacity")
 )
 
@@ -335,10 +336,10 @@ type AssignedOrderSummary struct {
 	TotalAmount         float64            `json:"total_amount"`
 	PaymentMethod       string             `json:"payment_method"`
 	ItemCount           int                `json:"item_count"`
-	CollectedVia         *string            `json:"collected_via,omitempty"`
+	CollectedVia        *string            `json:"collected_via,omitempty"`
 	Items               []OrderItemSummary `json:"items"`
-        DeliveryLat *float64 `json:"delivery_lat,omitempty"`
-        DeliveryLng *float64 `json:"delivery_lng,omitempty"`
+	DeliveryLat         *float64           `json:"delivery_lat,omitempty"`
+	DeliveryLng         *float64           `json:"delivery_lng,omitempty"`
 	CreatedAt           time.Time          `json:"created_at"`
 }
 
@@ -381,8 +382,8 @@ func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
 		CollectedVia:        o.CollectedVia,
 		Items:               itemSummaries,
 		CreatedAt:           o.CreatedAt,
-                DeliveryLat: o.Address.Lat,
-                DeliveryLng: o.Address.Lng,
+		DeliveryLat:         o.Address.Lat,
+		DeliveryLng:         o.Address.Lng,
 	}
 }
 
@@ -679,11 +680,11 @@ func UploadDeliveryProof(c *gin.Context) {
 func ConfirmDelivery(c *gin.Context) {
 	partnerID := c.MustGet("user_id").(uint)
 	orderID := c.Param("id")
-    // Optional body from the rider app: how the COD amount was collected (cash|upi).
-    var body struct {
-        CollectedVia string `json:"collected_via"`
-    }
-    _ = c.ShouldBindJSON(&body)
+	// Optional body from the rider app: how the COD amount was collected (cash|upi).
+	var body struct {
+		CollectedVia string `json:"collected_via"`
+	}
+	_ = c.ShouldBindJSON(&body)
 
 	var order models.Order
 	if err := database.DB.Preload("Address").Preload("Items.Product").Where("id = ? AND delivery_partner_id = ?", orderID, partnerID).First(&order).Error; err != nil {
@@ -719,15 +720,15 @@ func ConfirmDelivery(c *gin.Context) {
 	if order.PaymentMethod == models.PaymentMethodCOD {
 		order.PaymentStatus = models.OrderPaymentStatusPaid
 	}
-    if order.PaymentMethod == models.PaymentMethodCOD {
-        via := "cash"
-        if body.CollectedVia == "upi" {
-            via = "upi"
-            st := "verified"
-            order.UPIStatus = &st
-        }
-        order.CollectedVia = &via
-    }
+	if order.PaymentMethod == models.PaymentMethodCOD {
+		via := "cash"
+		if body.CollectedVia == "upi" {
+			via = "upi"
+			st := "verified"
+			order.UPIStatus = &st
+		}
+		order.CollectedVia = &via
+	}
 
 	if err := database.DB.Save(&order).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm delivery"})
@@ -748,22 +749,22 @@ func ConfirmDelivery(c *gin.Context) {
 	}
 
 	// COD cash alerts at 80% / 100% of the limit. UPI is not cash held by the rider.
-    if order.PaymentMethod == models.PaymentMethodCOD && body.CollectedVia != "upi" {
-        go services.NotifyCODThresholds(partnerID, order.TotalAmount, order.ID)
-    }
+	if order.PaymentMethod == models.PaymentMethodCOD && body.CollectedVia != "upi" {
+		go services.NotifyCODThresholds(partnerID, order.TotalAmount, order.ID)
+	}
 
-    // Notify the customer that their order has been delivered.
+	// Notify the customer that their order has been delivered.
 	go services.SendPushToUserWithData(order.UserID, "Order delivered", fmt.Sprintf("Your order #%d has been delivered. Enjoy!", order.ID), services.OrderPushData(order.ID))
 
-        // Rider must scan the store QR again before getting another
-    // auto-assigned order, so clear the store check-in now.
-    if err := services.ClearPartnerCheckin(partnerID); err != nil {
-        log.Printf("failed to clear store check-in for partner %d: %v", partnerID, err)
-    }
+	// Rider must scan the store QR again before getting another
+	// auto-assigned order, so clear the store check-in now.
+	if err := services.ClearPartnerCheckin(partnerID); err != nil {
+		log.Printf("failed to clear store check-in for partner %d: %v", partnerID, err)
+	}
 
-// This partner just freed up - immediately try to backfill any
-        // orders that were left unassigned because every partner was busy.
-        go services.TryAssignPendingOrdersToPartner(partnerID)
+	// This partner just freed up - immediately try to backfill any
+	// orders that were left unassigned because every partner was busy.
+	go services.TryAssignPendingOrdersToPartner(partnerID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Delivery confirmed", "order": order})
 }
@@ -807,7 +808,15 @@ func GetMyEarnings(c *gin.Context) {
 		return
 	}
 
-	totalEarnings := float64(len(deliveredOrders)) * perDeliveryEarning
+	var handedReturns []models.ReturnRequest
+	if err := database.DB.
+		Where("delivery_partner_id = ? AND pickup_status = ? AND handed_over_at IS NOT NULL", partnerID, models.PickupStatusHandedOver).
+		Find(&handedReturns).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load earnings"})
+		return
+	}
+	totalCount := len(deliveredOrders) + len(handedReturns)
+	totalEarnings := float64(totalCount) * perDeliveryEarning
 
 	todayStart := time.Now().Truncate(24 * time.Hour)
 	todayCount := 0
@@ -816,8 +825,11 @@ func GetMyEarnings(c *gin.Context) {
 		OrderID     uint      `json:"order_id"`
 		Amount      float64   `json:"amount"`
 		DeliveredAt time.Time `json:"delivered_at"`
+		Type        string    `json:"type"`
 	}
-	entries := make([]EarningEntry, 0, len(deliveredOrders))
+	entries := make([]EarningEntry, 0, len(deliveredOrders)+len(handedReturns))
+	weekStart := todayStart.AddDate(0, 0, -6)
+	weekCount := 0
 
 	for _, o := range deliveredOrders {
 		if o.UpdatedAt.After(todayStart) {
@@ -828,15 +840,45 @@ func GetMyEarnings(c *gin.Context) {
 			OrderID:     o.ID,
 			Amount:      perDeliveryEarning,
 			DeliveredAt: o.UpdatedAt,
+			Type:        "delivery",
 		})
 	}
+
+	for _, o := range deliveredOrders {
+		if !o.UpdatedAt.Before(weekStart) {
+			weekCount++
+		}
+	}
+	for _, r := range handedReturns {
+		if r.HandedOverAt == nil {
+			continue
+		}
+		at := *r.HandedOverAt
+		if at.After(todayStart) {
+			todayCount++
+			todayEarnings += perDeliveryEarning
+		}
+		if !at.Before(weekStart) {
+			weekCount++
+		}
+		entries = append(entries, EarningEntry{
+			OrderID:     r.OrderID,
+			Amount:      perDeliveryEarning,
+			DeliveredAt: at,
+			Type:        "return",
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].DeliveredAt.After(entries[j].DeliveredAt) })
+	weekEarnings := float64(weekCount) * perDeliveryEarning
 
 	c.JSON(http.StatusOK, gin.H{
 		"per_delivery_rate": perDeliveryEarning,
 		"today_earnings":    todayEarnings,
 		"today_deliveries":  todayCount,
 		"total_earnings":    totalEarnings,
-		"total_deliveries":  len(deliveredOrders),
+		"total_deliveries":  totalCount,
+		"week_earnings":     weekEarnings,
+		"week_deliveries":   weekCount,
 		"entries":           entries,
 	})
 }
