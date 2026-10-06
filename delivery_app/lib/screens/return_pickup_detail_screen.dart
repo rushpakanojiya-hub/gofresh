@@ -423,7 +423,7 @@ class _ReturnPickupDetailScreenState extends State<ReturnPickupDetailScreen> {
             const SizedBox(height: 12),
             Text(_error!, style: const TextStyle(color: Colors.red)),
           ],
-          if (!isPendingResponse) _buildStepper(pickupStatus),
+          if (!isPendingResponse && pickupStatus != 'handed_over') _buildStepper(pickupStatus),
           const SizedBox(height: 12),
           if (pickupStatus == 'accepted')
             ElevatedButton(

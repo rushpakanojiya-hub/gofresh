@@ -21,6 +21,8 @@ class PushService {
 
   /// ProfileScreen listens to this and reloads (new rating arrived).
   static final ValueNotifier<int> ratingRefresh = ValueNotifier<int>(0);
+  /// Bumped when a return/order changes state elsewhere; Home reloads.
+  static final ValueNotifier<int> dataRefresh = ValueNotifier<int>(0);
 
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();

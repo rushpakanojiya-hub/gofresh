@@ -44,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    PushService.dataRefresh.addListener(_onDataRefresh);
     WidgetsBinding.instance.addObserver(this);
     _loadAll();
     _loadAvailability();
@@ -65,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    PushService.dataRefresh.removeListener(_onDataRefresh);
     super.dispose();
   }
 
@@ -172,6 +174,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       PushService.sheetOpen = false;
     }
     if (mounted) _loadAll(silent: true);
+  }
+
+  void _onDataRefresh() {
+    Future.microtask(() {
+      if (mounted) _loadAll(silent: true);
+    });
   }
 
   Future<void> _loadAvailability() async {

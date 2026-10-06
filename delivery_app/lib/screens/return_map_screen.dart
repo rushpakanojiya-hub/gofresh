@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../widgets/swipe_confirm.dart';
+import '../services/push_service.dart';
 
 const Color _purple = Color(0xFF5B2A9E);
 
@@ -82,6 +83,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
   void dispose() {
     _notes.dispose();
     _posSub?.cancel();
+    PushService.dataRefresh.value++;
     _map?.dispose();
     super.dispose();
   }
@@ -98,6 +100,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
   void _setStatus(String s) {
     if (!mounted) return;
     setState(() => _p = {..._p, 'pickup_status': s});
+    PushService.dataRefresh.value++;
     _fit();
   }
 
@@ -382,6 +385,42 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(addr, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        ),
+                      if ((_p['items'] as List?)?.isNotEmpty ?? false)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7F1FB),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Order details',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                for (final it in (_p['items'] as List))
+                                  Text('${it['product_name']} x${it['quantity']}',
+                                      style: const TextStyle(fontSize: 13)),
+                                if (_s(_p, 'reason').isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text('Reason: ${_s(_p, 'reason')}',
+                                        style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                  ),
+                                if (num.tryParse('${_p['refund_amount'] ?? ''}') != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                        'Refund: \u20B9${num.parse('${_p['refund_amount']}').toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       if (!done)
                         Padding(
