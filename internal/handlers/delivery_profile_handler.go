@@ -45,13 +45,14 @@ func GetDeliveryProfile(c *gin.Context) {
 		// the current delivery-partner architecture (no warehouse_id,
 		// email, or photo column exists on this model), so they're
 		// intentionally omitted rather than fabricated here.
-		"vehicle_type":    partner.VehicleType,
-		"warehouse_id":    partner.WarehouseID,
-		"onboarding_step": partner.OnboardingStep,
-		"approval_status": partner.ApprovalStatus,
-		"account_status":  accountStatusLabel(partner.IsActive),
-		"is_online":       partner.IsOnline,
-		"created_at":      partner.CreatedAt,
+		"vehicle_type":      partner.VehicleType,
+		"profile_photo_url": partner.ProfilePhotoURL,
+		"warehouse_id":      partner.WarehouseID,
+		"onboarding_step":   partner.OnboardingStep,
+		"approval_status":   partner.ApprovalStatus,
+		"account_status":    accountStatusLabel(partner.IsActive),
+		"is_online":         partner.IsOnline,
+		"created_at":        partner.CreatedAt,
 	})
 }
 
@@ -171,4 +172,33 @@ func UpdateDeliveryAvailability(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": availabilityLabel(isOnline), "is_online": isOnline})
+}
+
+// UpdateDeliveryProfilePhoto godoc
+// PUT /api/v1/delivery/profile/photo (delivery partner only)
+// Saves the partner's profile photo URL (uploaded via POST /delivery/upload).
+// Kept separate from the onboarding selfie (KYC) so it never overwrites it.
+func UpdateDeliveryProfilePhoto(c *gin.Context) {
+	partnerID := c.MustGet("user_id").(uint)
+
+	var req struct {
+		PhotoURL string `json:"photo_url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || !validURL(req.PhotoURL) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A valid photo URL is required"})
+		return
+	}
+
+	res := database.DB.Model(&models.DeliveryPartner{}).
+		Where("id = ?", partnerID).
+		Update("profile_photo_url", req.PhotoURL)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save profile photo"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Delivery partner not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"profile_photo_url": req.PhotoURL})
 }

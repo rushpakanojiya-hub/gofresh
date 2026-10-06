@@ -21,6 +21,7 @@ type DeliveryPartner struct {
 	LastLocationUpdate   *time.Time `json:"last_location_update,omitempty"`
 	CheckedInWarehouseID *uint      `gorm:"index" json:"checked_in_warehouse_id,omitempty"`
 	CheckedInAt          *time.Time `json:"checked_in_at,omitempty"`
+	ProfilePhotoURL      string     `gorm:"not null;default:''" json:"profile_photo_url"`
 
 	// Onboarding (self-signup). Existing admin-created partners default to
 	// onboarding_step=5 / approval_status=approved. Bank fields are never

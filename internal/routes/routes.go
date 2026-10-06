@@ -99,6 +99,7 @@ func SetupRoutes(router *gin.Engine) {
 	delivery.GET("/ratings", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyDeliveryRatings)
 		delivery.GET("/orders/:id/rating", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetDeliveryOrderRating)
 			delivery.PUT("/profile", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateDeliveryProfile)
+			delivery.PUT("/profile/photo", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateDeliveryProfilePhoto)
 			delivery.GET("/availability", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetDeliveryAvailability)
 			delivery.PUT("/availability", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UpdateDeliveryAvailability)
 			delivery.PUT("/orders/:id/accept", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.AcceptAssignment)
