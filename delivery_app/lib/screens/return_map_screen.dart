@@ -59,6 +59,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
   BitmapDescriptor? _storeIcon;
   StreamSubscription<Position>? _posSub;
   bool _busy = false;
+  bool _showMap = false;
   bool _uploading = false;
   String? _error;
   String? _photoUrl;
@@ -290,6 +291,212 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_showMap,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) setState(() => _showMap = false);
+      },
+      child: _showMap ? _buildMapView(context) : _buildDetails(context),
+    );
+  }
+
+  Widget _detailSection({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    bool open = false,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: Colors.white,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: ValueKey('$title-$_status'),
+          initiallyExpanded: open,
+          leading: Icon(icon, size: 20, color: Colors.black87),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          subtitle: subtitle == null
+              ? null
+              : Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          expandedAlignment: Alignment.centerLeft,
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
+      ),
+    );
+  }
+
+  Widget _callMapButtons({required bool showCall}) {
+    final phone = _s(_p, 'customer_phone');
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          if (showCall) ...[
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: phone.isEmpty ? null : _call,
+                icon: const Icon(Icons.call, size: 16),
+                label: const Text('Call'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black87,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _target == null ? null : () => setState(() => _showMap = true),
+              icon: const Icon(Icons.navigation, size: 16),
+              label: const Text('Map'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetails(BuildContext context) {
+    final st = _status;
+    final toStore = st == 'picked_up';
+    final done = st == 'handed_over';
+    final items = (_p['items'] is List) ? _p['items'] as List : const [];
+    final name = _s(_p, 'customer_name');
+    final phone = _s(_p, 'customer_phone');
+    final addr = _s(_p, 'delivery_address');
+    final storeName = _s(_p, 'pickup_name');
+    final storeAddr = _s(_p, 'pickup_address');
+    final reason = _s(_p, 'reason');
+    final refund = num.tryParse('${_p['refund_amount'] ?? ''}');
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F1FB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                children: [
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.only(bottom: 18),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      children: [
+                        const Text('RETURN PICKUP - ORDER ID',
+                            style: TextStyle(fontSize: 11, color: Colors.black54)),
+                        const SizedBox(height: 6),
+                        Text('#${_s(_p, 'order_id')}',
+                            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  _detailSection(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'Order details',
+                    subtitle: '${items.length} item${items.length == 1 ? '' : 's'}',
+                    open: true,
+                    children: [
+                      for (final it in items)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text('${it is Map ? (it['quantity'] ?? 1) : 1}x  '
+                              '${it is Map ? (it['product_name'] ?? '') : ''}',
+                              style: const TextStyle(fontSize: 13)),
+                        ),
+                      if (reason.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text('Reason: $reason',
+                              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        ),
+                      if (refund != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text('Refund: \u20B9${refund.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                    ],
+                  ),
+                  _detailSection(
+                    icon: Icons.storefront_outlined,
+                    title: 'Store details',
+                    open: toStore,
+                    children: [
+                      if (storeName.isNotEmpty)
+                        Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if (storeAddr.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(storeAddr,
+                              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        ),
+                      if (toStore && !done) _callMapButtons(showCall: false),
+                    ],
+                  ),
+                  _detailSection(
+                    icon: Icons.person_outline,
+                    title: 'Customer details',
+                    open: !toStore && !done,
+                    children: [
+                      if (name.isNotEmpty)
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if (phone.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(phone, style: const TextStyle(fontSize: 13)),
+                        ),
+                      if (addr.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(addr,
+                              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        ),
+                      if (!toStore && !done) _callMapButtons(showCall: true),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                      ),
+                    _action(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapView(BuildContext context) {
     final st = _status;
     final toStore = st == 'picked_up';
     final done = st == 'handed_over';
@@ -347,6 +554,22 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
                     mapToolbarEnabled: false,
                     padding: const EdgeInsets.only(bottom: 300),
                   ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                    onPressed: () => setState(() => _showMap = false),
+                  ),
+                ),
+              ),
+            ),
           ),
           Align(
             alignment: Alignment.bottomCenter,
