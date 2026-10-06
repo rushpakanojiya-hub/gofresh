@@ -200,6 +200,9 @@ func HandoverReturnToWarehouse(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Rider must scan the store QR again before the next auto-assigned
+	// order or return pickup, so clear the store check-in now.
+	_ = services.ClearPartnerCheckin(partnerID)
 	c.JSON(http.StatusOK, gin.H{"message": "handed over to warehouse"})
 }
 
