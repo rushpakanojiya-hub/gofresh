@@ -228,6 +228,8 @@ type ReturnPickupSummary struct {
 	DeliveryAddress           string                    `json:"delivery_address"`
 	CustomerName              string                    `json:"customer_name"`
 	CustomerPhone             string                    `json:"customer_phone"`
+	DeliveryLat               *float64                  `json:"delivery_lat,omitempty"`
+	DeliveryLng               *float64                  `json:"delivery_lng,omitempty"`
 	Reason                    string                    `json:"reason"`
 	RefundAmount              float64                   `json:"refund_amount"`
 	ItemCount                 int                       `json:"item_count"`
@@ -258,6 +260,8 @@ func toReturnPickupSummary(rr models.ReturnRequest) ReturnPickupSummary {
 		DeliveryAddress:           addr,
 		CustomerName:              rr.Order.Address.FullName,
 		CustomerPhone:             rr.Order.Address.Phone,
+		DeliveryLat:               rr.Order.Address.Lat,
+		DeliveryLng:               rr.Order.Address.Lng,
 		Reason:                    rr.Reason,
 		RefundAmount:              rr.RefundAmount,
 		ItemCount:                 len(rr.Items),
