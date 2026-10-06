@@ -87,6 +87,139 @@ class _DeliveryCompleteScreenState extends State<DeliveryCompleteScreen> {
     );
   }
 
+  String _addressText(Map<String, dynamic> o) {
+    final a = o['address'] ?? o['delivery_address'];
+    if (a is Map) {
+      final parts = [a['line1'], a['line2'], a['city'], a['state'], a['pincode']]
+          .where((v) => v != null && '$v'.trim().isNotEmpty)
+          .map((v) => '$v');
+      final s = parts.join(', ');
+      return s.isEmpty ? '-' : s;
+    }
+    return (a == null || '$a'.isEmpty) ? '-' : '$a';
+  }
+
+  String _customerField(Map<String, dynamic> o, String flat, String key) {
+    final direct = o[flat];
+    if (direct != null && '$direct'.isNotEmpty) return '$direct';
+    for (final holder in ['user', 'customer', 'address', 'delivery_address']) {
+      final h = o[holder];
+      if (h is Map) {
+        final v = h[key] ?? (key == 'name' ? h['full_name'] : null);
+        if (v != null && '$v'.isNotEmpty) return '$v';
+      }
+    }
+    return '-';
+  }
+
+  List<String> _itemLines(Map<String, dynamic> o) {
+    final raw = o['items'] ?? o['order_items'];
+    if (raw is! List) return [];
+    return raw.map((it) {
+      if (it is! Map) return '$it';
+      final p = it['product'];
+      final name = it['name'] ?? it['product_name'] ?? (p is Map ? p['name'] : null) ?? 'Item';
+      return '$name x ${it['quantity'] ?? it['qty'] ?? 1}';
+    }).toList();
+  }
+
+  String _paymentText(Map<String, dynamic> o) {
+    final m = '${_pick(o, ['payment_method']) ?? '-'}'.toLowerCase();
+    final via = '${o['collected_via'] ?? ''}'.toLowerCase();
+    if (m == 'cod') return via == 'upi' ? 'COD - paid by UPI' : 'COD - cash';
+    return m == '-' ? '-' : m.toUpperCase();
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showOrderDetails() {
+    final o = widget.order;
+    final items = _itemLines(o);
+    final orderId = _pick(o, ['id', 'order_id']);
+    final isReturn = o['type'] == 'return_pickup' || o['return_request_id'] != null;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(isReturn ? 'Return order details' : 'Order details',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                _detailRow('Order', orderId == null ? '-' : '#$orderId'),
+                if (isReturn) ...[
+                  _detailRow('Type', 'Return pickup'),
+                  _detailRow('Refund', o['total_amount'] == null ? '-' : '\u20B9${_money(o['total_amount'])}'),
+                  _detailRow('Reason', '${o['reason'] ?? '-'}'),
+                ] else ...[
+                  _detailRow('Total', o['total_amount'] == null ? '-' : '\u20B9${_money(o['total_amount'])}'),
+                  _detailRow('Payment', _paymentText(o)),
+                ],
+                const Divider(height: 24),
+                const Text('Items', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                if (items.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Text('-', style: TextStyle(fontSize: 14)),
+                  )
+                else
+                  for (final line in items)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Text(line, style: const TextStyle(fontSize: 14)),
+                    ),
+                const Divider(height: 24),
+                const Text('Customer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                _detailRow('Name', _customerField(o, 'customer_name', 'name')),
+                _detailRow('Phone', _customerField(o, 'customer_phone', 'phone')),
+                _detailRow('Address', _addressText(o)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final o = widget.order;
@@ -178,22 +311,25 @@ class _DeliveryCompleteScreenState extends State<DeliveryCompleteScreen> {
                         _row(Icons.alt_route, 'Trip distance', distText),
                         _row(Icons.access_time_filled, 'Trip time', timeText),
                       ]),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE6DAF3),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.error, size: 20, color: Colors.black87),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text('Review customer address',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                            ),
-                            Icon(Icons.chevron_right, color: Colors.black54),
-                          ],
+                      GestureDetector(
+                        onTap: _showOrderDetails,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6DAF3),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.receipt_long, size: 20, color: Colors.black87),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text('Review order details',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                              ),
+                              Icon(Icons.chevron_right, color: Colors.black54),
+                            ],
+                          ),
                         ),
                       ),
                     ],
