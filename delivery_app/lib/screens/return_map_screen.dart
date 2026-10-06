@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,6 +10,21 @@ import '../services/api_service.dart';
 import '../widgets/swipe_confirm.dart';
 
 const Color _purple = Color(0xFF5B2A9E);
+
+Future<BitmapDescriptor> _emojiMarker(String emoji, {double size = 60}) async {
+  const double scale = 3.0;
+  final double px = size * scale;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  final painter = TextPainter(
+    text: TextSpan(text: emoji, style: TextStyle(fontSize: px * 0.8)),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  painter.paint(canvas, Offset((px - painter.width) / 2, (px - painter.height) / 2));
+  final img = await recorder.endRecording().toImage(px.toInt(), px.toInt());
+  final data = await img.toByteData(format: ui.ImageByteFormat.png);
+  return BitmapDescriptor.bytes(data!.buffer.asUint8List(), width: size, height: size);
+}
 
 String _s(Map<String, dynamic> o, String k) {
   final v = o[k];
@@ -36,6 +53,10 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
   late final int _id;
   GoogleMapController? _map;
   LatLng? _me;
+  BitmapDescriptor? _riderIcon;
+  BitmapDescriptor? _homeIcon;
+  BitmapDescriptor? _storeIcon;
+  StreamSubscription<Position>? _posSub;
   bool _busy = false;
   bool _uploading = false;
   String? _error;
@@ -52,6 +73,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
     super.initState();
     _p = Map<String, dynamic>.from(widget.pickup);
     _id = (_p['return_request_id'] as num).toInt();
+    _loadIcons();
     _locate();
     if (_status == 'accepted') _autoEnRoute();
   }
@@ -59,6 +81,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
   @override
   void dispose() {
     _notes.dispose();
+    _posSub?.cancel();
     _map?.dispose();
     super.dispose();
   }
@@ -78,6 +101,18 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
     _fit();
   }
 
+  Future<void> _loadIcons() async {
+    final home = await _emojiMarker('\u{1F3E0}', size: 60);
+    final store = await _emojiMarker('\u{1F3EC}', size: 60);
+    final rider = await _emojiMarker('\u{1F6F5}', size: 42);
+    if (!mounted) return;
+    setState(() {
+      _homeIcon = home;
+      _storeIcon = store;
+      _riderIcon = rider;
+    });
+  }
+
   Future<void> _locate() async {
     try {
       var perm = await Geolocator.checkPermission();
@@ -87,6 +122,12 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
       if (!mounted) return;
       setState(() => _me = LatLng(p.latitude, p.longitude));
       _fit();
+      _posSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+      ).listen((pos) {
+        if (!mounted) return;
+        setState(() => _me = LatLng(pos.latitude, pos.longitude));
+      });
     } catch (_) {}
   }
 
@@ -168,22 +209,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
         _setStatus('handed_over');
       });
 
-  Future<void> _openMaps() async {
-    final t = _target;
-    final addr = _status == 'picked_up' ? _s(_p, 'pickup_address') : _s(_p, 'delivery_address');
-    final uri = t != null
-        ? Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${t.latitude},${t.longitude}&travelmode=driving')
-        : Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(addr)}');
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) messenger.showSnackBar(const SnackBar(content: Text('Could not open Google Maps')));
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('Could not open Google Maps')));
-    }
-  }
-
-  Future<void> _call() async {
+    Future<void> _call() async {
     final phone = _s(_p, 'customer_phone');
     if (phone.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -273,17 +299,20 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
     final title = done ? 'Completed' : (toStore ? 'Store' : 'Pickup from customer');
 
     final markers = <Marker>{
-      if (me != null)
+      if (me != null && _riderIcon != null)
         Marker(
           markerId: const MarkerId('rider'),
           position: me,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon: _riderIcon!,
+          anchor: const Offset(0.5, 0.5),
         ),
       if (target != null)
         Marker(
           markerId: const MarkerId('target'),
           position: target,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+          icon: (toStore ? _storeIcon : _homeIcon) ?? BitmapDescriptor.defaultMarker,
+          anchor: const Offset(0.5, 0.5),
+          infoWindow: InfoWindow(title: name.isEmpty ? 'Drop' : name),
         ),
     };
     final lines = <Polyline>{
@@ -315,31 +344,6 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
                     mapToolbarEnabled: false,
                     padding: const EdgeInsets.only(bottom: 300),
                   ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Material(
-                color: Colors.white,
-                elevation: 3,
-                borderRadius: BorderRadius.circular(24),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.arrow_back, size: 18),
-                        SizedBox(width: 8),
-                        Text('Return pickup', style: TextStyle(fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ),
           Align(
             alignment: Alignment.bottomCenter,
@@ -400,7 +404,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
                               ],
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: _openMaps,
+                                  onPressed: _fit,
                                   icon: const Icon(Icons.navigation, size: 16),
                                   label: const Text('Map'),
                                   style: ElevatedButton.styleFrom(
