@@ -98,6 +98,7 @@ export interface DeliveryPartner {
   is_active?: boolean
   avg_rating?: number
   rating_count?: number
+  profile_photo_url?: string
 }
 
 export interface StaffPerformance {

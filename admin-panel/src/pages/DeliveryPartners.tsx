@@ -235,7 +235,22 @@ export default function DeliveryPartners() {
               <tbody>
                 {partners.map((p) => (
                   <tr key={p.id} className="border-t border-slate-800">
-                    <td className="px-4 py-3">{p.name}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {p.profile_photo_url ? (
+                          <img
+                            src={p.profile_photo_url}
+                            alt=""
+                            className="w-8 h-8 rounded-full object-cover bg-slate-800"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                            {(p.name || '?').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span>{p.name}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">{p.phone}</td>
                     <td className="px-4 py-3 text-slate-400">{p.vehicle_number || '-'}</td>
                     <td className="px-4 py-3">{p.rating_count ? "★ " + (p.avg_rating ?? 0).toFixed(1) + " (" + p.rating_count + ")" : "-"}</td>
