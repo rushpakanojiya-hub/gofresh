@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
-import { listReturns, approveReturn, rejectReturn, assignReturnPickup, listDeliveryPartners } from '../api/admin'
+import { listReturns, assignReturnPickup, listDeliveryPartners } from '../api/admin'
 import type { ReturnRequest, DeliveryPartner } from '../types/admin'
 
 export default function Returns() {
@@ -11,8 +11,6 @@ export default function Returns() {
   const [actingId, setActingId] = useState<number | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
-  const [rejectingId, setRejectingId] = useState<number | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
   const [assigningId, setAssigningId] = useState<number | null>(null)
   const [selectedPartnerId, setSelectedPartnerId] = useState('')
 
@@ -43,38 +41,6 @@ export default function Returns() {
     load()
     loadPartners()
   }, [])
-
-  async function handleApprove(id: number) {
-    if (!confirm('Approve this return? This will credit the customer wallet and restock inventory.')) return
-    setActingId(id)
-    try {
-      await approveReturn(id)
-      await load()
-    } catch (err: any) {
-      alert(err.response?.data?.error ?? 'Failed to approve return.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  function openReject(id: number) {
-    setRejectingId(id)
-    setRejectReason('')
-  }
-
-  async function confirmReject() {
-    if (!rejectingId) return
-    setActingId(rejectingId)
-    try {
-      await rejectReturn(rejectingId, rejectReason.trim() || undefined)
-      setRejectingId(null)
-      await load()
-    } catch (err: any) {
-      alert(err.response?.data?.error ?? 'Failed to reject return.')
-    } finally {
-      setActingId(null)
-    }
-  }
 
   function openAssign(id: number) {
     setAssigningId(id)
@@ -225,24 +191,7 @@ export default function Returns() {
                       {r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
-                      {r.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(r.id)}
-                            disabled={actingId === r.id}
-                            className="text-emerald-400 hover:text-emerald-300 text-xs disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => openReject(r.id)}
-                            disabled={actingId === r.id}
-                            className="text-red-400 hover:text-red-300 text-xs disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
+                      
                     </td>
                   </tr>
                 ))}
@@ -252,35 +201,6 @@ export default function Returns() {
         )}
       </div>
 
-      {rejectingId && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-sm">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3">Reject return request</h3>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Reason for rejection (optional but recommended)"
-              rows={3}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-4"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRejectingId(null)}
-                className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmReject}
-                disabled={actingId === rejectingId}
-                className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium disabled:opacity-40 transition-colors"
-              >
-                Confirm Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {assigningId && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
