@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 import 'delivery_complete_screen.dart';
 import 'delivery_handover_screen.dart';
 import 'delivery_map_screen.dart';
@@ -31,6 +32,7 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    PushService.dataRefresh.addListener(_onDataRefresh);
     _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted) _loadAll(silent: true);
     });
@@ -45,8 +47,15 @@ class _OrdersScreenState extends State<OrdersScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    PushService.dataRefresh.removeListener(_onDataRefresh);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onDataRefresh() {
+    Future.microtask(() {
+      if (mounted) _loadAll(silent: true);
+    });
   }
 
   Future<void> _loadAll({bool silent = false}) async {

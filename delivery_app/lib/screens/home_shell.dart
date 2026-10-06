@@ -19,7 +19,10 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   static const Color primaryPurple = Color(0xFF5B2A9E);
 
-  void switchTab(int i) => setState(() => _index = i);
+  void switchTab(int i) {
+    if (i != _index) PushService.dataRefresh.value++;
+    setState(() => _index = i);
+  }
 
   Future<void> _openScanner() async {
     final code = await Navigator.of(context).push<String>(

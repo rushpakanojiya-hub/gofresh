@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 
 class EarningsScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
@@ -24,12 +25,25 @@ class _EarningsScreenState extends State<EarningsScreen> {
   @override
   void initState() {
     super.initState();
+    PushService.dataRefresh.addListener(_onDataRefresh);
     _load();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    PushService.dataRefresh.removeListener(_onDataRefresh);
+    super.dispose();
+  }
+
+  void _onDataRefresh() {
+    Future.microtask(() {
+      if (mounted) _load(silent: true);
+    });
+  }
+
+  Future<void> _load({bool silent = false}) async {
     setState(() {
-      _loading = true;
+      if (!silent) _loading = true;
       _error = null;
     });
     try {
