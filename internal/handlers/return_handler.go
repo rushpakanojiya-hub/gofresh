@@ -199,6 +199,7 @@ func RequestReturn(c *gin.Context) {
 	// Auto-approved: refund/stock restore still happen only after the item
 	// is confirmed back at the store (ConfirmReturnReceived). Offer the pickup
 	// to the earliest checked-in rider right away.
+	go services.SendPushToUserWithData(userID, "Return request placed", "Your return request for order #"+orderID+" has been placed successfully. We will pick it up soon.", services.OrderPushData(order.ID))
 	go services.AutoAssignReturnPickup(returnReq.ID)
 
 	c.JSON(http.StatusCreated, gin.H{"return_request": returnReq})
