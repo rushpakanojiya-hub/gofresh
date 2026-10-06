@@ -427,6 +427,27 @@ export default function DeliveryPartners() {
           {detailsError && <p className="text-red-400 text-sm">{detailsError}</p>}
           {details && (
             <div className="space-y-4 text-sm">
+              <div className="flex items-center gap-3">
+                {details.profile_photo_url ? (
+                  <a href={details.profile_photo_url} target="_blank" rel="noreferrer">
+                    <img
+                      src={details.profile_photo_url}
+                      alt="Profile photo"
+                      className="w-16 h-16 rounded-full object-cover border border-slate-700"
+                    />
+                  </a>
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-xl text-slate-400">
+                    {(viewing.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="font-medium">{viewing.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {details.profile_photo_url ? 'Profile photo' : 'Profile photo not uploaded'}
+                  </p>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 {[
                   ['Phone', details.phone],
@@ -452,7 +473,8 @@ export default function DeliveryPartners() {
                   ['Driving licence', 'licence_url'],
                   ['Voter ID', 'voter_url'],
                   ['PAN card', 'pan_url'],
-                  ['Selfie', 'selfie_url'],
+                  ['KYC selfie', 'selfie_url'],
+                  ['RC book', 'rc_url'],
                 ]
                   .filter(([, key]) => details[key])
                   .map(([label, key]) => (
