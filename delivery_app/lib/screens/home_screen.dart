@@ -7,6 +7,7 @@ import 'delivery_map_screen.dart';
 import 'delivery_handover_screen.dart';
 import '../services/api_service.dart';
 import 'return_pickup_detail_screen.dart';
+import 'return_offer_sheet.dart';
 import '../services/location_service.dart';
 import '../services/push_service.dart';
 import 'new_order_sheet.dart';
@@ -141,7 +142,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       target = o;
       break;
     }
-    if (target == null) return;
+    if (target == null) {
+      dynamic rt;
+      for (final r in _returns) {
+        if (r['pickup_status']?.toString() != 'assigned') continue;
+        final rexp = DateTime.tryParse((r['pickup_assignment_expires_at'] ?? '').toString());
+        if (rexp != null && rexp.isBefore(DateTime.now())) continue;
+        final rid = (r['return_request_id'] as num).toInt();
+        if (PushService.returnPopupShown.contains(rid)) continue;
+        rt = r;
+        break;
+      }
+      if (rt == null) return;
+      PushService.returnPopupShown.add((rt['return_request_id'] as num).toInt());
+      PushService.sheetOpen = true;
+      try {
+        await ReturnOfferSheet.show(context, Map<String, dynamic>.from(rt as Map));
+      } finally {
+        PushService.sheetOpen = false;
+      }
+      if (mounted) _loadAll(silent: true);
+      return;
+    }
     PushService.popupShown.add(_idOf(target));
     PushService.sheetOpen = true;
     try {

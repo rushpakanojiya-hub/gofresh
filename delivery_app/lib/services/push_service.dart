@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../screens/new_order_sheet.dart';
+import '../screens/return_offer_sheet.dart';
 import '../screens/order_pickup_screen.dart';
 import '../screens/delivery_map_screen.dart';
 import '../screens/delivery_handover_screen.dart';
@@ -80,6 +81,35 @@ class PushService {
       sheetOpen = false;
     }
   }
+  static final Set<int> returnPopupShown = {};
+
+  /// Foreground "new_return_pickup": show the return offer sheet.
+  static Future<void> _showNewReturn(String? returnId) async {
+    final id = int.tryParse(returnId ?? '');
+    final ctx = navigatorKey.currentContext;
+    if (id == null || ctx == null || sheetOpen || returnPopupShown.contains(id)) return;
+    try {
+      dynamic item;
+      for (var attempt = 0; attempt < 4 && item == null; attempt++) {
+        if (attempt > 0) await Future.delayed(const Duration(milliseconds: 1500));
+        final list = await ApiService.getMyReturnPickups();
+        item = list.firstWhere(
+          (o) => o is Map && '${o['return_request_id']}' == '$id',
+          orElse: () => null,
+        );
+      }
+      final ctx2 = navigatorKey.currentContext;
+      if (item == null || ctx2 == null || !ctx2.mounted) return;
+      sheetOpen = true;
+      returnPopupShown.add(id);
+      await ReturnOfferSheet.show(ctx2, Map<String, dynamic>.from(item as Map));
+    } catch (e) {
+      debugPrint('return popup failed: $e');
+    } finally {
+      sheetOpen = false;
+    }
+  }
+
   static Future<void> openOrder(String? orderId, {int fallbackTab = 1}) async {
     final id = int.tryParse(orderId ?? '');
     final nav = navigatorKey.currentState;
@@ -123,7 +153,7 @@ class PushService {
   }
 
   static void _route(String? type) {
-    if (type == 'new_assignment') {
+    if (type == 'new_assignment' || type == 'new_return_pickup') {
       tabRequest.value = 1;
     } else if (type == 'rating') {
       tabRequest.value = 3;
@@ -183,6 +213,10 @@ class PushService {
 
   static void _onForeground(RemoteMessage msg) {
     if (msg.data['type'] == 'rating') ratingRefresh.value++;
+    if (msg.data['type'] == 'new_return_pickup') {
+      _showNewReturn(msg.data['return_request_id']?.toString());
+      return;
+    }
     if (msg.data['type'] == 'new_assignment') {
       _showNewOrder(msg.data['order_id']?.toString());
       return;
