@@ -30,6 +30,7 @@ func GetPartnerOnboardingAdmin(c *gin.Context) {
     view["name"] = p.Name
     view["phone"] = p.Phone
     view["is_active"] = p.IsActive
+    view["profile_photo_url"] = p.ProfilePhotoURL
     view["upi_id"] = p.UPIID
     view["bank_account_holder"] = p.BankAccountHolder
     view["bank_account_no"] = p.BankAccountNo
