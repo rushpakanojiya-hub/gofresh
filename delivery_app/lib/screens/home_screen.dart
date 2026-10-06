@@ -11,6 +11,7 @@ import 'return_offer_sheet.dart';
 import '../services/location_service.dart';
 import '../services/push_service.dart';
 import 'new_order_sheet.dart';
+import 'gigs_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _loadAll();
     _loadAvailability();
+    _loadGigs();
     _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _loadAll(silent: true);
     });
@@ -510,6 +512,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         const SizedBox(height: 16),
 
                         _checkinBanner(),
+                        _gigCard(),
+                        const SizedBox(height: 12),
                         _summaryCard(todayDeliveries, todayEarnings),
                         const SizedBox(height: 12),
                         _cashCard(pendingSettlement),
@@ -688,6 +692,111 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_workSinceMs > 0) ms += DateTime.now().millisecondsSinceEpoch - _workSinceMs;
     final mins = (ms / 60000).floor();
     return '${mins ~/ 60}h ${mins % 60}m';
+  }
+
+  List<Map<String, dynamic>> _gigSlots = [];
+
+  Future<void> _loadGigs() async {
+    try {
+      final out = <Map<String, dynamic>>[];
+      final ist = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+      for (var i = 0; i < 2; i++) {
+        final d = ist.add(Duration(days: i));
+        final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        final data = await ApiService.getGigs(ds);
+        for (final g in (data['groups'] as List? ?? [])) {
+          for (final s in (g['slots'] as List? ?? [])) {
+            if (s['booked'] == true) {
+              out.add({...Map<String, dynamic>.from(s as Map), 'day_offset': i});
+            }
+          }
+        }
+      }
+      if (mounted) setState(() => _gigSlots = out);
+    } catch (_) {}
+  }
+
+  Future<void> _openGigs() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const GigsScreen()));
+    if (mounted) _loadGigs();
+  }
+
+  Widget _gigCard() {
+    final now = DateTime.now();
+    Map<String, dynamic>? cur;
+    Map<String, dynamic>? next;
+    for (final s in _gigSlots) {
+      final st = DateTime.tryParse('${s['start_at']}');
+      final en = DateTime.tryParse('${s['end_at']}');
+      if (st == null || en == null) continue;
+      if (!now.isBefore(st) && now.isBefore(en)) {
+        cur ??= s;
+      } else if (st.isAfter(now)) {
+        final nx = next == null ? null : DateTime.tryParse('${next['start_at']}');
+        if (nx == null || st.isBefore(nx)) next = s;
+      }
+    }
+    String line;
+    if (cur != null) {
+      line = 'Current gig: ${cur['label']}';
+    } else if (next != null) {
+      line = 'Next gig: ${next['day_offset'] == 0 ? 'Today' : 'Tomorrow'}, ${next['label']}';
+    } else {
+      line = 'No gig booked';
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.event_available, size: 20),
+              SizedBox(width: 8),
+              Text('Gig details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(line, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (cur != null && _isOnline != true) ...[
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _togglingOnline ? null : () => _toggleOnline(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Go Online'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _openGigs,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Book gigs'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _checkinBanner() {

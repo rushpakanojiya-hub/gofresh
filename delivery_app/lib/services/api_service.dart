@@ -447,4 +447,34 @@ class ApiService {
     }
     return data['image_url'] as String;
   }
-}
+
+  // ---- Gigs ----
+  static Map<String, dynamic> _gigDecode(http.Response res) {
+    final dynamic body = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return Map<String, dynamic>.from(body as Map);
+    }
+    throw Exception(body is Map && body['error'] != null ? body['error'].toString() : 'Request failed');
+  }
+
+  static Future<Map<String, dynamic>> getGigs(String date) async {
+    final res = await http.get(Uri.parse('$baseUrl/delivery/gigs?date=$date'), headers: await _headers());
+    return _gigDecode(res);
+  }
+
+  static Future<Map<String, dynamic>> bookGigs(String date, List<String> slots) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/delivery/gigs/book'),
+      headers: await _headers(),
+      body: jsonEncode({'date': date, 'slots': slots}),
+    );
+    return _gigDecode(res);
+  }
+
+  static Future<Map<String, dynamic>> cancelGig(String date, String slot) async {
+    final res = await http.delete(
+      Uri.parse('$baseUrl/delivery/gigs/book?date=$date&slot=$slot'),
+      headers: await _headers(),
+    );
+    return _gigDecode(res);
+  }}
