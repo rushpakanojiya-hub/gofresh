@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'orders_screen.dart';
 import 'earnings_screen.dart';
+import 'pocket_screen.dart';
 import 'profile_screen.dart';
 import '../services/push_service.dart';
 import 'qr_scan_screen.dart';
@@ -78,6 +79,7 @@ class _HomeShellState extends State<HomeShell> {
       OrdersScreen(onSwitchTab: switchTab),
       const EarningsScreen(),
       const ProfileScreen(),
+      PocketScreen(onSwitchTab: switchTab),
     ];
 
     return PopScope(       canPop: _index == 0,       onPopInvokedWithResult: (didPop, result) {         if (!didPop) {           switchTab(0);         }       },       child: Scaffold(
@@ -101,6 +103,7 @@ class _HomeShellState extends State<HomeShell> {
           BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Earnings'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.savings_outlined), label: 'Pocket'),
         ],
       ),
     ),     );
