@@ -100,8 +100,8 @@ func CheckInPartner(partnerID uint, token string, lat, lng *float64) (*models.Wa
 		if pl == nil || pg == nil {
 			return nil, ErrCheckinNoLocation
 		}
-		if haversineKm(*pl, *pg, wh.Lat, wh.Lng)*1000 > StoreCheckinRadiusM {
-			return nil, ErrCheckinTooFar
+		if distM := haversineKm(*pl, *pg, wh.Lat, wh.Lng) * 1000; distM > StoreCheckinRadiusM {
+			return nil, fmt.Errorf("%w (you are %.0f m away, limit is %.0f m)", ErrCheckinTooFar, distM, StoreCheckinRadiusM)
 		}
 	}
 	err = database.DB.Model(&models.DeliveryPartner{}).
