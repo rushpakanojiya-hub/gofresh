@@ -48,7 +48,11 @@ class PushService {
       return;
     }
     if (type == 'new_assignment') {
-      openOrder(orderId, fallbackTab: 1);
+      _showNewOrder(orderId);
+      return;
+    }
+    if (type == 'new_return_pickup') {
+      _showNewReturn(orderId);
       return;
     }
     _route(type);
@@ -200,12 +204,12 @@ class PushService {
 
       FirebaseMessaging.onMessage.listen(_onForeground);
       FirebaseMessaging.onMessageOpenedApp
-          .listen((m) => _handle(m.data['type']?.toString(), m.data['order_id']?.toString()));
+          .listen((m) => _handle(m.data['type']?.toString(), (m.data['order_id'] ?? m.data['return_request_id'])?.toString()));
 
       final initial = await messaging.getInitialMessage();
       if (initial != null) {
         final t = initial.data['type']?.toString();
-        final o = initial.data['order_id']?.toString();
+        final o = (initial.data['order_id'] ?? initial.data['return_request_id'])?.toString();
         Future.delayed(const Duration(milliseconds: 800), () => _handle(t, o));
       }
     } catch (e) {
