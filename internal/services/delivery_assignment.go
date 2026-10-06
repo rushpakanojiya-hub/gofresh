@@ -227,8 +227,10 @@ func AutoAssignDeliveryPartner(orderID uint) {
             score := distanceKm + float64(loadByPartner[p.ID])*loadPenaltyKm
 
             if bestPartner == nil ||
-                (hasFreshLocation && !bestHasFreshLocation) ||
-                (hasFreshLocation == bestHasFreshLocation && score < bestScore) {
+                p.CheckedInAt.Before(*bestPartner.CheckedInAt) ||
+                (p.CheckedInAt.Equal(*bestPartner.CheckedInAt) &&
+                    ((hasFreshLocation && !bestHasFreshLocation) ||
+                        (hasFreshLocation == bestHasFreshLocation && score < bestScore))) {
                 bestPartner = p
                 bestScore = score
                 bestHasFreshLocation = hasFreshLocation

@@ -70,6 +70,7 @@ func CheckInToStore(c *gin.Context) {
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
+	go services.TryAssignPendingOrdersToPartner(partnerID)
 	c.JSON(http.StatusOK, gin.H{
 		"checked_in":     true,
 		"warehouse_id":   wh.ID,
