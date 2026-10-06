@@ -113,9 +113,53 @@ class _EarningsScreenState extends State<EarningsScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        _WeeklyPayoutCard(
-                          amount: _data?['week_earnings'] ?? 0,
-                          count: (_data?['week_deliveries'] ?? 0) as int,
+                        _WeeklyPayoutCard(entries: (_data?['entries'] as List?) ?? const []),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: motivationBg,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Keep going!',
+                                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: primaryPurple),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      "You're doing great today.",
+                                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    ElevatedButton(
+                                      onPressed: _load,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryPurple,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                      ),
+                                      child: const Text('Refresh', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: const BoxDecoration(
+                                  color: primaryPurple,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.currency_rupee, color: Colors.white, size: 30),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 24),
                         const Text(
@@ -175,53 +219,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                               ),
                             );
                           }),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: motivationBg,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Keep going!',
-                                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: primaryPurple),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      "You're doing great today.",
-                                      style: TextStyle(fontSize: 13, color: Colors.black54),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    ElevatedButton(
-                                      onPressed: _load,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: primaryPurple,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                      ),
-                                      child: const Text('Refresh', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: 64,
-                                height: 64,
-                                decoration: const BoxDecoration(
-                                  color: primaryPurple,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.currency_rupee, color: Colors.white, size: 30),
-                              ),
-                            ],
-                          ),
-                        ),
+                        
                       ],
                     ),
                   ),
@@ -267,45 +265,177 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _WeeklyPayoutCard extends StatelessWidget {
-  final num amount;
-  final int count;
+class _WeeklyPayoutCard extends StatefulWidget {
+  final List<dynamic> entries;
+  const _WeeklyPayoutCard({required this.entries});
 
-  const _WeeklyPayoutCard({required this.amount, required this.count});
+  @override
+  State<_WeeklyPayoutCard> createState() => _WeeklyPayoutCardState();
+}
+
+class _WeeklyPayoutCardState extends State<_WeeklyPayoutCard> {
+  static const Color _brown = Color(0xFF9A5B00);
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  late DateTime _weekStart = _mondayOf(DateTime.now());
+
+  static DateTime _mondayOf(DateTime d) => DateTime(d.year, d.month, d.day - (d.weekday - 1));
+  static DateTime _addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+  static String _fmt(DateTime d) => '${d.day.toString().padLeft(2, '0')} ${_months[d.month - 1]}';
+  static String _rs(num v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+  String _range(DateTime start) {
+    final end = _addDays(start, 6);
+    final year = end.year != start.year ? ' ${end.year}' : '';
+    return '${_fmt(start)}$year - ${_fmt(end)} ${end.year}';
+  }
+
+  List<num> _sum(DateTime start) {
+    final end = _addDays(start, 7);
+    num amount = 0;
+    num count = 0;
+    for (final e in widget.entries) {
+      if (e is! Map) continue;
+      final t = DateTime.tryParse('${e['delivered_at'] ?? ''}')?.toLocal();
+      if (t == null || t.isBefore(start) || !t.isBefore(end)) continue;
+      amount += (e['amount'] is num) ? e['amount'] as num : 0;
+      count++;
+    }
+    return [amount, count];
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _weekStart,
+      firstDate: DateTime(now.year - 2),
+      lastDate: now,
+      helpText: 'Select a day to see that week',
+    );
+    if (picked != null && mounted) {
+      setState(() => _weekStart = _mondayOf(picked));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final thisWeek = _mondayOf(now);
+    final isThisWeek = _weekStart == thisWeek;
+    final canNext = !_addDays(_weekStart, 7).isAfter(now);
+    final sel = _sum(_weekStart);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF1D6),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
                   'Weekly Payout',
-                  style: TextStyle(color: Color(0xFF9A5B00), fontWeight: FontWeight.w600, fontSize: 13),
+                  style: TextStyle(color: _brown, fontWeight: FontWeight.w600, fontSize: 13),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  '\u20B9$amount',
-                  style: const TextStyle(color: Color(0xFF9A5B00), fontSize: 28, fontWeight: FontWeight.bold),
+              ),
+              IconButton(
+                tooltip: 'Pick a date',
+                icon: const Icon(Icons.calendar_month_outlined, color: _brown),
+                onPressed: _pickDate,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_left, color: _brown),
+                onPressed: () => setState(() => _weekStart = _addDays(_weekStart, -7)),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      _range(_weekStart),
+                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    if (isThisWeek)
+                      const Text('This week', style: TextStyle(color: Colors.black54, fontSize: 11)),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Last 7 days - $count jobs',
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-              ],
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.chevron_right, color: canNext ? _brown : Colors.black26),
+                onPressed: canNext ? () => setState(() => _weekStart = _addDays(_weekStart, 7)) : null,
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 0, top: 4, right: 8),
+            child: Center(
+              child: Column(
+                children: [
+                  Text(
+                    '\u20B9${_rs(sel[0])}',
+                    style: const TextStyle(color: _brown, fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('${sel[1].toInt()} jobs', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                ],
+              ),
             ),
           ),
-          const Icon(Icons.calendar_month_outlined, color: Color(0xFF9A5B00), size: 32),
+          const Divider(height: 20),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: Text('Recent weeks', style: TextStyle(color: _brown, fontWeight: FontWeight.w600, fontSize: 12)),
+          ),
+          for (var i = 0; i < 4; i++)
+            Builder(builder: (_) {
+              final ws = _addDays(thisWeek, -7 * i);
+              final s = _sum(ws);
+              final selected = ws == _weekStart;
+              return InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => setState(() => _weekStart = ws),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${_fmt(ws)} - ${_fmt(_addDays(ws, 6))}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                      Text('${s[1].toInt()} jobs  ', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                      Text(
+                        '\u20B9${_rs(s[0])}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                          color: _brown,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
         ],
       ),
     );
