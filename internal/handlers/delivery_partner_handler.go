@@ -755,7 +755,13 @@ func ConfirmDelivery(c *gin.Context) {
     // Notify the customer that their order has been delivered.
 	go services.SendPushToUserWithData(order.UserID, "Order delivered", fmt.Sprintf("Your order #%d has been delivered. Enjoy!", order.ID), services.OrderPushData(order.ID))
 
-        // This partner just freed up - immediately try to backfill any
+        // Rider must scan the store QR again before getting another
+    // auto-assigned order, so clear the store check-in now.
+    if err := services.ClearPartnerCheckin(partnerID); err != nil {
+        log.Printf("failed to clear store check-in for partner %d: %v", partnerID, err)
+    }
+
+// This partner just freed up - immediately try to backfill any
         // orders that were left unassigned because every partner was busy.
         go services.TryAssignPendingOrdersToPartner(partnerID)
 
