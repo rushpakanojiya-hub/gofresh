@@ -230,6 +230,10 @@ type ReturnPickupSummary struct {
 	CustomerPhone             string                    `json:"customer_phone"`
 	DeliveryLat               *float64                  `json:"delivery_lat,omitempty"`
 	DeliveryLng               *float64                  `json:"delivery_lng,omitempty"`
+	PickupName                string                    `json:"pickup_name,omitempty"`
+	PickupAddress             string                    `json:"pickup_address,omitempty"`
+	PickupLat                 *float64                  `json:"pickup_lat,omitempty"`
+	PickupLng                 *float64                  `json:"pickup_lng,omitempty"`
 	Reason                    string                    `json:"reason"`
 	RefundAmount              float64                   `json:"refund_amount"`
 	ItemCount                 int                       `json:"item_count"`
@@ -294,9 +298,36 @@ func GetMyReturnPickups(c *gin.Context) {
 		return
 	}
 
+	whByID := map[uint]models.Warehouse{}
+	{
+		ids := []uint{}
+		for _, rr := range returnReqs {
+			if rr.Order.WarehouseID != nil {
+				ids = append(ids, *rr.Order.WarehouseID)
+			}
+		}
+		if len(ids) > 0 {
+			var whs []models.Warehouse
+			database.DB.Where("id IN ?", ids).Find(&whs)
+			for _, w := range whs {
+				whByID[w.ID] = w
+			}
+		}
+	}
+
 	summaries := make([]ReturnPickupSummary, 0, len(returnReqs))
 	for _, rr := range returnReqs {
-		summaries = append(summaries, toReturnPickupSummary(rr))
+		s := toReturnPickupSummary(rr)
+		if rr.Order.WarehouseID != nil {
+			if w, ok := whByID[*rr.Order.WarehouseID]; ok {
+				lat, lng := w.Lat, w.Lng
+				s.PickupName = w.Name
+				s.PickupAddress = w.Address
+				s.PickupLat = &lat
+				s.PickupLng = &lng
+			}
+		}
+		summaries = append(summaries, s)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"returns": summaries})
