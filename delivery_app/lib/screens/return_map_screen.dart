@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../widgets/swipe_confirm.dart';
 import '../services/push_service.dart';
+import 'delivery_complete_screen.dart';
 
 const Color _purple = Color(0xFF5B2A9E);
 
@@ -253,6 +254,14 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
   Future<void> _handover() => _run(() async {
     await ApiService.handoverReturnToWarehouse(_id);
     _setStatus('handed_over');
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => DeliveryCompleteScreen(
+          order: {..._p, 'id': _p['order_id'], 'total_amount': _p['refund_amount']},
+        ),
+      ),
+    );
   });
 
   Future<void> _call() async {

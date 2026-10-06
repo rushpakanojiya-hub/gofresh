@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import 'return_map_screen.dart';
+import 'delivery_complete_screen.dart';
 
 class ReturnPickupDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pickup;
@@ -30,6 +31,18 @@ class _ReturnPickupDetailScreenState extends State<ReturnPickupDetailScreen> {
     _pickup = widget.pickup;
     _returnRequestId = (_pickup['return_request_id'] as num).toInt();
     final st = _pickup['pickup_status']?.toString();
+    if (st == 'handed_over') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => DeliveryCompleteScreen(
+              order: {..._pickup, 'id': _pickup['order_id'], 'total_amount': _pickup['refund_amount']},
+            ),
+          ),
+        );
+      });
+    }
     if (st == 'accepted' || st == 'en_route' || st == 'arrived' || st == 'picked_up') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -200,6 +213,14 @@ class _ReturnPickupDetailScreenState extends State<ReturnPickupDetailScreen> {
       await ApiService.handoverReturnToWarehouse(_returnRequestId);
       _applyPickupUpdate('handed_over');
       setState(() => _loading = false);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => DeliveryCompleteScreen(
+            order: {..._pickup, 'id': _pickup['order_id'], 'total_amount': _pickup['refund_amount']},
+          ),
+        ),
+      );
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
