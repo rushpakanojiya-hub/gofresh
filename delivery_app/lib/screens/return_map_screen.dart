@@ -239,16 +239,6 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: _notes,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Condition notes (optional)',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _uploading ? null : _takePhoto,
               icon: _uploading
@@ -296,7 +286,7 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) setState(() => _showMap = false);
       },
-      child: _showMap ? _buildMapView(context) : _buildDetails(context),
+      child: (_showMap || _status == 'picked_up') ? _buildMapView(context) : _buildDetails(context),
     );
   }
 
@@ -473,7 +463,8 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
                 ],
               ),
             ),
-            Flexible(
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -565,7 +556,13 @@ class _ReturnMapScreenState extends State<ReturnMapScreen> {
                   backgroundColor: Colors.white,
                   child: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                    onPressed: () => setState(() => _showMap = false),
+                    onPressed: () {
+                      if (_status == 'picked_up') {
+                        Navigator.of(context).pop();
+                      } else {
+                        setState(() => _showMap = false);
+                      }
+                    },
                   ),
                 ),
               ),
