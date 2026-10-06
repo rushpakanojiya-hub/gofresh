@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import 'return_map_screen.dart';
 
 class ReturnPickupDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pickup;
@@ -28,6 +29,15 @@ class _ReturnPickupDetailScreenState extends State<ReturnPickupDetailScreen> {
     super.initState();
     _pickup = widget.pickup;
     _returnRequestId = (_pickup['return_request_id'] as num).toInt();
+    final st = _pickup['pickup_status']?.toString();
+    if (st == 'accepted' || st == 'en_route' || st == 'arrived' || st == 'picked_up') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => ReturnMapScreen(pickup: _pickup)),
+        );
+      });
+    }
   }
 
   @override
@@ -60,6 +70,10 @@ class _ReturnPickupDetailScreenState extends State<ReturnPickupDetailScreen> {
       await ApiService.acceptReturnPickup(_returnRequestId);
       _applyPickupUpdate('accepted');
       setState(() => _loading = false);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => ReturnMapScreen(pickup: {..._pickup, 'pickup_status': 'accepted'})),
+      );
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
