@@ -20,8 +20,6 @@ const (
 	StoreQRTTL = 60 * time.Second
 	// StoreCheckinMaxAge is how long a check-in stays valid at most.
 	StoreCheckinMaxAge = 12 * time.Hour
-	// StoreCheckinRadiusM is the max distance (metres) from the store to check in.
-	StoreCheckinRadiusM = 300.0
 )
 
 var (
@@ -100,8 +98,8 @@ func CheckInPartner(partnerID uint, token string, lat, lng *float64) (*models.Wa
 		if pl == nil || pg == nil {
 			return nil, ErrCheckinNoLocation
 		}
-		if distM := haversineKm(*pl, *pg, wh.Lat, wh.Lng) * 1000; distM > StoreCheckinRadiusM {
-			return nil, fmt.Errorf("%w (you are %.0f m away, limit is %.0f m)", ErrCheckinTooFar, distM, StoreCheckinRadiusM)
+		if distM := haversineKm(*pl, *pg, wh.Lat, wh.Lng) * 1000; distM > storeCheckinRadiusM() {
+			return nil, fmt.Errorf("%w (you are %.0f m away, limit is %.0f m)", ErrCheckinTooFar, distM, storeCheckinRadiusM())
 		}
 	}
 	err = database.DB.Model(&models.DeliveryPartner{}).
@@ -124,4 +122,13 @@ func ClearPartnerCheckin(partnerID uint) error {
 			"checked_in_warehouse_id": nil,
 			"checked_in_at":           nil,
 		}).Error
+}
+
+// storeCheckinRadiusM is the max distance (metres) from the store to check in.
+// Override with the STORE_CHECKIN_RADIUS_M env var; defaults to 300.
+func storeCheckinRadiusM() float64 {
+	if v, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv("STORE_CHECKIN_RADIUS_M")), 64); err == nil && v > 0 {
+		return v
+	}
+	return 300.0
 }
