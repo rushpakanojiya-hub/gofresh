@@ -700,7 +700,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final out = <Map<String, dynamic>>[];
       final ist = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
-      for (var i = 0; i < 2; i++) {
+      for (var i = 0; i < 1; i++) {
         final d = ist.add(Duration(days: i));
         final ds = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
         final data = await ApiService.getGigs(ds);

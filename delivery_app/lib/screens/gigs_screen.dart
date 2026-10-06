@@ -261,17 +261,17 @@ class _GigsScreenState extends State<GigsScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
-        title: Text('Gigs, ${_day.day} ${_months[_day.month - 1]}',
+        title: const Text('Gigs',
             style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
-          TextButton(
-            onPressed: _loading
-                ? null
-                : () {
-                    setState(() => _dayOffset = _dayOffset == 0 ? 1 : 0);
-                    _load();
-                  },
-            child: Text(_dayOffset == 0 ? 'Tomorrow' : 'Today'),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Text(
+                'Today, ${_day.day} ${_months[_day.month - 1]}',
+                style: const TextStyle(color: Color(0xFF5B2A9E), fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
         ],
       ),
