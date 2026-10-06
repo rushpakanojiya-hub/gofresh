@@ -69,19 +69,19 @@ func RequestReturn(c *gin.Context) {
 		return
 	}
 
-    // Same window as support complaints: 48h if every item is perishable,
-    // otherwise 72h from delivery.
-    if window, werr := computeOrderComplaintWindow(&order); werr != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check return window"})
-        return
-    } else if !window.Open {
-        c.JSON(http.StatusForbidden, gin.H{
-            "error":    "The time to return items from this order has ended.",
-            "code":     "return_window_closed",
-            "deadline": window.Deadline,
-        })
-        return
-    }
+	// Same window as support complaints: 48h if every item is perishable,
+	// otherwise 72h from delivery.
+	if window, werr := computeOrderComplaintWindow(&order); werr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check return window"})
+		return
+	} else if !window.Open {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":    "The time to return items from this order has ended.",
+			"code":     "return_window_closed",
+			"deadline": window.Deadline,
+		})
+		return
+	}
 
 	var req models.ReturnRequestBody
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -185,7 +185,7 @@ func RequestReturn(c *gin.Context) {
 		OrderID:      order.ID,
 		UserID:       userID,
 		Reason:       req.Reason,
-		Status:       models.ReturnStatusPending,
+		Status:       models.ReturnStatusApproved,
 		RefundAmount: refundAmount,
 		ImageURL:     imageURL,
 		Items:        returnItems,
@@ -195,6 +195,11 @@ func RequestReturn(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create return request"})
 		return
 	}
+
+	// Auto-approved: refund/stock restore still happen only after the item
+	// is confirmed back at the store (ConfirmReturnReceived). Offer the pickup
+	// to the earliest checked-in rider right away.
+	go services.AutoAssignReturnPickup(returnReq.ID)
 
 	c.JSON(http.StatusCreated, gin.H{"return_request": returnReq})
 }
