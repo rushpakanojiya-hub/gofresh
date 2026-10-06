@@ -112,6 +112,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        _WeeklyPayoutCard(
+                          amount: _data?['week_earnings'] ?? 0,
+                          count: (_data?['week_deliveries'] ?? 0) as int,
+                        ),
                         const SizedBox(height: 24),
                         const Text(
                           'Delivery History',
@@ -143,7 +148,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                                       color: Color(0xFF22C55E),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.check, color: Colors.white, size: 18),
+                                    child: Icon(entry['type'] == 'return' ? Icons.assignment_return_outlined : Icons.check, color: Colors.white, size: 18),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -151,7 +156,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Order #${entry['order_id']}',
+                                          '${entry['type'] == 'return' ? 'Return' : 'Order'} #${entry['order_id']}',
                                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Colors.black87),
                                         ),
                                         const SizedBox(height: 2),
@@ -256,6 +261,51 @@ class _SummaryCard extends StatelessWidget {
           Text('₹$amount', style: TextStyle(color: textColor, fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeeklyPayoutCard extends StatelessWidget {
+  final num amount;
+  final int count;
+
+  const _WeeklyPayoutCard({required this.amount, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1D6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Weekly Payout',
+                  style: TextStyle(color: Color(0xFF9A5B00), fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '\u20B9$amount',
+                  style: const TextStyle(color: Color(0xFF9A5B00), fontSize: 28, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Last 7 days - $count jobs',
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.calendar_month_outlined, color: Color(0xFF9A5B00), size: 32),
         ],
       ),
     );
