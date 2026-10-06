@@ -801,8 +801,8 @@ func GetMyEarnings(c *gin.Context) {
 
 	var deliveredOrders []models.Order
 	if err := database.DB.
-		Where("delivery_partner_id = ? AND status = ?", partnerID, models.OrderStatusDelivered).
-		Order("updated_at DESC").
+		Where("delivery_partner_id = ? AND (status = ? OR delivered_at IS NOT NULL OR delivery_status = ?)", partnerID, models.OrderStatusDelivered, models.DeliveryStatusDelivered).
+		Order("COALESCE(delivered_at, updated_at) DESC").
 		Find(&deliveredOrders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load earnings"})
 		return
@@ -832,20 +832,20 @@ func GetMyEarnings(c *gin.Context) {
 	weekCount := 0
 
 	for _, o := range deliveredOrders {
-		if o.UpdatedAt.After(todayStart) {
+		if deliveredTime(o).After(todayStart) {
 			todayCount++
 			todayEarnings += perDeliveryEarning
 		}
 		entries = append(entries, EarningEntry{
 			OrderID:     o.ID,
 			Amount:      perDeliveryEarning,
-			DeliveredAt: o.UpdatedAt,
+			DeliveredAt: deliveredTime(o),
 			Type:        "delivery",
 		})
 	}
 
 	for _, o := range deliveredOrders {
-		if !o.UpdatedAt.Before(weekStart) {
+		if !deliveredTime(o).Before(weekStart) {
 			weekCount++
 		}
 	}
@@ -881,4 +881,13 @@ func GetMyEarnings(c *gin.Context) {
 		"week_deliveries":   weekCount,
 		"entries":           entries,
 	})
+}
+
+// deliveredTime is the real delivery time when recorded, else UpdatedAt
+// (orders delivered before delivered_at existed).
+func deliveredTime(o models.Order) time.Time {
+	if o.DeliveredAt != nil {
+		return *o.DeliveredAt
+	}
+	return o.UpdatedAt
 }
