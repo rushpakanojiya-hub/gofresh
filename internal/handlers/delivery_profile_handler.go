@@ -151,6 +151,13 @@ func UpdateDeliveryAvailability(c *gin.Context) {
 
 	isOnline := req.Status == "online"
 
+	if isOnline && !partnerHasActiveGig(partnerID) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Book a gig slot to go online. You can only go online during a booked gig.",
+			"code":  "GIG_REQUIRED",
+		})
+		return
+	}
 	result := database.DB.Model(&models.DeliveryPartner{}).
 		Where("id = ?", partnerID).
 		Update("is_online", isOnline)

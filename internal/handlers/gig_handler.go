@@ -220,3 +220,20 @@ func CancelMyGig(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Gig cancelled"})
 }
+
+// partnerHasActiveGig reports whether the partner has a booked gig slot that
+// covers the current IST time. Used to gate going ONLINE.
+func partnerHasActiveGig(partnerID uint) bool {
+	gigEnsureTables()
+	now := time.Now().In(gigIST)
+	var rows []models.GigBooking
+	if err := database.DB.Where("delivery_partner_id = ? AND date = ?", partnerID, now.Format("2006-01-02")).Find(&rows).Error; err != nil {
+		return false
+	}
+	for _, r := range rows {
+		if s, ok := gigFind(r.SlotKey); ok && now.Hour() >= s.Start && now.Hour() < s.End {
+			return true
+		}
+	}
+	return false
+}
