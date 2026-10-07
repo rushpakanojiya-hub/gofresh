@@ -133,6 +133,15 @@ func SetupRoutes(router *gin.Engine) {
 			warehouse.POST("/send-otp", middleware.RateLimit(5, time.Minute), handlers.SendWarehouseStaffOTP)
 			warehouse.POST("/verify-otp", middleware.RateLimit(10, time.Minute), handlers.VerifyWarehouseStaffOTP)
 
+			pickerRoutes := warehouse.Group("/picker")
+			pickerRoutes.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly())
+			pickerRoutes.GET("/stores", handlers.GetPickerStores)
+			pickerRoutes.POST("/slots/:id/book", handlers.BookPickerSlot)
+			pickerRoutes.GET("/bookings/me", handlers.GetMyPickerBookings)
+			pickerRoutes.DELETE("/bookings/:id", handlers.CancelPickerBooking)
+			pickerRoutes.GET("/presence", handlers.GetPickerPresence)
+			pickerRoutes.PUT("/presence", handlers.SetPickerPresence)
+
 			warehouseStockTransfers := warehouse.Group("/stock-transfers")
 			warehouseStockTransfers.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly())
 			{
@@ -166,6 +175,7 @@ func SetupRoutes(router *gin.Engine) {
 				warehouseAuthed.GET("/staff/performance/me", handlers.GetMyPerformance)
 				warehouseAuthed.GET("/staff/performance", handlers.GetWarehouseStaffPerformance)
 				warehouseAuthed.GET("/staff", handlers.GetWarehouseStaffOverview)
+				warehouseAuthed.GET("/picker-roster", handlers.GetPickerRoster)
 				warehouseAuthed.GET("/zones", handlers.GetWarehouseZones)
 				warehouseAuthed.POST("/zones", middleware.InventoryManagerOnly(), handlers.CreateWarehouseZone)
 				warehouseAuthed.DELETE("/zones/:zoneId", middleware.InventoryManagerOnly(), handlers.DeleteZone)
