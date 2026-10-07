@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { acceptOrder, listWarehouseOrders, handoverOrder as handoverOrderApi, getOrderInvoice } from '../api/warehouse'
+import { acceptOrder, listWarehouseOrders, getOrderInvoice } from '../api/warehouse'
 import type { Order, OrderStatus, OrderInvoice } from '../types/warehouse'
 import StatusBadge from '../components/StatusBadge'
 import { getErrorMessage } from '../utils/errors'
@@ -35,18 +35,13 @@ export default function Orders() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<number | null>(null)
-  const [handoverTarget, setHandoverTarget] = useState<Order | null>(null)
-  const [packageCount, setPackageCount] = useState(1)
-  const [handoverSubmitting, setHandoverSubmitting] = useState(false)
-  const [handoverError, setHandoverError] = useState<string | null>(null)
-
   const [invoiceTarget, setInvoiceTarget] = useState<number | null>(null)
   const [invoice, setInvoice] = useState<OrderInvoice | null>(null)
   const [invoiceLoading, setInvoiceLoading] = useState(false)
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setIsLoading(true)
+  const load = useCallback(async (silent?: boolean) => {
+    if (silent !== true) setIsLoading(true)
     setError(null)
     try {
       const params: { status?: string; page: number; limit: number } = { page, limit: 20 }
@@ -65,6 +60,8 @@ export default function Orders() {
 
   useEffect(() => {
     load()
+    const t = setInterval(() => load(true), 5000)
+    return () => clearInterval(t)
   }, [load])
 
   function setTab(status?: OrderStatus) {
@@ -85,30 +82,6 @@ export default function Orders() {
       setError(getErrorMessage(err, 'Failed to accept order.'))
     } finally {
       setAcceptingId(null)
-    }
-  }
-
-  function openHandover(order: Order) {
-    setHandoverTarget(order)
-    setPackageCount(1)
-    setHandoverError(null)
-  }
-
-  async function handleConfirmHandover() {
-    if (!handoverTarget || !handoverTarget.delivery_partner) return
-    setHandoverSubmitting(true)
-    setHandoverError(null)
-    try {
-      await handoverOrderApi(handoverTarget.id, {
-        package_count: packageCount,
-        delivery_partner_id: handoverTarget.delivery_partner.id,
-      })
-      setHandoverTarget(null)
-      await load()
-    } catch (err) {
-      setHandoverError(getErrorMessage(err, 'Failed to record handover.'))
-    } finally {
-      setHandoverSubmitting(false)
     }
   }
 
@@ -222,12 +195,13 @@ export default function Orders() {
                           {acceptingId === order.id ? 'Accepting...' : 'Accept'}
                         </button>
                       ) : order.status === 'ready_for_dispatch' ? (
-                        <button
-                          onClick={() => openHandover(order)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors"
-                        >
-                          Handover
-                        </button>
+                        <span className="text-xs text-amber-300">
+                          Waiting for partner{order.delivery_partner ? ` - ${order.delivery_partner.name}` : ''}
+                        </span>
+                      ) : order.status === 'handed_over' ? (
+                        <span className="text-xs text-emerald-300">
+                          Picked up{order.delivery_partner ? ` by ${order.delivery_partner.name}` : ''}
+                        </span>
                       ) : action ? (
                         <button
                           onClick={() => goToTask(order)}
@@ -268,58 +242,6 @@ export default function Orders() {
             >
               Next
             </button>
-          </div>
-        </div>
-      )}
-
-      {handoverTarget && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-base font-semibold mb-4">Handover Order #{handoverTarget.id}</h2>
-            {handoverTarget.delivery_partner ? (
-              <div className="border border-slate-800 rounded-lg p-3 mb-4 text-sm">
-                <p className="text-slate-400 text-xs uppercase mb-1">Assigned Delivery Partner</p>
-                <p className="font-medium">{handoverTarget.delivery_partner.name}</p>
-                <p className="text-slate-400">{handoverTarget.delivery_partner.phone}</p>
-                {handoverTarget.delivery_partner.vehicle_number && (
-                  <p className="text-slate-400 text-xs">Vehicle: {handoverTarget.delivery_partner.vehicle_number}</p>
-                )}
-                <p className="text-xs text-red-400 mt-2">Verify this partner is physically present before confirming.</p>
-              </div>
-            ) : (
-              <p className="text-sm text-rose-400 mb-4">No delivery partner assigned to this order yet. Cannot hand over.</p>
-            )}
-
-            <label className="block text-xs text-slate-400 mb-1">Package Count</label>
-            <input
-              type="number"
-              min={1}
-              value={packageCount}
-              onChange={(e) => setPackageCount(parseInt(e.target.value, 10) || 1)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-4"
-            />
-
-            {handoverError && (
-              <div className="border border-rose-900 bg-rose-950/40 text-rose-300 text-sm rounded-lg px-3 py-2 mb-4">
-                {handoverError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setHandoverTarget(null)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmHandover}
-                disabled={handoverSubmitting || !handoverTarget.delivery_partner}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
-              >
-                {handoverSubmitting ? 'Confirming...' : 'Confirm Handover'}
-              </button>
-            </div>
           </div>
         </div>
       )}
