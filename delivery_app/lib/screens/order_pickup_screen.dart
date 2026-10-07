@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import '../services/api_service.dart';
 import 'delivery_map_screen.dart';
 
 const Color _green = Color(0xFF1ED760);
@@ -22,7 +24,8 @@ String _money(String raw) {
 /// where, then swipe "Order picked" once the items are in hand.
 class OrderPickupScreen extends StatefulWidget {
   final Map<String, dynamic> order;
-  const OrderPickupScreen({super.key, required this.order});
+  final bool ready;
+  const OrderPickupScreen({super.key, required this.order, this.ready = false});
 
   @override
   State<OrderPickupScreen> createState() => _OrderPickupScreenState();
@@ -31,6 +34,45 @@ class OrderPickupScreen extends StatefulWidget {
 class _OrderPickupScreenState extends State<OrderPickupScreen> {
   bool _busy = false;
   String? _error;
+  bool _storeReady = false;
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.order['status']?.toString();
+    _storeReady = widget.ready || s == 'ready_for_dispatch' || s == 'handed_over';
+    if (!widget.ready) {
+      _checkReady();
+      _poll = Timer.periodic(const Duration(seconds: 4), (_) => _checkReady());
+    }
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkReady() async {
+    try {
+      final list = await ApiService.getMyDeliveries();
+      for (final o in list) {
+        if (o is Map && '${o['order_id'] ?? o['id']}' == '$_id') {
+          final s = o['status']?.toString();
+          final ok = s == 'ready_for_dispatch' || s == 'handed_over' || s == 'shipped';
+          if (ok != _storeReady && mounted) setState(() => _storeReady = ok);
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _iAmReady() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => OrderPickupScreen(order: widget.order, ready: true)),
+    );
+  }
 
   int get _id => ((widget.order['order_id'] ?? widget.order['id']) as num).toInt();
 
@@ -40,8 +82,11 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
       _error = null;
     });
     try {
+      await ApiService.pickupOrder(_id);
       if (!mounted) return;
-      final updated = Map<String, dynamic>.from(widget.order)..['status'] = 'shipped';
+      final updated = Map<String, dynamic>.from(widget.order)
+        ..['status'] = 'shipped'
+        ..['delivery_status'] = 'picked_up';
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => DeliveryMapScreen(order: updated)),
       );
@@ -211,7 +256,25 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
               ),
             Padding(
               padding: const EdgeInsets.all(16),
-              child: _SwipeToConfirm(label: 'Order picked', busy: _busy, onConfirm: _picked),
+              child: widget.ready
+          ? _SwipeToConfirm(label: 'Order picked', busy: _busy, onConfirm: _picked)
+          : SizedBox(
+              width: double.infinity,
+              height: 60,
+              child: ElevatedButton(
+                onPressed: _storeReady ? _iAmReady : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.black,
+                  disabledBackgroundColor: const Color(0xFFD9D9D9),
+                  shape: const StadiumBorder(),
+                ),
+                child: Text(
+                  _storeReady ? 'I am ready' : 'Waiting for store to mark ready',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ),
             ),
           ],
         ),

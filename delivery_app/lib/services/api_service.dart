@@ -477,4 +477,15 @@ class ApiService {
       headers: await _headers(),
     );
     return _gigDecode(res);
-  }}
+  }
+
+  static Future<Map<String, dynamic>> pickupOrder(int orderId) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/delivery/orders/$orderId/pickup'),
+      headers: await _headers(),
+    );
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) throw Exception(data['error'] ?? 'Failed to mark order picked');
+    return data;
+  }
+}
