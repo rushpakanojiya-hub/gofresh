@@ -68,7 +68,7 @@ class _GigsScreenState extends State<GigsScreen> {
     try {
       await ApiService.bookGigs(_date, _selected.toList());
       _toast('Gigs booked');
-      await _load();
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       _toast(e.toString().replaceFirst('Exception: ', ''));
     } finally {
