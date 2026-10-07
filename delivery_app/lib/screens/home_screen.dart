@@ -230,6 +230,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _toggleOnline([bool? target]) async {
     final next = target ?? !(_isOnline ?? false);
     if (_isOnline == next) return;
+    if (next) {
+      await _loadGigs();
+      if (!_hasCurrentGig()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Book a gig slot to go online')),
+        );
+        await _openGigs();
+        return;
+      }
+    }
     if (next && !await _ensureLocationOn()) return;
     setState(() => _togglingOnline = true);
     try {
@@ -241,10 +252,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         LocationService.stopTracking();
       }
     } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(content: Text(msg)),
         );
+      }
+      if (msg.contains('Book a gig')) {
+        if (mounted) setState(() => _togglingOnline = false);
+        await _openGigs();
       }
     } finally {
       if (mounted) setState(() => _togglingOnline = false);
@@ -714,6 +730,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       if (mounted) setState(() => _gigSlots = out);
     } catch (_) {}
+  }
+
+  bool _hasCurrentGig() {
+    final now = DateTime.now();
+    for (final s in _gigSlots) {
+      final st = DateTime.tryParse('${s['start_at']}');
+      final en = DateTime.tryParse('${s['end_at']}');
+      if (st == null || en == null) continue;
+      if (!now.isBefore(st) && now.isBefore(en)) return true;
+    }
+    return false;
   }
 
   Future<void> _openGigs() async {
