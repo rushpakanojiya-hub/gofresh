@@ -150,7 +150,7 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 
 	var partners []models.DeliveryPartner
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL", true, true).
+		Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL AND checked_in_warehouse_id IS NOT NULL AND checked_in_at > ?", true, true, time.Now().Add(-StoreCheckinMaxAge)).
 		Order("id").
 		Find(&partners).Error; err != nil {
 		return nil, fmt.Errorf("failed to load delivery partners: %w", err)
@@ -216,7 +216,10 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 		const loadPenaltyKm = 3.0
 		score := distanceKm + float64(loadByPartner[p.ID])*loadPenaltyKm
 
-		if best == nil || (fresh && !bestFresh) || (fresh == bestFresh && score < bestScore) {
+		if best == nil ||
+            p.CheckedInAt.Before(*best.CheckedInAt) ||
+            (p.CheckedInAt.Equal(*best.CheckedInAt) &&
+                ((fresh && !bestFresh) || (fresh == bestFresh && score < bestScore))) {
 			best = p
 			bestScore = score
 			bestFresh = fresh
