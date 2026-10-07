@@ -84,11 +84,16 @@ class _HomeShellState extends State<HomeShell> {
 
     return PopScope(       canPop: _index == 0,       onPopInvokedWithResult: (didPop, result) {         if (!didPop) {           switchTab(0);         }       },       child: Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openScanner,
-        backgroundColor: primaryPurple,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.qr_code_scanner),
+      floatingActionButton: ValueListenableBuilder<bool>(
+        valueListenable: partnerOnline,
+        builder: (context, online, _) => online
+            ? FloatingActionButton(
+                onPressed: _openScanner,
+                backgroundColor: primaryPurple,
+                foregroundColor: Colors.white,
+                child: const Icon(Icons.qr_code_scanner),
+              )
+            : const SizedBox.shrink(),
       ),
       body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: BottomNavigationBar(

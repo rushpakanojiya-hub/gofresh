@@ -13,6 +13,9 @@ import '../services/push_service.dart';
 import 'new_order_sheet.dart';
 import 'gigs_screen.dart';
 
+/// True while the partner is ONLINE. HomeShell uses it to show the QR scan button.
+final ValueNotifier<bool> partnerOnline = ValueNotifier<bool>(false);
+
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
   const HomeScreen({super.key, this.onSwitchTab});
@@ -187,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadAvailability() async {
     try {
       final data = await ApiService.getAvailability();
-      if (mounted) { setState(() => _isOnline = data['is_online'] == true); _syncWorking(data['is_online'] == true); }
+      if (mounted) { setState(() => _isOnline = data['is_online'] == true); partnerOnline.value = data['is_online'] == true; _syncWorking(data['is_online'] == true); }
     } catch (_) {
       // Badge just won't show a definite state yet.
     }
@@ -245,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() => _togglingOnline = true);
     try {
       final data = await ApiService.updateAvailability(next);
-      if (mounted) { setState(() => _isOnline = data['is_online'] == true); _syncWorking(data['is_online'] == true); }
+      if (mounted) { setState(() => _isOnline = data['is_online'] == true); partnerOnline.value = data['is_online'] == true; _syncWorking(data['is_online'] == true); }
       if (data['is_online'] == true) {
         LocationService.startTracking();
       } else {
