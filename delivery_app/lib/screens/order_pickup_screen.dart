@@ -41,8 +41,8 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
   void initState() {
     super.initState();
     final s = widget.order['status']?.toString();
-    _storeReady = widget.ready || s == 'ready_for_dispatch' || s == 'handed_over';
-    if (!widget.ready) {
+    _storeReady = widget.ready || s == 'handed_over' || s == 'shipped';
+    if (!_storeReady) {
       _checkReady();
       _poll = Timer.periodic(const Duration(seconds: 4), (_) => _checkReady());
     }
@@ -60,18 +60,13 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
       for (final o in list) {
         if (o is Map && '${o['order_id'] ?? o['id']}' == '$_id') {
           final s = o['status']?.toString();
-          final ok = s == 'ready_for_dispatch' || s == 'handed_over' || s == 'shipped';
+          final ok = s == 'handed_over' || s == 'shipped';
           if (ok != _storeReady && mounted) setState(() => _storeReady = ok);
+          if (ok) _poll?.cancel();
           break;
         }
       }
     } catch (_) {}
-  }
-
-  void _iAmReady() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => OrderPickupScreen(order: widget.order, ready: true)),
-    );
   }
 
   int get _id => ((widget.order['order_id'] ?? widget.order['id']) as num).toInt();
@@ -256,25 +251,25 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
               ),
             Padding(
               padding: const EdgeInsets.all(16),
-              child: widget.ready
-          ? _SwipeToConfirm(label: 'Order picked', busy: _busy, onConfirm: _picked)
-          : SizedBox(
-              width: double.infinity,
-              height: 60,
-              child: ElevatedButton(
-                onPressed: _storeReady ? _iAmReady : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _green,
-                  foregroundColor: Colors.black,
-                  disabledBackgroundColor: const Color(0xFFD9D9D9),
-                  shape: const StadiumBorder(),
-                ),
-                child: Text(
-                  _storeReady ? 'I am ready' : 'Waiting for store to mark ready',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SwipeToConfirm(
+                    label: 'Order picked',
+                    busy: _busy,
+                    enabled: _storeReady,
+                    onConfirm: _picked,
+                  ),
+                  if (!_storeReady)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Waiting for store to hand over the order',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
+                ],
               ),
-            ),
             ),
           ],
         ),
@@ -287,8 +282,14 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
 class _SwipeToConfirm extends StatefulWidget {
   final String label;
   final bool busy;
+  final bool enabled;
   final VoidCallback onConfirm;
-  const _SwipeToConfirm({required this.label, required this.busy, required this.onConfirm});
+  const _SwipeToConfirm({
+    required this.label,
+    required this.busy,
+    required this.onConfirm,
+    this.enabled = true,
+  });
 
   @override
   State<_SwipeToConfirm> createState() => _SwipeToConfirmState();
@@ -301,17 +302,20 @@ class _SwipeToConfirmState extends State<_SwipeToConfirm> {
   @override
   void didUpdateWidget(_SwipeToConfirm old) {
     super.didUpdateWidget(old);
-    if (old.busy && !widget.busy) setState(() => _dx = 0);
+    if ((old.busy && !widget.busy) || (old.enabled && !widget.enabled)) {
+      setState(() => _dx = 0);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final locked = widget.busy || !widget.enabled;
     return LayoutBuilder(builder: (context, c) {
       final maxDx = c.maxWidth - _knob - 8;
       return Container(
         height: _knob + 8,
         decoration: BoxDecoration(
-          color: _green,
+          color: widget.enabled ? _green : const Color(0xFFD9D9D9),
           borderRadius: BorderRadius.circular(40),
         ),
         child: Stack(
@@ -319,15 +323,19 @@ class _SwipeToConfirmState extends State<_SwipeToConfirm> {
           children: [
             Center(
               child: Text(widget.label,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: widget.enabled ? Colors.black : Colors.black45,
+                  )),
             ),
             Positioned(
               left: 4 + _dx,
               child: GestureDetector(
-                onHorizontalDragUpdate: widget.busy
+                onHorizontalDragUpdate: locked
                     ? null
                     : (d) => setState(() => _dx = (_dx + d.delta.dx).clamp(0.0, maxDx).toDouble()),
-                onHorizontalDragEnd: widget.busy
+                onHorizontalDragEnd: locked
                     ? null
                     : (_) {
                         if (_dx >= maxDx * 0.85) {
@@ -340,7 +348,10 @@ class _SwipeToConfirmState extends State<_SwipeToConfirm> {
                 child: Container(
                   width: _knob,
                   height: _knob,
-                  decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: widget.enabled ? Colors.black : const Color(0xFF9E9E9E),
+                    shape: BoxShape.circle,
+                  ),
                   child: widget.busy
                       ? const Padding(
                           padding: EdgeInsets.all(15),
