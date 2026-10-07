@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { listWarehouseOrders } from '../api/warehouse'
+import { listWarehouseOrders, handoverOrder } from '../api/warehouse'
 import type { Order } from '../types/warehouse'
 import { getErrorMessage } from '../utils/errors'
+
+type PartnerRef = { delivery_partner_id?: number | null; delivery_partner?: { id?: number; name?: string } | null }
+
+function partnerIdOf(order: Order): number | null {
+  const o = order as unknown as PartnerRef
+  return o.delivery_partner_id ?? o.delivery_partner?.id ?? null
+}
 
 export default function Handover() {
   const [waiting, setWaiting] = useState<Order[]>([])
   const [pickedUp, setPickedUp] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<number | null>(null)
 
   const load = useCallback(async (silent?: boolean) => {
     if (silent !== true) setIsLoading(true)
@@ -31,6 +39,31 @@ export default function Handover() {
     const t = setInterval(() => load(true), 5000)
     return () => clearInterval(t)
   }, [load])
+
+  async function handleHandover(order: Order) {
+    const partnerId = partnerIdOf(order)
+    if (!partnerId) {
+      setError('No delivery partner assigned to this order yet.')
+      return
+    }
+    const input = window.prompt('Number of packages handed over to the partner?', '1')
+    if (input === null) return
+    const count = parseInt(input, 10)
+    if (!Number.isFinite(count) || count < 1) {
+      setError('Package count must be at least 1.')
+      return
+    }
+    setBusyId(order.id)
+    setError(null)
+    try {
+      await handoverOrder(order.id, { package_count: count, delivery_partner_id: partnerId })
+      await load(true)
+    } catch (err) {
+      setError(getErrorMessage(err, 'Handover failed.'))
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   function renderTable(rows: Order[], done: boolean) {
     return (
@@ -62,9 +95,15 @@ export default function Handover() {
                 <td className="px-4 py-3 text-slate-400 uppercase text-xs">{order.payment_method}</td>
                 <td className="px-4 py-3 text-right">
                   {done ? (
-                    <span className="text-xs text-emerald-300">Picked up</span>
+                    <span className="text-xs text-emerald-300">Handed over</span>
                   ) : (
-                    <span className="text-xs text-amber-300">Waiting for partner</span>
+                    <button
+                      onClick={() => handleHandover(order)}
+                      disabled={busyId === order.id || !partnerIdOf(order)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 transition-colors"
+                    >
+                      {busyId === order.id ? 'Handing over...' : 'Hand over'}
+                    </button>
                   )}
                 </td>
               </tr>
@@ -81,7 +120,8 @@ export default function Handover() {
         <div>
           <h1 className="font-display text-2xl font-semibold">Handover</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Delivery partners pick up ready orders themselves. This page updates automatically.
+            Hand each order to its delivery partner and tap Hand over. The partner's Order picked swipe turns
+            green after this. This page updates automatically.
           </p>
         </div>
         <button
@@ -102,19 +142,19 @@ export default function Handover() {
 
       {!isLoading && (
         <>
-          <h2 className="text-sm font-semibold text-slate-300 mb-2">Waiting for partner ({waiting.length})</h2>
+          <h2 className="text-sm font-semibold text-slate-300 mb-2">Ready to hand over ({waiting.length})</h2>
           {waiting.length === 0 ? (
             <div className="border border-slate-800 rounded-xl bg-slate-900 p-6 text-center text-sm text-slate-500 mb-8">
-              No orders are waiting for a delivery partner.
+              No orders are waiting for handover.
             </div>
           ) : (
             renderTable(waiting, false)
           )}
 
-          <h2 className="text-sm font-semibold text-slate-300 mb-2">Picked up by partner ({pickedUp.length})</h2>
+          <h2 className="text-sm font-semibold text-slate-300 mb-2">Handed over ({pickedUp.length})</h2>
           {pickedUp.length === 0 ? (
             <div className="border border-slate-800 rounded-xl bg-slate-900 p-6 text-center text-sm text-slate-500">
-              No recent pickups.
+              No recent handovers.
             </div>
           ) : (
             renderTable(pickedUp, true)
