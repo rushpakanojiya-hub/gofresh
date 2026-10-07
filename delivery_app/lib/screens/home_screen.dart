@@ -15,8 +15,7 @@ import 'gigs_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
-  final VoidCallback? onScan;
-  const HomeScreen({super.key, this.onSwitchTab, this.onScan});
+  const HomeScreen({super.key, this.onSwitchTab});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -809,10 +808,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         : 'Scan store QR to receive orders';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: checkedIn ? null : widget.onScan,
-        child: Container(
+      child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -833,7 +829,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
-    ),
     );
   }
 

@@ -75,7 +75,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeScreen(onSwitchTab: switchTab, onScan: _openScanner),
+      HomeScreen(onSwitchTab: switchTab),
       OrdersScreen(onSwitchTab: switchTab),
       const EarningsScreen(),
       const ProfileScreen(),
