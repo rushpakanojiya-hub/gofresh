@@ -66,9 +66,13 @@ func main() {
     // a response, mark them expired, and automatically try the next
     // eligible partner. Runs every minute so a silent partner never stalls
     // an order for much longer than the configured timeout.
-    c.AddFunc("* * * * *", func() {
-        services.ExpireStaleAssignments()
-    })
+    go func() {
+        ticker := time.NewTicker(10 * time.Second)
+        defer ticker.Stop()
+        for range ticker.C {
+            services.ExpireStaleAssignments()
+        }
+    }()
     c.Start()
 
     // 6. Setup Gin router
