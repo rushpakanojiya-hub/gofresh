@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { acceptOrder, listWarehouseOrders, getOrderInvoice } from '../api/warehouse'
+import { acceptOrder, listWarehouseOrders, getOrderInvoice, handoverOrder } from '../api/warehouse'
 import type { Order, OrderStatus, OrderInvoice } from '../types/warehouse'
 import StatusBadge from '../components/StatusBadge'
 import { getErrorMessage } from '../utils/errors'
@@ -23,6 +23,13 @@ function actionFor(order: Order): { label: string; onClick: () => void } | null 
   return null
 }
 
+type PartnerRef = { delivery_partner_id?: number | null; delivery_partner?: { id?: number; name?: string } | null }
+
+function partnerIdOf(order: Order): number | null {
+  const o = order as unknown as PartnerRef
+  return o.delivery_partner_id ?? o.delivery_partner?.id ?? null
+}
+
 export default function Orders() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -35,6 +42,7 @@ export default function Orders() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<number | null>(null)
+  const [handingId, setHandingId] = useState<number | null>(null)
   const [invoiceTarget, setInvoiceTarget] = useState<number | null>(null)
   const [invoice, setInvoice] = useState<OrderInvoice | null>(null)
   const [invoiceLoading, setInvoiceLoading] = useState(false)
@@ -82,6 +90,31 @@ export default function Orders() {
       setError(getErrorMessage(err, 'Failed to accept order.'))
     } finally {
       setAcceptingId(null)
+    }
+  }
+
+  async function handleHandover(order: Order) {
+    const partnerId = partnerIdOf(order)
+    if (!partnerId) {
+      setError('No delivery partner assigned to this order yet.')
+      return
+    }
+    const input = window.prompt('Number of packages handed over to the partner?', '1')
+    if (input === null) return
+    const count = parseInt(input, 10)
+    if (!Number.isFinite(count) || count < 1) {
+      setError('Package count must be at least 1.')
+      return
+    }
+    setHandingId(order.id)
+    setError(null)
+    try {
+      await handoverOrder(order.id, { package_count: count, delivery_partner_id: partnerId })
+      await load(true)
+    } catch (err) {
+      setError(getErrorMessage(err, 'Handover failed.'))
+    } finally {
+      setHandingId(null)
     }
   }
 
@@ -195,9 +228,18 @@ export default function Orders() {
                           {acceptingId === order.id ? 'Accepting...' : 'Accept'}
                         </button>
                       ) : order.status === 'ready_for_dispatch' ? (
-                        <span className="text-xs text-amber-300">
-                          Waiting for partner{order.delivery_partner ? ` - ${order.delivery_partner.name}` : ''}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-amber-300">
+                            {order.delivery_partner ? order.delivery_partner.name : 'No partner assigned'}
+                          </span>
+                          <button
+                            onClick={() => handleHandover(order)}
+                            disabled={handingId === order.id || !partnerIdOf(order)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40"
+                          >
+                            {handingId === order.id ? 'Handing over...' : 'Hand over'}
+                          </button>
+                        </div>
                       ) : order.status === 'handed_over' ? (
                         <span className="text-xs text-emerald-300">
                           Picked up{order.delivery_partner ? ` by ${order.delivery_partner.name}` : ''}
