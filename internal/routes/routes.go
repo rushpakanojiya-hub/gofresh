@@ -109,6 +109,7 @@ func SetupRoutes(router *gin.Engine) {
 			delivery.PUT("/orders/:id/delivery-proof", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.UploadDeliveryProof)
 			delivery.PUT("/orders/:id/resolve-failed", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.ResolveFailedDelivery)
 			delivery.GET("/earnings", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyEarnings)
+			delivery.PUT("/orders/:id/pickup", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.PickupOrder)
 			delivery.GET("/gigs", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyGigs)
 			delivery.POST("/gigs/book", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.BookMyGigs)
 			delivery.DELETE("/gigs/book", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.CancelMyGig)
