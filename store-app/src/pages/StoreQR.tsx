@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { getCheckinQR } from '../api/warehouse'
 import { useAuth } from '../context/AuthContext'
 
-const REFRESH_MS = 30000
+const REFRESH_MS = 10000
 
 export default function StoreQR() {
   const { staff } = useAuth()
@@ -15,9 +15,7 @@ export default function StoreQR() {
     try {
       const data = await getCheckinQR()
       setToken(data.token)
-      setSecondsLeft(
-        Math.max(0, Math.round((new Date(data.expires_at).getTime() - Date.now()) / 1000)),
-      )
+      setSecondsLeft(REFRESH_MS / 1000)
       setError(null)
     } catch {
       setError('Could not load the QR. Check your internet connection.')
@@ -42,7 +40,7 @@ export default function StoreQR() {
       <h1 className="font-display text-2xl mb-2">Store QR</h1>
       <p className="text-sm text-slate-400 mb-6">
         Delivery partners scan this QR with the scan button in their app. Only after scanning
-        will they be auto-assigned orders. This QR changes every 30 seconds, so a photo of it will not work.
+        will they be auto-assigned orders. This QR changes every 10 seconds, so a photo of it will not work.
       </p>
 
       <div className="inline-block bg-white p-5">

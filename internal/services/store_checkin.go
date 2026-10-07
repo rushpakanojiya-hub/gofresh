@@ -17,7 +17,7 @@ import (
 
 const (
 	// StoreQRTTL is how long one generated store QR stays scannable.
-	StoreQRTTL = 60 * time.Second
+	StoreQRTTL = 25 * time.Second
 	// StoreCheckinMaxAge is how long a check-in stays valid at most.
 	StoreCheckinMaxAge = 12 * time.Hour
 )
