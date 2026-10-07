@@ -28,6 +28,7 @@ var (
 	ErrCheckinNoLocation   = errors.New("Could not get your location. Turn on location and try again")
 	ErrCheckinTooFar       = errors.New("You are too far from the store")
 	ErrCheckinNotFound     = errors.New("Partner or store not found")
+	ErrCheckinOffline    = errors.New("Go online first to check in at the store")
 )
 
 func storeCheckinKey() []byte {
@@ -82,6 +83,9 @@ func CheckInPartner(partnerID uint, token string, lat, lng *float64) (*models.Wa
 	var p models.DeliveryPartner
 	if err := database.DB.First(&p, partnerID).Error; err != nil {
 		return nil, ErrCheckinNotFound
+	}
+	if !p.IsOnline {
+		return nil, ErrCheckinOffline
 	}
 	if p.WarehouseID != nil && *p.WarehouseID != wid {
 		return nil, ErrCheckinWrongStore

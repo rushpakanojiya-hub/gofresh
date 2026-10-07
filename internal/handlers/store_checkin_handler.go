@@ -62,7 +62,7 @@ func CheckInToStore(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrCheckinInvalidToken), errors.Is(err, services.ErrCheckinNoLocation):
 			status = http.StatusBadRequest
-		case errors.Is(err, services.ErrCheckinWrongStore), errors.Is(err, services.ErrCheckinTooFar):
+		case errors.Is(err, services.ErrCheckinWrongStore), errors.Is(err, services.ErrCheckinTooFar), errors.Is(err, services.ErrCheckinOffline):
 			status = http.StatusForbidden
 		case errors.Is(err, services.ErrCheckinNotFound):
 			status = http.StatusNotFound
