@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/push_service.dart';
 import 'services/api_service.dart';
 import 'services/location_service.dart';
@@ -6,8 +8,15 @@ import 'screens/login_screen.dart';
 import 'screens/home_shell.dart';
 import 'screens/onboarding_flow.dart';
 
+/// Background/killed isolate entry point. Must be a top-level function.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   await LocationService.initialize();
   runApp(const MyApp());
 }
