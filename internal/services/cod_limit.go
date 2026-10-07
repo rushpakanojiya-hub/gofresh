@@ -8,7 +8,7 @@ import (
 // CODCashLimit is the max COD cash a partner may hold (delivered COD minus
 // verified deposits) before they stop receiving new COD orders. Keep in sync
 // with _cashLimit in delivery_app home_screen.dart.
-const CODCashLimit = 1500.0
+const CODCashLimit = 2500.0
 
 // PendingCODByPartner returns pending settlement per partner, using the same
 // rule as GetMyCODSummary: delivered COD total minus verified deposits.

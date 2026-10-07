@@ -57,7 +57,7 @@ export default function DeliveryPartners() {
         const w = await getRiderWorkload()
         const m: Record<number, { pending: number; limit: number; reached: boolean }> = {}
         for (const r of w.riders ?? []) {
-          m[r.partner_id] = { pending: r.pending_cod ?? 0, limit: r.cod_limit ?? 1500, reached: !!r.cod_limit_reached }
+          m[r.partner_id] = { pending: r.pending_cod ?? 0, limit: r.cod_limit ?? 2500, reached: !!r.cod_limit_reached }
         }
         setCash(m)
       } catch {

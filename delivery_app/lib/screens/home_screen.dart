@@ -885,7 +885,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
-  static const double _cashLimit = 1500;
+  static const double _cashLimit = 2500;
 
   Widget _cashCard(dynamic pending) {
     final held = pending is num ? pending.toDouble() : 0.0;

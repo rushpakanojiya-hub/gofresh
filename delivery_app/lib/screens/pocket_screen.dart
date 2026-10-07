@@ -24,7 +24,7 @@ class _PocketScreenState extends State<PocketScreen> {
 
   // TODO: pocket balance and tips need a backend API. Shown as 0 for now.
   final num _pocketBalance = 0;
-  final num _cashLimit = 1500;
+  final num _cashLimit = 2500;
   final num _tipsBalance = 0;
 
   @override
