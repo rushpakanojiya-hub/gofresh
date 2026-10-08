@@ -27,6 +27,7 @@ const emptyForm = {
   image_url: '',
   gst_percent: '0',
   hsn_code: '',
+  weight: '',
 }
 
 export default function Products() {
@@ -110,6 +111,7 @@ export default function Products() {
       image_url: p.image_url ?? '',
       gst_percent: String(p.gst_percent ?? 0),
       hsn_code: p.hsn_code ?? '',
+      weight: p.weight ?? '',
     })
     setFormError(null)
     setEditingProduct(p)
@@ -164,6 +166,7 @@ export default function Products() {
           image_url: form.image_url.trim(),
           gst_percent: form.gst_percent ? parseFloat(form.gst_percent) : 0,
           hsn_code: form.hsn_code.trim(),
+          weight: form.weight.trim(),
         })
       } else {
         await createProduct({
@@ -176,6 +179,7 @@ export default function Products() {
           image_url: form.image_url.trim(),
           gst_percent: form.gst_percent ? parseFloat(form.gst_percent) : 0,
           hsn_code: form.hsn_code.trim(),
+          weight: form.weight.trim(),
           stock: form.stock ? parseInt(form.stock, 10) : 0,
         })
       }
@@ -532,6 +536,16 @@ className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm w-6
                   value={form.hsn_code}
                   onChange={(e) => setForm({ ...form, hsn_code: e.target.value })}
                   placeholder="e.g. 8544"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Weight</label>
+                <input
+                  type="text"
+                  value={form.weight}
+                  onChange={(e) => setForm({ ...form, weight: e.target.value })}
+                  placeholder="e.g. 750 ml (leave empty for piece)"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
                 />
               </div>

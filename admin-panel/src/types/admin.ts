@@ -9,6 +9,7 @@ export interface Product {
   barcode?: string
   gst_percent?: number
   hsn_code?: string
+  weight?: string
   subcategory_id?: number | null
   subcategory?: { id: number; name: string } | null
   created_at?: string
@@ -26,6 +27,7 @@ export interface ProductCreateRequest {
   stock?: number
   gst_percent?: number
   hsn_code?: string
+  weight?: string
 }
 
 export interface Category {
