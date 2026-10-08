@@ -348,7 +348,7 @@ func SetPickerPresence(c *gin.Context) {
 	} else {
 		var inProgress int64
 		database.DB.Model(&models.PickingTask{}).
-			Where("picker_id = ? AND status = ?", staffID, "in_progress").Count(&inProgress)
+			Where("picker_id = ? AND status = ? AND created_at > ?", staffID, "in_progress", pickerTaskCutoff()).Count(&inProgress)
 		if inProgress > 0 {
 			c.JSON(http.StatusConflict, gin.H{"error": "Finish your current order before going offline"})
 			return

@@ -23,6 +23,10 @@ const (
 	pickerTaskMaxAge     = 2 * time.Hour
 )
 
+func pickerTaskCutoff() time.Time {
+	return time.Now().Add(-pickerTaskMaxAge)
+}
+
 // pickerAllottedSeconds: more items -> more time (5 items = 1:40).
 func pickerAllottedSeconds(qty int) int {
 	s := pickerBaseSeconds + pickerPerItemSeconds*qty
@@ -128,7 +132,7 @@ func pickerIsFirstInLine(staffID, warehouseID uint, now time.Time) bool {
 	}
 	var busyIDs []uint
 	database.DB.Model(&models.PickingTask{}).
-		Where("picker_id IN ? AND status IN ?", ids, []string{"pending", "in_progress"}).
+		Where("picker_id IN ? AND status IN ? AND created_at > ?", ids, []string{"pending", "in_progress"}, now.Add(-pickerTaskMaxAge)).
 		Pluck("picker_id", &busyIDs)
 	busy := map[uint]bool{}
 	for _, id := range busyIDs {
@@ -176,7 +180,7 @@ func pickerClaimTask(staffID, warehouseID uint) (uint, error) {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		var t models.PickingTask
 		e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("warehouse_id = ? AND status = ? AND picker_id IS NULL", warehouseID, "pending").
+			Where("warehouse_id = ? AND status = ? AND picker_id IS NULL AND created_at > ?", warehouseID, "pending", pickerTaskCutoff()).
 			Order("id ASC").First(&t).Error
 		if e == nil {
 			t.PickerID = &staffID
