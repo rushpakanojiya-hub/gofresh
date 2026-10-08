@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 "fmt"
@@ -39,6 +39,10 @@ if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 Preload("Items.Product").Preload("Address").
 First(&order, orderID).Error; err != nil {
 return fmt.Errorf("order not found: %w", err)
+}
+// cancelled-order guard: a cancelled order is never billed.
+if order.Status == models.OrderStatusCancelled {
+return fmt.Errorf("order %d is cancelled: invoice not generated", orderID)
 }
 
 // Re-check after acquiring the lock in case another goroutine

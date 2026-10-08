@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "net/http"
@@ -113,6 +113,11 @@ orderID := c.Param("id")
 var order models.Order
 if err := database.DB.Where("id = ? AND user_id = ?", orderID, userID).First(&order).Error; err != nil {
 c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+return
+}
+// cancelled-order guard: no invoice is shown for a cancelled order.
+if order.Status == models.OrderStatusCancelled {
+c.JSON(http.StatusNotFound, gin.H{"error": "No invoice for a cancelled order"})
 return
 }
 

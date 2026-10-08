@@ -399,6 +399,11 @@ if err := database.DB.Preload("Warehouse").Where("id = ? AND user_id = ?", order
 c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 return
 }
+// cancelled-order guard: no invoice is shown for a cancelled order.
+if order.Status == models.OrderStatusCancelled {
+c.JSON(http.StatusNotFound, gin.H{"error": "No invoice for a cancelled order"})
+return
+}
 
 var invoice models.Invoice
 if err := database.DB.Where("order_id = ?", order.ID).Preload("Items").First(&invoice).Error; err != nil {
