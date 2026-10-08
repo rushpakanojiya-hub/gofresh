@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/cache"
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
@@ -126,57 +126,58 @@ func CreateProduct(c *gin.Context) {
 	}
 
 	product := models.Product{
-		Name:        req.Name,
-		Description: req.Description,
-		Price:       req.Price,
-		MRP:         req.MRP,
-		CostPrice:   req.CostPrice,
-               GSTPercent:  req.GSTPercent,
-		HSNCode:     req.HSNCode,
-		ImageURL:    req.ImageURL,
-		CategoryID:  req.CategoryID,
+		Name:          req.Name,
+		Description:   req.Description,
+		Price:         req.Price,
+		MRP:           req.MRP,
+		CostPrice:     req.CostPrice,
+		GSTPercent:    req.GSTPercent,
+		HSNCode:       req.HSNCode,
+		ImageURL:      req.ImageURL,
+		Weight:        req.Weight,
+		CategoryID:    req.CategoryID,
 		SubcategoryID: req.SubcategoryID,
 	}
-    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-            if err := tx.Create(&product).Error; err != nil {
-                    return err
-            }
-            var warehouses []models.Warehouse
-            if err := tx.Where("is_active = ?", true).Find(&warehouses).Error; err != nil {
-                    return err
-            }
-            if len(warehouses) == 0 {
-                    // No warehouses configured yet - fall back to the old
-                    // single-warehouse-1 behavior so product creation still works.
-                    inventory := models.Inventory{
-                            ProductID:   product.ID,
-                            WarehouseID: 1,
-                            Stock:       req.Stock,
-                            InStock:     req.Stock > 0,
-                    }
-                    return tx.Create(&inventory).Error
-            }
-            // Every product gets an inventory row at every active warehouse
-            // from day one. Only the first (primary) warehouse gets the
-            // stock figure entered on creation; others start at 0 and are
-            // stocked separately by the admin later.
-            for i, wh := range warehouses {
-                    stock := 0
-                    if i == 0 {
-                            stock = req.Stock
-                    }
-                    inventory := models.Inventory{
-                            ProductID:   product.ID,
-                            WarehouseID: wh.ID,
-                            Stock:       stock,
-                            InStock:     stock > 0,
-                    }
-                    if err := tx.Create(&inventory).Error; err != nil {
-                            return err
-                    }
-            }
-            return nil
-    })
+	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&product).Error; err != nil {
+			return err
+		}
+		var warehouses []models.Warehouse
+		if err := tx.Where("is_active = ?", true).Find(&warehouses).Error; err != nil {
+			return err
+		}
+		if len(warehouses) == 0 {
+			// No warehouses configured yet - fall back to the old
+			// single-warehouse-1 behavior so product creation still works.
+			inventory := models.Inventory{
+				ProductID:   product.ID,
+				WarehouseID: 1,
+				Stock:       req.Stock,
+				InStock:     req.Stock > 0,
+			}
+			return tx.Create(&inventory).Error
+		}
+		// Every product gets an inventory row at every active warehouse
+		// from day one. Only the first (primary) warehouse gets the
+		// stock figure entered on creation; others start at 0 and are
+		// stocked separately by the admin later.
+		for i, wh := range warehouses {
+			stock := 0
+			if i == 0 {
+				stock = req.Stock
+			}
+			inventory := models.Inventory{
+				ProductID:   product.ID,
+				WarehouseID: wh.ID,
+				Stock:       stock,
+				InStock:     stock > 0,
+			}
+			if err := tx.Create(&inventory).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 
 	if txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create product"})
@@ -221,9 +222,12 @@ func UpdateProduct(c *gin.Context) {
 	product.Price = req.Price
 	product.MRP = req.MRP
 	product.CostPrice = req.CostPrice
-       product.GSTPercent = req.GSTPercent
+	product.GSTPercent = req.GSTPercent
 	product.HSNCode = req.HSNCode
 	product.ImageURL = req.ImageURL
+	if req.Weight != "" {
+		product.Weight = req.Weight
+	}
 	product.CategoryID = req.CategoryID
 	product.SubcategoryID = req.SubcategoryID
 
@@ -250,27 +254,27 @@ func UpdateProduct(c *gin.Context) {
 // it again on a product that already has a barcode just returns the
 // existing value unchanged, so it's safe to click more than once.
 func GenerateProductBarcode(c *gin.Context) {
-id := c.Param("id")
+	id := c.Param("id")
 
-var product models.Product
-if err := database.DB.First(&product, id).Error; err != nil {
-c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
-return
-}
+	var product models.Product
+	if err := database.DB.First(&product, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
+		return
+	}
 
-if product.Barcode == "" {
-product.Barcode = fmt.Sprintf("PRD%06d", product.ID)
-if err := database.DB.Model(&product).Update("barcode", product.Barcode).Error; err != nil {
-c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate barcode"})
-return
-}
+	if product.Barcode == "" {
+		product.Barcode = fmt.Sprintf("PRD%06d", product.ID)
+		if err := database.DB.Model(&product).Update("barcode", product.Barcode).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate barcode"})
+			return
+		}
 
-adminID := c.MustGet("user_id").(uint)
-adminPhone := c.MustGet("phone").(string)
-utils.LogAudit(adminID, adminPhone, "generate_barcode", "product", id, "barcode: "+product.Barcode)
-}
+		adminID := c.MustGet("user_id").(uint)
+		adminPhone := c.MustGet("phone").(string)
+		utils.LogAudit(adminID, adminPhone, "generate_barcode", "product", id, "barcode: "+product.Barcode)
+	}
 
-c.JSON(http.StatusOK, gin.H{"id": product.ID, "barcode": product.Barcode})
+	c.JSON(http.StatusOK, gin.H{"id": product.ID, "barcode": product.Barcode})
 }
 
 // DeleteProduct godoc
@@ -341,7 +345,8 @@ func UpdateInventory(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update inventory"})
 		return
 	}
-	if err := cache.DeleteByPrefix(c.Request.Context(), "products:list:"); err != nil { }
+	if err := cache.DeleteByPrefix(c.Request.Context(), "products:list:"); err != nil {
+	}
 	_ = cache.Delete(c.Request.Context(), "products:id:"+id)
 
 	adminID := c.MustGet("user_id").(uint)
@@ -427,10 +432,10 @@ func UpdateOrderStatus(c *gin.Context) {
 	}
 
 	if req.Status == models.OrderStatusDelivered && order.PaymentMethod == models.PaymentMethodCOD {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "COD orders must be marked delivered by the delivery partner (cash collection and ledger are recorded there)"})
-        return
-    }
-    allowed := validOrderTransitions[order.Status]
+		c.JSON(http.StatusBadRequest, gin.H{"error": "COD orders must be marked delivered by the delivery partner (cash collection and ledger are recorded there)"})
+		return
+	}
+	allowed := validOrderTransitions[order.Status]
 	if !allowed[req.Status] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Cannot change status from '" + order.Status + "' to '" + req.Status + "'",
@@ -469,13 +474,13 @@ func UpdateOrderStatus(c *gin.Context) {
 	}
 
 	order.Status = req.Status
-    // If this status change just confirmed the order (e.g. admin verifying
-    // an online payment), try to auto-assign the nearest available
-    // delivery partner right away instead of waiting for warehouse
-    // packing to complete.
-    if req.Status == models.OrderStatusConfirmed {
-        go services.AutoAssignDeliveryPartner(order.ID)
-    }
+	// If this status change just confirmed the order (e.g. admin verifying
+	// an online payment), try to auto-assign the nearest available
+	// delivery partner right away instead of waiting for warehouse
+	// packing to complete.
+	if req.Status == models.OrderStatusConfirmed {
+		go services.AutoAssignDeliveryPartner(order.ID)
+	}
 
 	message := "Your order #" + orderID + " status is now: " + req.Status
 	utils.SendNotification(order.Address.Phone, message, "order_status_"+req.Status, &order.ID)
@@ -487,5 +492,3 @@ func UpdateOrderStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, order)
 }
-
-
