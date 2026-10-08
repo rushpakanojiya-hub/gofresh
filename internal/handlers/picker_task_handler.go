@@ -19,6 +19,8 @@ const (
 	pickerPerItemSeconds = 12
 	pickerMaxSeconds     = 900
 	pickerStaleAfter     = 30 * time.Second
+	pickerOrderMaxAge    = 30 * time.Minute
+	pickerTaskMaxAge     = 2 * time.Hour
 )
 
 // pickerAllottedSeconds: more items -> more time (5 items = 1:40).
@@ -192,8 +194,9 @@ func pickerClaimTask(staffID, warehouseID uint) (uint, error) {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("warehouse_id = ? AND status = ? AND "+
 				"NOT EXISTS (SELECT 1 FROM picking_tasks WHERE picking_tasks.order_id = orders.id) AND "+
-				"EXISTS (SELECT 1 FROM order_items WHERE order_items.order_id = orders.id)",
-				warehouseID, models.OrderStatusConfirmed).
+				"EXISTS (SELECT 1 FROM order_items WHERE order_items.order_id = orders.id) AND "+
+				"orders.created_at > ?",
+				warehouseID, models.OrderStatusConfirmed, time.Now().Add(-pickerOrderMaxAge)).
 			Order("orders.id ASC").First(&order).Error; err != nil {
 			return err
 		}
@@ -245,7 +248,7 @@ func GetPickerTask(c *gin.Context) {
 
 	var mine models.PickingTask
 	if err := database.DB.Preload("Items").
-		Where("picker_id = ? AND status IN ?", staffID, []string{"pending", "in_progress"}).
+		Where("picker_id = ? AND status IN ? AND created_at > ?", staffID, []string{"pending", "in_progress"}, now.Add(-pickerTaskMaxAge)).
 		Order("id ASC").First(&mine).Error; err == nil {
 		c.JSON(http.StatusOK, gin.H{"task": pickerTaskOut(mine)})
 		return
