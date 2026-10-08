@@ -141,6 +141,7 @@ func SetupRoutes(router *gin.Engine) {
 			pickerRoutes.DELETE("/bookings/:id", handlers.CancelPickerBooking)
 			pickerRoutes.GET("/presence", handlers.GetPickerPresence)
 			pickerRoutes.PUT("/presence", handlers.SetPickerPresence)
+			pickerRoutes.GET("/task", handlers.GetPickerTask)
 
 			warehouseStockTransfers := warehouse.Group("/stock-transfers")
 			warehouseStockTransfers.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly())

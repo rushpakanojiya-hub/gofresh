@@ -265,7 +265,7 @@ func CancelPickerBooking(c *gin.Context) {
 	database.DB.Model(&models.PickerSlotBooking{}).
 		Where("staff_id = ? AND booking_date = ? AND status = ?", staffID, pickerToday(), "booked").Count(&left)
 	if left == 0 {
-		database.DB.Model(&models.PickerPresence{}).Where("staff_id = ?", staffID).Update("is_online", false)
+		pickerForceOffline(staffID)
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Booking cancelled"})
 }
@@ -278,7 +278,16 @@ func pickerPresenceResponse(p models.PickerPresence) gin.H {
 			name = w.Name
 		}
 	}
-	return gin.H{"is_online": p.IsOnline, "workflow": p.Workflow, "warehouse_id": p.WarehouseID, "warehouse_name": name}
+	now := time.Now()
+	active, login := pickerStatsOut(pickerStatsFor(p.StaffID, now), now)
+	return gin.H{
+		"is_online":      p.IsOnline,
+		"workflow":       p.Workflow,
+		"warehouse_id":   p.WarehouseID,
+		"warehouse_name": name,
+		"active_seconds": active,
+		"login_seconds":  login,
+	}
 }
 
 // GetPickerPresence GET /warehouse/picker/presence
@@ -291,7 +300,7 @@ func GetPickerPresence(c *gin.Context) {
 	}
 	var p models.PickerPresence
 	if err := database.DB.Where("staff_id = ?", staffID).First(&p).Error; err != nil {
-		c.JSON(http.StatusOK, gin.H{"is_online": false, "workflow": "", "warehouse_id": 0, "warehouse_name": ""})
+		c.JSON(http.StatusOK, gin.H{"is_online": false, "workflow": "", "warehouse_id": 0, "warehouse_name": "", "active_seconds": 0, "login_seconds": 0})
 		return
 	}
 	c.JSON(http.StatusOK, pickerPresenceResponse(p))
@@ -317,7 +326,16 @@ func SetPickerPresence(c *gin.Context) {
 	if wf != "picker" && wf != "packer" {
 		wf = "picker"
 	}
-	p := models.PickerPresence{StaffID: staffID, IsOnline: req.Online, Workflow: wf}
+	now := time.Now()
+
+	var p models.PickerPresence
+	wasOnline := false
+	if err := database.DB.Where("staff_id = ?", staffID).First(&p).Error; err == nil {
+		wasOnline = p.IsOnline
+	}
+	p.StaffID = staffID
+	p.Workflow = wf
+
 	if req.Online {
 		var b models.PickerSlotBooking
 		if err := database.DB.Where("staff_id = ? AND booking_date = ? AND status = ?", staffID, pickerToday(), "booked").
@@ -326,10 +344,31 @@ func SetPickerPresence(c *gin.Context) {
 			return
 		}
 		p.WarehouseID = b.WarehouseID
+		p.IsOnline = true
+	} else {
+		var inProgress int64
+		database.DB.Model(&models.PickingTask{}).
+			Where("picker_id = ? AND status = ?", staffID, "in_progress").Count(&inProgress)
+		if inProgress > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Finish your current order before going offline"})
+			return
+		}
+		// Hand back orders that were assigned but not started.
+		database.DB.Model(&models.PickingTask{}).
+			Where("picker_id = ? AND status = ?", staffID, "pending").Update("picker_id", nil)
+		p.WarehouseID = 0
+		p.IsOnline = false
 	}
 	if err := database.DB.Save(&p).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
+	}
+	if p.IsOnline {
+		if !wasOnline {
+			pickerGoOnline(staffID, now)
+		}
+	} else {
+		pickerGoOffline(staffID, now)
 	}
 	c.JSON(http.StatusOK, pickerPresenceResponse(p))
 }

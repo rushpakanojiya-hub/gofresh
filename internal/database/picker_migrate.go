@@ -13,7 +13,7 @@ var pickerOnce sync.Once
 // default slots (09:00-13:00 and 17:00-21:00) for active warehouses if no slots exist yet.
 func EnsurePickerTables() {
 	pickerOnce.Do(func() {
-		if err := DB.AutoMigrate(&models.PickerSlot{}, &models.PickerSlotBooking{}, &models.PickerPresence{}); err != nil {
+		if err := DB.AutoMigrate(&models.PickerSlot{}, &models.PickerSlotBooking{}, &models.PickerPresence{}, &models.PickerStats{}); err != nil {
 			log.Printf("picker: automigrate failed: %v", err)
 			return
 		}
