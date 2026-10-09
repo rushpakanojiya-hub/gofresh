@@ -5,6 +5,10 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Orders from './pages/Orders'
+import PickingMonitor from './pages/PickingMonitor'
+import Putaway from './pages/Putaway'
+import Locations from './pages/Locations'
+import Receiving from './pages/Receiving'
 import Picking from './pages/Picking'
 import Packing from './pages/Packing'
 import Substitution from './pages/Substitution'
@@ -32,6 +36,10 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/orders" element={<Protected><Orders /></Protected>} />
+          <Route path="/picking-monitor" element={<Protected><PickingMonitor /></Protected>} />
+          <Route path="/putaway" element={<Protected><Putaway /></Protected>} />
+          <Route path="/locations" element={<Protected><Locations /></Protected>} />
+          <Route path="/receiving" element={<Protected><Receiving /></Protected>} />
           <Route path="/picking/:orderId" element={<Protected><Picking /></Protected>} />
           <Route path="/packing/:orderId" element={<Protected><Packing /></Protected>} />
           <Route path="/substitutions" element={<Protected><Substitution /></Protected>} />

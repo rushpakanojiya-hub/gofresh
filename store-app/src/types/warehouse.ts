@@ -1,4 +1,4 @@
-﻿export interface WarehouseStaff {
+export interface WarehouseStaff {
   id: number
   name: string
   phone: string
@@ -96,6 +96,10 @@ export interface Order {
   payment_status: 'pending' | 'paid' | 'failed'
   delivery_partner_id?: number | null
   delivery_partner?: DeliveryPartner
+  picker_id?: number | null
+  picker_name?: string
+  task_status?: string
+  delayed?: boolean
   items?: OrderItem[]
   created_at: string
   updated_at: string
@@ -184,6 +188,9 @@ export interface WarehouseDashboardStats {
   avg_picking_minutes: number
   avg_packing_minutes: number
   fulfillment_rate: number
+  items_per_hour?: number
+  online_pickers?: number
+  pending_putaway?: number
 }
 
 // ---- Exceptions ----
@@ -243,6 +250,8 @@ export interface StaffPerformanceRow {
   clean_picks: number
   accuracy_rate: number
   exceptions_caused: number
+  role?: string
+  items_per_hour?: number
 }
 
 // ---- Warehouse locations ----
@@ -599,4 +608,101 @@ customer_phone: string
 
 export interface StoreReturnsResponse {
 return_requests: StoreReturnRequest[]
+}
+
+// ---- Picking monitor ----
+
+export interface PickingMonitorTask {
+  task_id: number
+  order_id: number
+  picker_id: number | null
+  picker_name: string
+  picker_online: boolean
+  status: TaskStatus
+  created_at: string
+  started_at: string | null
+  waiting_minutes: number
+  items_total: number
+  items_done: number
+  stale: boolean
+  delayed: boolean
+}
+
+export interface PickingMonitorPicker {
+  staff_id: number
+  name: string
+  online: boolean
+  active_tasks: number
+  state: 'offline' | 'idle' | 'busy'
+}
+
+export interface PickingMonitorData {
+  tasks: PickingMonitorTask[]
+  pickers: PickingMonitorPicker[]
+}
+
+// ---- Putaway ----
+
+export interface PutawayBinRef {
+  id: number
+  name?: string
+  rack?: { name?: string; zone?: { name?: string } }
+}
+
+export interface PutawayTaskRow {
+  id: number
+  receiving_id: number
+  product_id: number
+  product?: { id: number; name: string }
+  receiving?: { id: number; supplier_name?: string }
+  quantity: number
+  suggested_bin_id?: number | null
+  suggested_bin?: PutawayBinRef | null
+  actual_bin_id?: number | null
+  actual_bin?: PutawayBinRef | null
+  putter_id?: number | null
+  putter_name: string
+  status: 'pending' | 'in_progress' | 'completed'
+  wrong_location: boolean
+  note?: string
+  created_at: string
+  assigned_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+}
+
+export interface PutawayData {
+  tasks: PutawayTaskRow[]
+  putters: { id: number; name: string }[]
+  summary: {
+    pending: number
+    in_progress: number
+    completed_today: number
+    wrong_location_7d: number
+  }
+}
+
+// ---- Location occupancy ----
+
+export interface OccupancyBin {
+  id: number
+  name: string
+  product_count: number
+  total_qty: number
+  products: { product_id: number; name: string; stock: number }[]
+}
+
+export interface OccupancyData {
+  zones: {
+    id: number
+    name: string
+    racks: { id: number; name: string; bins: OccupancyBin[] }[]
+  }[]
+  summary: {
+    zones: number
+    racks: number
+    bins: number
+    occupied_bins: number
+    unassigned_products: number
+  }
 }

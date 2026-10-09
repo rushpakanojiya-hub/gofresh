@@ -193,6 +193,9 @@ export default function Dashboard() {
             <StatCard label="Avg Picking Time" value={stats.avg_picking_minutes.toFixed(1)} suffix="min" icon={IconClock} />
             <StatCard label="Avg Packing Time" value={stats.avg_packing_minutes.toFixed(1)} suffix="min" icon={IconClock} />
             <StatCard label="Active Staff" value={stats.active_staff} icon={IconUsers} />
+            <StatCard label="Items / Hour" value={(stats.items_per_hour ?? 0).toFixed(1)} suffix="items/hr" icon={IconClock} />
+            <StatCard label="Online Pickers" value={stats.online_pickers ?? 0} icon={IconUsers} />
+            <StatCard label="Pending Putaway" value={stats.pending_putaway ?? 0} icon={IconClock} />
           </div>
         </>
       )}

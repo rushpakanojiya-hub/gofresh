@@ -185,7 +185,7 @@ export default function Orders() {
                 <th className="px-4 py-3">Items</th>
                 <th className="px-4 py-3">Total</th>
                 <th className="px-4 py-3">Payment</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Status</th><th className="px-4 py-3">Picker</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
@@ -209,6 +209,16 @@ export default function Orders() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={order.status} />
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {order.picker_name ? (
+                        <span className="text-slate-300">{order.picker_name}</span>
+                      ) : order.status === 'confirmed' ? (
+                        <span className="text-slate-500">Unassigned</span>
+                      ) : (
+                        <span className="text-slate-600">&mdash;</span>
+                      )}
+                      {order.delayed && <span className="ml-2 text-rose-300">Delayed</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end items-center gap-2">

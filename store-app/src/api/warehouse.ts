@@ -118,9 +118,9 @@ export const updateException = (id: number, data: { status: string; resolution?:
 
 // ---- Staff performance ----
 
-export const getStaffPerformance = () =>
+export const getStaffPerformance = (period: 'today' | '7d' | '30d' = 'today') =>
   apiClient
-    .get('/warehouse/staff/performance')
+    .get('/warehouse/staff/performance', { params: { period } })
     .then((r) => r.data as { staff_performance: StaffPerformanceRow[] })
 
 export const getMyPerformance = () =>
@@ -316,3 +316,31 @@ export const getCheckinQR = () =>
   apiClient
     .get('/warehouse/checkin-qr')
     .then((r) => r.data as { token: string; expires_at: string; ttl_seconds: number; warehouse_id: number })
+// ---- Picking monitor ----
+
+export const getPickingMonitor = () =>
+  apiClient
+    .get('/warehouse/ops/picking-monitor')
+    .then((r) => r.data as import('../types/warehouse').PickingMonitorData)
+
+export const reassignPickingTask = (taskId: number, pickerId: number) =>
+  apiClient
+    .put(`/warehouse/ops/picking/${taskId}/reassign`, { picker_id: pickerId })
+    .then((r) => r.data as { success: boolean; task_id: number; picker_id: number })
+
+// ---- Putaway ----
+
+export const getPutawayTasks = (status?: 'pending' | 'in_progress' | 'completed') =>
+  apiClient
+    .get('/warehouse/putaway/tasks', { params: status ? { status } : {} })
+    .then((r) => r.data as import('../types/warehouse').PutawayData)
+
+export const assignPutawayTask = (taskId: number, putterId: number) =>
+  apiClient
+    .put(`/warehouse/putaway/tasks/${taskId}/assign`, { putter_id: putterId })
+    .then((r) => r.data as { success: boolean; task_id: number; putter_id: number })
+
+export const getLocationOccupancy = () =>
+  apiClient
+    .get('/warehouse/locations/occupancy')
+    .then((r) => r.data as import('../types/warehouse').OccupancyData)
