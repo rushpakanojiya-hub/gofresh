@@ -2,13 +2,13 @@ import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-const navItems: { to: string; label: string; managerOnly?: boolean }[] = [
+const navItems: { to: string; label: string; managerOnly?: boolean; inventoryToo?: boolean }[] = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/orders', label: 'Order Queue' },
   { to: '/picking-monitor', label: 'Picking Monitor', managerOnly: true },
-  { to: '/putaway', label: 'Putaway', managerOnly: true },
-  { to: '/receiving', label: 'Receiving', managerOnly: true },
-  { to: '/locations', label: 'Locations', managerOnly: true },
+  { to: '/putaway', label: 'Putaway', inventoryToo: true },
+  { to: '/receiving', label: 'Receiving', inventoryToo: true },
+  { to: '/locations', label: 'Locations', inventoryToo: true },
   { to: '/substitutions', label: 'Substitution' },
   { to: '/returns', label: 'Returns' },
   { to: '/inventory', label: 'Inventory' },
@@ -32,7 +32,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <p className="font-display text-xl leading-none">Store Staff App</p>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-0.5">
-          {navItems.filter((item) => !item.managerOnly || ['warehouse_manager', 'supervisor'].includes(staff?.role ?? '')).map((item) => (
+          {navItems.filter((item) => (!item.managerOnly && !item.inventoryToo) || ['warehouse_manager', 'supervisor'].includes(staff?.role ?? '') || (item.inventoryToo && staff?.role === 'inventory_staff')).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
