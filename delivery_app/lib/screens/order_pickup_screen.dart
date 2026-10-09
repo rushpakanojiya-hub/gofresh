@@ -36,12 +36,18 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
   String? _error;
   bool _storeReady = false;
   Timer? _poll;
+  String _staffName = '';
+  String _staffPhone = '';
+  bool _popupShown = false;
 
   @override
   void initState() {
     super.initState();
     final s = widget.order['status']?.toString();
     _storeReady = widget.ready || s == 'handed_over' || s == 'shipped';
+    _staffName = _pick(widget.order, ['store_staff_name']);
+    _staffPhone = _pick(widget.order, ['store_staff_phone']);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowStaffPopup());
     if (!_storeReady) {
       _checkReady();
       _poll = Timer.periodic(const Duration(seconds: 4), (_) => _checkReady());
@@ -61,6 +67,15 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
         if (o is Map && '${o['order_id'] ?? o['id']}' == '$_id') {
           final s = o['status']?.toString();
           final ok = s == 'handed_over' || s == 'shipped';
+          final nm = (o['store_staff_name'] ?? '').toString();
+          final ph = (o['store_staff_phone'] ?? '').toString();
+          if (nm.isNotEmpty && (nm != _staffName || ph != _staffPhone) && mounted) {
+            setState(() {
+              _staffName = nm;
+              _staffPhone = ph;
+            });
+            _maybeShowStaffPopup();
+          }
           if (ok != _storeReady && mounted) setState(() => _storeReady = ok);
           if (ok) _poll?.cancel();
           break;
@@ -69,6 +84,52 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
     } catch (_) {}
   }
 
+  void _maybeShowStaffPopup() {
+    if (_popupShown || !mounted || _staffName.isEmpty) return;
+    _popupShown = true;
+    _showStaffPopup();
+  }
+
+  Future<void> _showStaffPopup() {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Collect order from',
+            style: TextStyle(fontSize: 14, color: Colors.black54)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.person_outline),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_staffName,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            if (_staffPhone.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.phone_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    SelectableText(_staffPhone, style: const TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
   int get _id => ((widget.order['order_id'] ?? widget.order['id']) as num).toInt();
 
   Future<void> _picked() async {
@@ -226,6 +287,20 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
                         ),
                     ],
                   ),
+                  if (_staffName.isNotEmpty)
+                    _section(
+                      icon: Icons.badge_outlined,
+                      title: 'Store contact',
+                      open: true,
+                      children: [
+                        Text(_staffName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        if (_staffPhone.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(_staffPhone, style: const TextStyle(fontSize: 13)),
+                          ),
+                      ],
+                    ),
                   _section(
                     icon: Icons.storefront_outlined,
                     title: 'Store details',

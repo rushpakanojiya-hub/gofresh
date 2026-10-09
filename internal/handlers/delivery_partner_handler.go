@@ -322,6 +322,8 @@ type OrderItemSummary struct {
 }
 
 type AssignedOrderSummary struct {
+	StoreStaffName      string             `json:"store_staff_name"`
+	StoreStaffPhone     string             `json:"store_staff_phone"`
 	OrderID             uint               `json:"order_id"`
 	Status              string             `json:"status"`
 	AssignmentStatus    *string            `json:"assignment_status,omitempty"`
@@ -421,6 +423,7 @@ func GetMyDeliveries(c *gin.Context) {
 	for _, o := range orders {
 		summaries = append(summaries, toAssignedOrderSummary(o))
 	}
+	attachStoreStaff(orders, summaries)
 
 	c.JSON(http.StatusOK, gin.H{"orders": summaries})
 }
@@ -890,4 +893,52 @@ func deliveredTime(o models.Order) time.Time {
 		return *o.DeliveredAt
 	}
 	return o.UpdatedAt
+}
+
+// attachStoreStaff fills the store contact (packer, else picker) on each
+// summary so the rider knows who to collect the order from.
+func attachStoreStaff(orders []models.Order, summaries []AssignedOrderSummary) {
+	if len(orders) == 0 {
+		return
+	}
+	ids := make([]uint, 0, len(orders))
+	for _, o := range orders {
+		ids = append(ids, o.ID)
+	}
+	staffByOrder := make(map[uint]uint)
+	var picks []models.PickingTask
+	database.DB.Where("order_id IN ?", ids).Find(&picks)
+	for _, pk := range picks {
+		if pk.PickerID != nil {
+			staffByOrder[pk.OrderID] = *pk.PickerID
+		}
+	}
+	var packs []models.PackingTask
+	database.DB.Where("order_id IN ?", ids).Find(&packs)
+	for _, pk := range packs {
+		if pk.PackerID != nil {
+			staffByOrder[pk.OrderID] = *pk.PackerID
+		}
+	}
+	if len(staffByOrder) == 0 {
+		return
+	}
+	staffIDs := make([]uint, 0, len(staffByOrder))
+	for _, id := range staffByOrder {
+		staffIDs = append(staffIDs, id)
+	}
+	var staff []models.WarehouseStaff
+	database.DB.Where("id IN ?", staffIDs).Find(&staff)
+	byID := make(map[uint]models.WarehouseStaff, len(staff))
+	for _, s := range staff {
+		byID[s.ID] = s
+	}
+	for i := range summaries {
+		if sid, ok := staffByOrder[summaries[i].OrderID]; ok {
+			if s, ok2 := byID[sid]; ok2 {
+				summaries[i].StoreStaffName = s.Name
+				summaries[i].StoreStaffPhone = s.Phone
+			}
+		}
+	}
 }
