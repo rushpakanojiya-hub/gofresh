@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { getWarehouseInventory } from '../api/warehouse'
+import { assignProductBin, getLocationOccupancy, getWarehouseInventory } from '../api/warehouse'
 import type { WarehouseInventoryRow, WarehouseInventoryResponse } from '../types/warehouse'
 import { getErrorMessage } from '../utils/errors'
 
@@ -58,6 +58,44 @@ export default function Inventory() {
     setPage(1)
   }, [statusFilter, search])
 
+  const [assigning, setAssigning] = useState<WarehouseInventoryRow | null>(null)
+  const [binOptions, setBinOptions] = useState<{ id: number; label: string }[]>([])
+  const [selectedBin, setSelectedBin] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
+
+  const openAssign = async (row: WarehouseInventoryRow) => {
+    setAssigning(row)
+    setSelectedBin('')
+    setAssignError(null)
+    try {
+      const occ = await getLocationOccupancy()
+      const opts: { id: number; label: string }[] = []
+      occ.zones.forEach((z) =>
+        z.racks.forEach((rk) =>
+          rk.bins.forEach((b) => opts.push({ id: b.id, label: `${z.name} / ${rk.name} / ${b.name}` }))
+        )
+      )
+      setBinOptions(opts)
+    } catch (err) {
+      setAssignError(getErrorMessage(err, 'Failed to load bins.'))
+    }
+  }
+
+  const submitAssign = async () => {
+    if (!assigning || !selectedBin) return
+    setIsSaving(true)
+    setAssignError(null)
+    try {
+      await assignProductBin(assigning.product_id, Number(selectedBin))
+      setAssigning(null)
+      await load()
+    } catch (err) {
+      setAssignError(getErrorMessage(err, 'Failed to assign bin.'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setSearch(searchInput.trim())
@@ -141,7 +179,7 @@ export default function Inventory() {
                   </td>
                   <td className="px-4 py-3 text-slate-400">{r.category_name || '-'}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">
-                    {r.bin_name ? `${r.zone_name} / ${r.rack_name} / ${r.bin_name}` : 'Unassigned'}
+                    <span>{r.bin_name ? `${r.zone_name} / ${r.rack_name} / ${r.bin_name}` : 'Unassigned'}</span> <button onClick={() => openAssign(r)} className="ml-2 text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">{r.bin_name ? 'Change' : 'Assign'}</button>
                   </td>
                   <td className="px-4 py-3 text-right">{r.stock}</td>
                   <td className="px-4 py-3 text-right text-slate-400">{r.reserved}</td>
@@ -177,6 +215,43 @@ export default function Inventory() {
         </div>
       )}
 
+      {assigning && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm p-6">
+            <h2 className="text-base font-semibold mb-1">Assign bin</h2>
+            <p className="text-xs text-slate-500 mb-4">{assigning.product_name}</p>
+            <select
+              value={selectedBin}
+              onChange={(e) => setSelectedBin(e.target.value)}
+              className="w-full text-sm px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 mb-3"
+            >
+              <option value="">Select a bin...</option>
+              {binOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+            {binOptions.length === 0 && !assignError && (
+              <p className="text-xs text-slate-500 mb-3">No bins found. Create zone, rack and bin in Locations first.</p>
+            )}
+            {assignError && <p className="text-sm text-rose-300 mb-3">{assignError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAssigning(null)}
+                className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAssign}
+                disabled={isSaving || !selectedBin}
+                className="text-sm px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {!isLoading && data && data.total_pages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <button
