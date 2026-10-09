@@ -28,9 +28,11 @@ export default function Locations() {
   const [newName, setNewName] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [newStorage, setNewStorage] = useState('dry')
 
   const openAdd = (kind: 'zone' | 'rack' | 'bin', parentId?: number) => {
     setAdding({ kind, parentId })
+    setNewStorage('dry')
     setNewName('')
     setAddError(null)
   }
@@ -41,7 +43,7 @@ export default function Locations() {
     setIsSaving(true)
     setAddError(null)
     try {
-      if (adding.kind === 'zone') await createZone(name)
+      if (adding.kind === 'zone') await createZone(name, newStorage)
       else if (adding.kind === 'rack') await createRack(adding.parentId as number, name)
       else await createBin(adding.parentId as number, name)
       setAdding(null)
@@ -178,6 +180,12 @@ export default function Locations() {
               placeholder={adding.kind === 'zone' ? 'e.g. A' : adding.kind === 'rack' ? 'e.g. A-01' : 'e.g. A-01-01'}
               className="w-full text-sm px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 mb-3"
             />
+            {adding.kind === 'zone' && (
+              <select value={newStorage} onChange={(e) => setNewStorage(e.target.value)} className="w-full text-sm px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 mb-3">
+                <option value="dry">Dry Storage</option>
+                <option value="cold">Cold Storage</option>
+              </select>
+            )}
             {addError && <p className="text-sm text-rose-300 mb-3">{addError}</p>}
             <div className="flex justify-end gap-2">
               <button

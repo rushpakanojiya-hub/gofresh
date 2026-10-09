@@ -260,6 +260,7 @@ export interface WarehouseZone {
   id: number
   warehouse_id: number
   name: string
+  storage_type?: string
   created_at: string
   updated_at: string
 }
@@ -696,6 +697,7 @@ export interface OccupancyData {
   zones: {
     id: number
     name: string
+    storage_type?: string
     racks: { id: number; name: string; bins: OccupancyBin[] }[]
   }[]
   summary: {

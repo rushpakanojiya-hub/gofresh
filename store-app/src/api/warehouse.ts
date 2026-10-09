@@ -131,8 +131,8 @@ export const getMyPerformance = () =>
 export const listZones = () =>
   apiClient.get('/warehouse/zones').then((r) => r.data as { zones: WarehouseZone[] })
 
-export const createZone = (name: string) =>
-  apiClient.post('/warehouse/zones', { name }).then((r) => r.data as WarehouseZone)
+export const createZone = (name: string, storageType: string = 'dry') =>
+  apiClient.post('/warehouse/zones', { name, storage_type: storageType }).then((r) => r.data as WarehouseZone)
 
 export const listRacks = (zoneId: number) =>
   apiClient.get(`/warehouse/zones/${zoneId}/racks`).then((r) => r.data as { racks: WarehouseRack[] })

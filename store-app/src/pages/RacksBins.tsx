@@ -110,10 +110,9 @@ export default function RacksBins() {
     return out
   }, [data])
 
-  const isCold = (n: string) => /cold|frozen|chill/i.test(n)
   const sections = [
-    { title: 'Cold Storage', tone: 'text-sky-300', zones: (data?.zones ?? []).filter((z) => isCold(z.name)) },
-    { title: 'Dry Storage', tone: 'text-amber-300', zones: (data?.zones ?? []).filter((z) => !isCold(z.name)) },
+    { title: 'Cold Storage', tone: 'text-sky-300', zones: (data?.zones ?? []).filter((z) => z.storage_type === 'cold') },
+    { title: 'Dry Storage', tone: 'text-amber-300', zones: (data?.zones ?? []).filter((z) => z.storage_type !== 'cold') },
   ]
   const selected = flat.find((f) => f.bin.id === selectedId) ?? null
   const q = query.trim().toLowerCase()

@@ -398,9 +398,10 @@ type opsRackOcc struct {
 	Bins []opsBinOcc `json:"bins"`
 }
 type opsZoneOcc struct {
-	ID    uint         `json:"id"`
-	Name  string       `json:"name"`
-	Racks []opsRackOcc `json:"racks"`
+	ID          uint         `json:"id"`
+	Name        string       `json:"name"`
+	Racks       []opsRackOcc `json:"racks"`
+	StorageType string       `json:"storage_type"`
 }
 
 // GetLocationOccupancy: GET /warehouse/locations/occupancy
@@ -468,7 +469,7 @@ func GetLocationOccupancy(c *gin.Context) {
 		if zr == nil {
 			zr = []opsRackOcc{}
 		}
-		out = append(out, opsZoneOcc{ID: z.ID, Name: z.Name, Racks: zr})
+		out = append(out, opsZoneOcc{ID: z.ID, Name: z.Name, StorageType: z.StorageType, Racks: zr})
 	}
 
 	var unassigned int64

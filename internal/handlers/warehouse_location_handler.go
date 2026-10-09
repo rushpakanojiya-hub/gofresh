@@ -31,7 +31,11 @@ func CreateWarehouseZone(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	zone := models.WarehouseZone{WarehouseID: warehouseID, Name: req.Name}
+	storageType := "dry"
+	if req.StorageType == "cold" {
+		storageType = "cold"
+	}
+	zone := models.WarehouseZone{WarehouseID: warehouseID, Name: req.Name, StorageType: storageType}
 	if err := database.DB.Create(&zone).Error; err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "A zone with this name already exists in your warehouse"})
 		return
