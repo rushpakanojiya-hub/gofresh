@@ -8,6 +8,7 @@ import Orders from './pages/Orders'
 import PickingMonitor from './pages/PickingMonitor'
 import Putaway from './pages/Putaway'
 import Locations from './pages/Locations'
+import RacksBins from './pages/RacksBins'
 import Receiving from './pages/Receiving'
 import Picking from './pages/Picking'
 import Packing from './pages/Packing'
@@ -39,6 +40,7 @@ function App() {
           <Route path="/picking-monitor" element={<Protected><PickingMonitor /></Protected>} />
           <Route path="/putaway" element={<Protected><Putaway /></Protected>} />
           <Route path="/locations" element={<Protected><Locations /></Protected>} />
+          <Route path="/racks" element={<Protected><RacksBins /></Protected>} />
           <Route path="/receiving" element={<Protected><Receiving /></Protected>} />
           <Route path="/picking/:orderId" element={<Protected><Picking /></Protected>} />
           <Route path="/packing/:orderId" element={<Protected><Packing /></Protected>} />

@@ -9,6 +9,7 @@ const navItems: { to: string; label: string; managerOnly?: boolean; inventoryToo
   { to: '/putaway', label: 'Putaway', inventoryToo: true, putterToo: true },
   { to: '/receiving', label: 'Receiving', inventoryToo: true },
   { to: '/locations', label: 'Locations', inventoryToo: true },
+  { to: '/racks', label: 'Racks & Bins', inventoryToo: true },
   { to: '/substitutions', label: 'Substitution' },
   { to: '/returns', label: 'Returns' },
   { to: '/inventory', label: 'Inventory' },
