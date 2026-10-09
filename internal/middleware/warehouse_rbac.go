@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 "net/http"
@@ -42,5 +42,6 @@ RoleManagement   = []string{"warehouse_manager", "supervisor"}
 RoleInventoryOps = []string{"warehouse_manager", "supervisor", "inventory_staff"}
 RolePickers      = []string{"warehouse_manager", "supervisor", "picker"}
 RolePackers      = []string{"warehouse_manager", "supervisor", "packer"}
-RoleAnyStaff     = []string{"warehouse_manager", "supervisor", "picker", "packer", "inventory_staff"}
+RolePutters      = []string{"warehouse_manager", "supervisor", "putter"}
+RoleAnyStaff     = []string{"warehouse_manager", "supervisor", "picker", "packer", "inventory_staff", "putter"}
 )

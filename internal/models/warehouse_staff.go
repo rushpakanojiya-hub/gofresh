@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import (
 "time"
@@ -29,6 +29,7 @@ var ValidWarehouseStaffRoles = map[string]bool{
 "packer":            true,
 "inventory_staff":   true,
 "supervisor":        true,
+"putter":            true,
 }
 
 // WarehouseStaffRequest is the body for POST/PUT /admin/warehouse-staff
