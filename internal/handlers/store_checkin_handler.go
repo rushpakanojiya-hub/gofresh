@@ -56,6 +56,13 @@ func CheckInToStore(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "token required"})
 		return
 	}
+	if !partnerHasActiveGig(partnerID) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Book a gig slot to scan the store QR. Scan is allowed only during your booked gig time.",
+			"code":  "GIG_REQUIRED",
+		})
+		return
+	}
 	wh, err := services.CheckInPartner(partnerID, req.Token, req.Lat, req.Lng)
 	if err != nil {
 		status := http.StatusInternalServerError
