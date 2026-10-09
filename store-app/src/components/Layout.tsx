@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { listWarehouseOrders } from '../api/warehouse'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -21,6 +23,27 @@ const navItems: { to: string; label: string; managerOnly?: boolean; inventoryToo
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { staff, logout } = useAuth()
+
+  const [newCount, setNewCount] = useState(0)
+  useEffect(() => {
+    if (!staff) return
+    let alive = true
+    const NEW_VIEW = ['confirmed', 'picking', 'picked', 'packing', 'packed', 'ready_for_dispatch']
+    const loadCount = async () => {
+      try {
+        const data = await listWarehouseOrders({ page: 1, limit: 100 })
+        if (alive) setNewCount((data.orders ?? []).filter((o) => NEW_VIEW.includes(o.status)).length)
+      } catch {
+        // badge is optional; ignore errors
+      }
+    }
+    loadCount()
+    const timer = setInterval(loadCount, 5000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [staff])
   const warehouseLabel = staff?.warehouse?.name ?? `WAREHOUSE #${staff?.warehouse_id ?? '-'}`
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
@@ -44,7 +67,12 @@ export default function Layout({ children }: { children: ReactNode }) {
                 }`
               }
             >
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.to === '/orders' && newCount > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-semibold flex items-center justify-center">
+                  {newCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
