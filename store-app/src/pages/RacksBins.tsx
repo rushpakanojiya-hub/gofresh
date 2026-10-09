@@ -110,6 +110,11 @@ export default function RacksBins() {
     return out
   }, [data])
 
+  const isCold = (n: string) => /cold|frozen|chill/i.test(n)
+  const sections = [
+    { title: 'Cold Storage', tone: 'text-sky-300', zones: (data?.zones ?? []).filter((z) => isCold(z.name)) },
+    { title: 'Dry Storage', tone: 'text-amber-300', zones: (data?.zones ?? []).filter((z) => !isCold(z.name)) },
+  ]
   const selected = flat.find((f) => f.bin.id === selectedId) ?? null
   const q = query.trim().toLowerCase()
 
@@ -182,7 +187,10 @@ export default function RacksBins() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 items-start">
           <div className="border border-slate-800 bg-slate-900 rounded-xl p-4">
             {view === 'map' ? (
-              data.zones.map((z) => (
+              sections.filter((sec) => sec.zones.length > 0).map((sec) => (
+                <div key={sec.title} className="mb-6 last:mb-0 rounded-xl border border-slate-800 p-3">
+                  <p className={`text-sm font-semibold mb-3 ${sec.tone}`}>{sec.title}</p>
+                  {sec.zones.map((z) => (
                 <div key={z.id} className="mb-5 last:mb-0">
                   <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Zone {z.name}</p>
                   {z.racks.length === 0 && <p className="text-sm text-slate-600">No racks.</p>}
@@ -221,6 +229,8 @@ export default function RacksBins() {
                       </div>
                     ))}
                   </div>
+                </div>
+                  ))}
                 </div>
               ))
             ) : (
