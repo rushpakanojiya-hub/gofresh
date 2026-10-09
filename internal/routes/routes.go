@@ -200,6 +200,7 @@ func SetupRoutes(router *gin.Engine) {
 				warehouseAuthed.GET("/inventory", handlers.GetWarehouseInventory)
 				warehouseAuthed.GET("/inventory/:productId", handlers.GetProductInventory)
 				warehouseAuthed.POST("/inventory/:productId/adjust", middleware.InventoryManagerOnly(), handlers.AdjustStock)
+			warehouseAuthed.PUT("/inventory/:productId/bin", middleware.InventoryManagerOnly(), handlers.AssignProductBin)
 				warehouseAuthed.GET("/stock-movements", handlers.GetStockMovements)
 				warehouseAuthed.POST("/receiving", middleware.InventoryManagerOnly(), handlers.CreateReceiving)
 				warehouseAuthed.GET("/receiving", handlers.GetWarehouseReceivings)
