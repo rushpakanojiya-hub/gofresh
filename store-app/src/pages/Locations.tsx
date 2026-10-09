@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getLocationOccupancy } from '../api/warehouse'
+import { createBin, createRack, createZone, getLocationOccupancy } from '../api/warehouse'
 import type { OccupancyBin, OccupancyData } from '../types/warehouse'
 import { getErrorMessage } from '../utils/errors'
 
@@ -24,6 +24,35 @@ export default function Locations() {
     load()
   }, [load])
 
+  const [adding, setAdding] = useState<{ kind: 'zone' | 'rack' | 'bin'; parentId?: number } | null>(null)
+  const [newName, setNewName] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  const openAdd = (kind: 'zone' | 'rack' | 'bin', parentId?: number) => {
+    setAdding({ kind, parentId })
+    setNewName('')
+    setAddError(null)
+  }
+
+  const submitAdd = async () => {
+    const name = newName.trim()
+    if (!adding || !name) return
+    setIsSaving(true)
+    setAddError(null)
+    try {
+      if (adding.kind === 'zone') await createZone(name)
+      else if (adding.kind === 'rack') await createRack(adding.parentId as number, name)
+      else await createBin(adding.parentId as number, name)
+      setAdding(null)
+      setNewName('')
+      await load()
+    } catch (err) {
+      setAddError(getErrorMessage(err, 'Failed to save.'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
   const s = data?.summary
 
   return (
@@ -41,6 +70,14 @@ export default function Locations() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <button
+          onClick={() => openAdd('zone')}
+          className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 transition-colors"
+        >
+          + Add Zone
+        </button>
+      </div>
       {error && (
         <div className="border border-rose-900 bg-rose-950/40 text-rose-300 text-sm rounded-lg px-4 py-3 mb-4">
           {error}
@@ -73,11 +110,11 @@ export default function Locations() {
 
       {data?.zones.map((z) => (
         <div key={z.id} className="mb-6">
-          <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Zone {z.name}</p>
+          <div className="flex items-center justify-between mb-2"><p className="text-xs uppercase tracking-wide text-slate-500">Zone {z.name}</p><button onClick={() => openAdd('rack', z.id)} className="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">+ Rack</button></div>
           {z.racks.length === 0 && <p className="text-sm text-slate-600 mb-2">No racks.</p>}
           {z.racks.map((r) => (
             <div key={r.id} className="border border-slate-800 bg-slate-900 rounded-xl p-3 mb-3">
-              <p className="text-sm font-medium mb-2">Rack {r.name}</p>
+              <div className="flex items-center justify-between mb-2"><p className="text-sm font-medium">Rack {r.name}</p><button onClick={() => openAdd('bin', r.id)} className="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">+ Bin</button></div>
               {r.bins.length === 0 ? (
                 <p className="text-xs text-slate-600">No bins.</p>
               ) : (
@@ -103,6 +140,36 @@ export default function Locations() {
         </div>
       ))}
 
+      {adding && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm p-6">
+            <h2 className="text-base font-semibold mb-3">Add {adding.kind}</h2>
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={adding.kind === 'zone' ? 'e.g. A' : adding.kind === 'rack' ? 'e.g. A-01' : 'e.g. A-01-01'}
+              className="w-full text-sm px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 mb-3"
+            />
+            {addError && <p className="text-sm text-rose-300 mb-3">{addError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAdding(null)}
+                className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAdd}
+                disabled={isSaving || !newName.trim()}
+                className="text-sm px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {selected && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm p-6">
