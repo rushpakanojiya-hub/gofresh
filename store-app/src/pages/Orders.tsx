@@ -8,13 +8,13 @@ import { getErrorMessage } from '../utils/errors'
 
 const TABS: { label: string; status?: OrderStatus }[] = [
   { label: 'New Orders', status: 'confirmed' },
-  { label: 'Picking', status: 'picking' },
-  { label: 'Packing', status: 'packing' },
-  { label: 'Ready for Dispatch', status: 'ready_for_dispatch' },
   { label: 'Handed Over', status: 'handed_over' },
   { label: 'Completed', status: 'delivered' },
   { label: 'All', status: undefined },
 ]
+
+// Statuses shown together in the New Orders view.
+const NEW_VIEW: string[] = ['confirmed', 'picking', 'picked', 'packing', 'packed', 'ready_for_dispatch']
 
 // Where an order's action button should route the staff member.
 function actionFor(order: Order): { label: string; onClick: () => void } | null {
@@ -53,13 +53,15 @@ export default function Orders() {
     if (silent !== true) setIsLoading(true)
     setError(null)
     try {
-      const params: { status?: string; page: number; limit: number } = { page, limit: 20 }
+      const isNew = activeStatus === 'confirmed'
+      const params: { status?: string; page: number; limit: number } = { page, limit: isNew ? 100 : 20 }
       const tab = TABS.find((t) => (t.status ?? 'all') === activeStatus)
-      if (tab?.status) params.status = tab.status
+      if (tab?.status && !isNew) params.status = tab.status
       const data = await listWarehouseOrders(params)
-      setOrders(data.orders ?? [])
-      setTotalPages(data.total_pages || 1)
-      setTotal(data.total)
+      const shown = isNew ? (data.orders ?? []).filter((o) => NEW_VIEW.includes(o.status)) : (data.orders ?? [])
+      setOrders(shown)
+      setTotalPages(isNew ? 1 : data.total_pages || 1)
+      setTotal(isNew ? shown.length : data.total)
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load orders.'))
     } finally {

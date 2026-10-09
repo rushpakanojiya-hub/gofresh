@@ -14,7 +14,6 @@ const navItems: { to: string; label: string; managerOnly?: boolean; inventoryToo
   { to: '/returns', label: 'Returns' },
   { to: '/inventory', label: 'Inventory' },
   { to: '/exceptions', label: 'Exceptions' },
-  { to: '/handover', label: 'Handover' },
   { to: '/staff', label: 'Staff' },
   { to: '/checkin-qr', label: 'Store QR' },
   { to: '/performance', label: 'Performance' },
