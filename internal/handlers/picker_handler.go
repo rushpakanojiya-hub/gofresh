@@ -323,7 +323,7 @@ func SetPickerPresence(c *gin.Context) {
 		return
 	}
 	wf := req.Workflow
-	if wf != "picker" && wf != "packer" {
+	if wf != "picker" && wf != "packer" && wf != "auditor" && wf != "fnv" {
 		wf = "picker"
 	}
 	now := time.Now()
