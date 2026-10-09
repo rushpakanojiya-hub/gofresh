@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { STORE_READ_ONLY } from '../readOnly'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { acceptOrder, listWarehouseOrders, getOrderInvoice, handoverOrder } from '../api/warehouse'
 import type { Order, OrderStatus, OrderInvoice } from '../types/warehouse'
@@ -220,25 +221,25 @@ export default function Orders() {
                           </button>
                         )}
                         {order.status === 'confirmed' ? (
-                        <button
+                        STORE_READ_ONLY ? (<span className="text-xs text-slate-400">Waiting for picker</span>) : (<button
                           onClick={() => handleAccept(order)}
                           disabled={acceptingId === order.id}
                           className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
                         >
                           {acceptingId === order.id ? 'Accepting...' : 'Accept'}
-                        </button>
+                        </button>)
                       ) : order.status === 'ready_for_dispatch' ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-amber-300">
                             {order.delivery_partner ? order.delivery_partner.name : 'No partner assigned'}
                           </span>
-                          <button
+                          {STORE_READ_ONLY ? (<span className="text-xs text-slate-500">Awaiting pickup</span>) : (<button
                             onClick={() => handleHandover(order)}
                             disabled={handingId === order.id || !partnerIdOf(order)}
                             className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-medium transition-colors disabled:opacity-40"
                           >
                             {handingId === order.id ? 'Handing over...' : 'Hand over'}
-                          </button>
+                          </button>)}
                         </div>
                       ) : order.status === 'handed_over' ? (
                         <span className="text-xs text-emerald-300">
@@ -249,7 +250,7 @@ export default function Orders() {
                           onClick={() => goToTask(order)}
                           className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium transition-colors"
                         >
-                          {action.label}
+                          {STORE_READ_ONLY ? 'View' : action.label}
                         </button>
                         ) : (
                           <span className="text-xs text-slate-600">&mdash;</span>

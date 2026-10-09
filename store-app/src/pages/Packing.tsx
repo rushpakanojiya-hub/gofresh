@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { STORE_READ_ONLY } from '../readOnly'
 import { useNavigate, useParams } from 'react-router-dom'
 import { completePacking, getPackingTask, startPacking } from '../api/warehouse'
 import type { PackingTaskResponse } from '../types/warehouse'
@@ -29,6 +30,8 @@ export default function Packing() {
 
   useEffect(() => {
     load()
+    const t = setInterval(load, 5000)
+    return () => clearInterval(t)
   }, [load])
 
   async function handleStart() {
@@ -120,23 +123,23 @@ export default function Packing() {
       </div>
 
       {task.status === 'pending' && (
-        <button
+        STORE_READ_ONLY ? (<p className="text-xs text-slate-400">Not started yet. Packing is done in the picker app.</p>) : (<button
           onClick={handleStart}
           disabled={isStarting}
           className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors disabled:opacity-50"
         >
           {isStarting ? 'Starting...' : 'Start Packing'}
-        </button>
+        </button>)
       )}
 
       {task.status === 'in_progress' && (
-        <button
+        STORE_READ_ONLY ? (<p className="text-xs text-slate-400">Packing in progress in the picker app.</p>) : (<button
           onClick={handleComplete}
           disabled={isCompleting}
           className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
         >
           {isCompleting ? 'Completing...' : 'Complete Packing'}
-        </button>
+        </button>)
       )}
 
       {task.status === 'completed' && (

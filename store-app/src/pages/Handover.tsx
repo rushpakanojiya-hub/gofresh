@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { STORE_READ_ONLY } from '../readOnly'
 import { listWarehouseOrders, handoverOrder } from '../api/warehouse'
 import type { Order } from '../types/warehouse'
 import { getErrorMessage } from '../utils/errors'
@@ -97,13 +98,13 @@ export default function Handover() {
                   {done ? (
                     <span className="text-xs text-emerald-300">Handed over</span>
                   ) : (
-                    <button
+                    STORE_READ_ONLY ? (<span className="text-xs text-slate-400">Awaiting pickup</span>) : (<button
                       onClick={() => handleHandover(order)}
                       disabled={busyId === order.id || !partnerIdOf(order)}
                       className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-40 transition-colors"
                     >
                       {busyId === order.id ? 'Handing over...' : 'Hand over'}
-                    </button>
+                    </button>)
                   )}
                 </td>
               </tr>

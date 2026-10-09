@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { STORE_READ_ONLY } from '../readOnly'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { completePicking, getPickingTask, markPickItem, scanPickItem, startPicking } from '../api/warehouse'
 import type { PickingTask, PickingTaskItem } from '../types/warehouse'
@@ -26,7 +27,7 @@ function ItemRow({
   const [scanState, setScanState] = useState<'idle' | 'match' | 'mismatch'>('idle')
   const [showCamera, setShowCamera] = useState(false)
 
-  const isDone = item.status !== 'pending'
+  const isDone = STORE_READ_ONLY || item.status !== 'pending'
 
   const submitScan = async (code: string) => {
     if (!code.trim()) return
@@ -232,6 +233,8 @@ export default function Picking() {
 
   useEffect(() => {
     load()
+    const t = setInterval(load, 5000)
+    return () => clearInterval(t)
   }, [load])
 
   async function handleStart() {
@@ -315,13 +318,13 @@ export default function Picking() {
       )}
 
       {task.status === 'pending' && (
-        <button
+        STORE_READ_ONLY ? (<p className="mb-6 text-xs text-slate-400">Not started yet. Picking is done in the picker app.</p>) : (<button
           onClick={handleStart}
           disabled={isStarting}
           className="mb-6 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors disabled:opacity-50"
         >
           {isStarting ? 'Starting...' : 'Start Picking'}
-        </button>
+        </button>)
       )}
 
       {task.status !== 'pending' && (
@@ -339,13 +342,13 @@ export default function Picking() {
       )}
 
       {task.status === 'in_progress' && (
-        <button
+        STORE_READ_ONLY ? (<p className="text-xs text-slate-400">Picking in progress in the picker app.</p>) : (<button
           onClick={handleComplete}
           disabled={!allMarked || isCompleting}
           className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
         >
           {isCompleting ? 'Completing...' : allMarked ? 'Complete Picking' : 'Mark all items to continue'}
-        </button>
+        </button>)
       )}
 
       {task.status === 'completed' && (
