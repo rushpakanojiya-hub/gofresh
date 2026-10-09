@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import Modal from '../components/Modal'
 import {
@@ -14,6 +14,7 @@ const ROLES = [
   { value: 'picker', label: 'Picker' },
   { value: 'packer', label: 'Packer' },
   { value: 'inventory_staff', label: 'Inventory Staff' },
+  { value: 'putter', label: 'Putter' },
   { value: 'supervisor', label: 'Supervisor' },
   { value: 'warehouse_manager', label: 'Warehouse Manager' },
 ]
