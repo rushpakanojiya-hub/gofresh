@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createBin, createRack, createZone, getLocationOccupancy } from '../api/warehouse'
+import { createBin, createRack, createZone, getLocationOccupancy, renameBin, renameRack } from '../api/warehouse'
 import type { OccupancyBin, OccupancyData } from '../types/warehouse'
 import { getErrorMessage } from '../utils/errors'
 
@@ -51,6 +51,33 @@ export default function Locations() {
       setAddError(getErrorMessage(err, 'Failed to save.'))
     } finally {
       setIsSaving(false)
+    }
+  }
+  const [editing, setEditing] = useState<{ kind: 'rack' | 'bin'; id: number } | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const openEdit = (kind: 'rack' | 'bin', id: number, current: string) => {
+    setEditing({ kind, id })
+    setEditName(current)
+    setEditError(null)
+  }
+
+  const submitEdit = async () => {
+    const name = editName.trim()
+    if (!editing || !name) return
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      if (editing.kind === 'rack') await renameRack(editing.id, name)
+      else await renameBin(editing.id, name)
+      setEditing(null)
+      await load()
+    } catch (err) {
+      setEditError(getErrorMessage(err, 'Failed to rename.'))
+    } finally {
+      setEditSaving(false)
     }
   }
   const s = data?.summary
@@ -114,7 +141,7 @@ export default function Locations() {
           {z.racks.length === 0 && <p className="text-sm text-slate-600 mb-2">No racks.</p>}
           {z.racks.map((r) => (
             <div key={r.id} className="border border-slate-800 bg-slate-900 rounded-xl p-3 mb-3">
-              <div className="flex items-center justify-between mb-2"><p className="text-sm font-medium">Rack {r.name}</p><button onClick={() => openAdd('bin', r.id)} className="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">+ Bin</button></div>
+              <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><p className="text-sm font-medium">Rack {r.name}</p><button onClick={() => openEdit('rack', r.id, r.name)} className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">Rename</button></div><button onClick={() => openAdd('bin', r.id)} className="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">+ Bin</button></div>
               {r.bins.length === 0 ? (
                 <p className="text-xs text-slate-600">No bins.</p>
               ) : (
@@ -170,10 +197,40 @@ export default function Locations() {
           </div>
         </div>
       )}
+      {editing && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm p-6">
+            <h2 className="text-base font-semibold mb-3">Rename {editing.kind}</h2>
+            <input
+              autoFocus
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitEdit() }}
+              className="w-full text-sm px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 mb-3"
+            />
+            {editError && <p className="text-sm text-rose-300 mb-3">{editError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setEditing(null)}
+                className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitEdit}
+                disabled={editSaving || !editName.trim()}
+                className="text-sm px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors"
+              >
+                {editSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {selected && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm p-6">
-            <h2 className="text-base font-semibold mb-1">Bin {selected.bin.name}</h2>
+            <div className="flex items-center justify-between mb-1"><h2 className="text-base font-semibold">Bin {selected.bin.name}</h2><button onClick={() => { const b = selected.bin; setSelected(null); openEdit('bin', b.id, b.name) }} className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">Rename</button></div>
             <p className="text-xs text-slate-500 mb-4">{selected.path}</p>
             {selected.bin.products.length === 0 ? (
               <p className="text-sm text-slate-400 mb-4">Empty.</p>

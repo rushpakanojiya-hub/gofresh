@@ -344,3 +344,9 @@ export const getLocationOccupancy = () =>
   apiClient
     .get('/warehouse/locations/occupancy')
     .then((r) => r.data as import('../types/warehouse').OccupancyData)
+
+export const renameRack = (rackId: number, name: string) =>
+  apiClient.put(`/warehouse/racks/${rackId}`, { name }).then((r) => r.data)
+
+export const renameBin = (binId: number, name: string) =>
+  apiClient.put(`/warehouse/bins/${binId}`, { name }).then((r) => r.data)
