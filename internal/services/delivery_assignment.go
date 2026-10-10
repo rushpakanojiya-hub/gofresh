@@ -270,6 +270,9 @@ func AutoAssignDeliveryPartner(orderID uint) {
             return errAutoAssignSkipped
         }
 
+        if e := tx.Model(&models.DeliveryPartner{}).Where("id = ?", bestPartner.ID).Update("checked_in_at", time.Now()).Error; e != nil {
+            return fmt.Errorf("failed to rotate partner queue: %w", e)
+        }
         assignedPartnerID = bestPartner.ID
         assignedPartnerName = bestPartner.Name
         return nil
@@ -312,6 +315,7 @@ func TryAssignPendingOrdersToPartner(partnerID uint) {
             models.OrderStatusPacked,
             models.OrderStatusReadyForDispatch,
         }).
+        Where("created_at > ?", time.Now().Add(-12*time.Hour)).
         Order("created_at ASC").
         Pluck("id", &orderIDs).Error
     if err != nil {
