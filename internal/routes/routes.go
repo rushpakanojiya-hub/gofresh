@@ -110,6 +110,7 @@ func SetupRoutes(router *gin.Engine) {
 			delivery.PUT("/orders/:id/resolve-failed", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.ResolveFailedDelivery)
 			delivery.GET("/earnings", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyEarnings)
 			delivery.PUT("/orders/:id/pickup", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.PickupOrder)
+			delivery.POST("/orders/:id/verify-picker-qr", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.VerifyPickerQR)
 			delivery.GET("/gigs", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.GetMyGigs)
 			delivery.POST("/gigs/book", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.BookMyGigs)
 			delivery.DELETE("/gigs/book", middleware.AuthMiddleware(), middleware.DeliveryPartnerOnly(), handlers.CancelMyGig)
@@ -145,6 +146,7 @@ func SetupRoutes(router *gin.Engine) {
 			pickerRoutes.POST("/orders/:id/handover", handlers.PickerHandover)
 			pickerRoutes.GET("/summary", handlers.GetPickerSummary)
 			pickerRoutes.GET("/history", handlers.GetPickerHistory)
+                        pickerRoutes.GET("/orders/:id/handover-qr", handlers.GetPickerHandoverQR)
                         pickerRoutes.GET("/today", handlers.GetPickerToday)
 			pickerRoutes.GET("/payout", handlers.GetPickerPayout)
 
