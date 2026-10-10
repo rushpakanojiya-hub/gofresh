@@ -326,6 +326,7 @@ func TryAssignPendingOrdersToPartner(partnerID uint) {
         return
     }
     for _, id := range orderIDs {
+        clearAttemptedPartner(id, partnerID)
         AutoAssignDeliveryPartner(id)
     }
 }
