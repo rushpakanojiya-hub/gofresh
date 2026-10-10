@@ -135,7 +135,7 @@ func SetupRoutes(router *gin.Engine) {
 			warehouse.POST("/verify-otp", middleware.RateLimit(10, time.Minute), handlers.VerifyWarehouseStaffOTP)
 
 			pickerRoutes := warehouse.Group("/picker")
-			pickerRoutes.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly())
+			pickerRoutes.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly(), handlers.PickerRoleOnly())
 			pickerRoutes.GET("/stores", handlers.GetPickerStores)
 			pickerRoutes.POST("/slots/:id/book", handlers.BookPickerSlot)
 			pickerRoutes.GET("/bookings/me", handlers.GetMyPickerBookings)
