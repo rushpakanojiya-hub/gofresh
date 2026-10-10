@@ -172,6 +172,48 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return '${d.day} ${m[d.month - 1]}, $h:$mm ${d.hour >= 12 ? 'PM' : 'AM'}';
   }
 
+  void _showOrderDetail(Map<String, dynamic> o) {
+    final mins = (((o['duration_seconds'] as num?) ?? 0) / 60).ceil();
+    final onTime = o['on_time'] == true;
+    Widget row(String k, String v) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            Expanded(child: Text(k, style: TextStyle(color: Colors.grey.shade600))),
+            Text(v, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ]),
+        );
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Order #${o['order_id']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            row('Completed', _when((o['completed_at'] ?? '').toString())),
+            row('Items picked', '${o['items_picked']}/${o['items_needed']}'),
+            row('Pick time', '$mins min'),
+            row('Status', onTime ? 'On time' : 'Late'),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showQr(o['order_id']);
+                },
+                icon: Icon(Icons.qr_code_2),
+                label: Text('Show handover QR'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showQr(dynamic orderId) async {
     final id = (orderId as num?)?.toInt();
     if (id == null) return;
@@ -234,7 +276,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
               ),
             ),
           for (final o in _history)
-            Container(
+            InkWell(
+              onTap: () => _showOrderDetail(o),
+              child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFEAECF0))),
@@ -279,6 +323,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
                 ],
               ),
+            ),
             ),
         ],
       ),
