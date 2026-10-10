@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 class PickingScreen extends StatefulWidget {
   final int orderId;
@@ -485,46 +484,6 @@ class _PickingScreenState extends State<PickingScreen> {
     }
   }
 
-  Future<void> _scanPressed() async {
-    if (_items.isEmpty || _busy) return;
-    final it = _items[_idx];
-    final code = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => _BarcodeScanScreen(productName: (_prod(it)['name'] ?? '').toString()),
-      ),
-    );
-    if (code == null || !mounted) return;
-    setState(() {
-      _busy = true;
-      _msg = null;
-    });
-    try {
-      final r = await ApiService.scanPickItem((it['id'] as num).toInt(), code);
-      if (!mounted) return;
-      if (r['error'] != null) {
-        setState(() {
-          _busy = false;
-          _msg = r['error'].toString();
-        });
-        return;
-      }
-      if (r['match'] == true) {
-        setState(() => _busy = false);
-        await _pickPressed();
-      } else {
-        setState(() {
-          _busy = false;
-          _msg = 'Wrong product scanned. Please scan the correct item.';
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _msg = 'Network error. Please try again.';
-      });
-    }
-  }
   Future<void> _pickPressed() async {
     if (_items.isEmpty) return;
     final it = _items[_idx];
@@ -652,20 +611,6 @@ class _PickingScreenState extends State<PickingScreen> {
               style: TextStyle(color: msg.startsWith('Waiting') ? Colors.orange.shade800 : Colors.red),
             ),
           ),
-        if (!_allMarked && _items.isNotEmpty && (_prod(_items[_idx])['barcode'] ?? '').toString().isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: OutlinedButton.icon(
-              onPressed: _busy ? null : _scanPressed,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Scan barcode', style: TextStyle(fontWeight: FontWeight.w700)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
         actions,
       ],
     );
@@ -714,63 +659,5 @@ class _PickingScreenState extends State<PickingScreen> {
       content = _body();
     }
     return Scaffold(backgroundColor: Colors.white, body: SafeArea(child: content));
-  }
-}
-
-class _BarcodeScanScreen extends StatefulWidget {
-  final String productName;
-  const _BarcodeScanScreen({required this.productName});
-
-  @override
-  State<_BarcodeScanScreen> createState() => _BarcodeScanScreenState();
-}
-
-class _BarcodeScanScreenState extends State<_BarcodeScanScreen> {
-  bool _done = false;
-
-  void _onDetect(BarcodeCapture cap) {
-    if (_done) return;
-    final v = cap.barcodes.isNotEmpty ? cap.barcodes.first.rawValue : null;
-    if (v == null || v.isEmpty) return;
-    _done = true;
-    Navigator.pop(context, v);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Scan barcode', style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
-      body: Stack(
-        children: [
-          MobileScanner(onDetect: _onDetect),
-          Center(
-            child: Container(
-              width: 260,
-              height: 160,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 3),
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 60,
-            child: Text(
-              widget.productName.isEmpty ? 'Scan the item barcode' : 'Scan: ${widget.productName}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

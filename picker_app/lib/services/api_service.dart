@@ -144,9 +144,6 @@ class ApiService {
         'reason': ?reason,
       });
 
-  static Future<Map<String, dynamic>> scanPickItem(int itemId, String barcode) =>
-      _put('/warehouse/picking/items/$itemId/scan', {'barcode': barcode});
-
   static Future<Map<String, dynamic>> completePicking(int orderId) =>
       _put('/warehouse/picking/$orderId/complete', {});
 
