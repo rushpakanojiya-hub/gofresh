@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import 'delivery_map_screen.dart';
 
@@ -91,42 +92,97 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
   }
 
   Future<void> _showStaffPopup() {
+    final initial = _staffName.trim().isEmpty ? '?' : _staffName.trim()[0].toUpperCase();
+    bool copied = false;
     return showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Collect order from',
-            style: TextStyle(fontSize: 14, color: Colors.black54)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Dialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.person_outline),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(_staffName,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Container(
+                  width: 64,
+                  height: 64,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(color: Color(0xFFE8F9EE), shape: BoxShape.circle),
+                  child: Text(
+                    initial,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF0C831F)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'COLLECT ORDER FROM',
+                  style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: Colors.black45),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _staffName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text('Order #$_id', style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                if (_staffPhone.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F7),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.phone_outlined, size: 20, color: Colors.black87),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _staffPhone,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await Clipboard.setData(ClipboardData(text: _staffPhone));
+                            setLocal(() => copied = true);
+                          },
+                          icon: Icon(copied ? Icons.check : Icons.copy_rounded, size: 16),
+                          label: Text(copied ? 'Copied' : 'Copy'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF0C831F),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _green,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Got it', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  ),
                 ),
               ],
             ),
-            if (_staffPhone.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.phone_outlined, size: 20),
-                    const SizedBox(width: 8),
-                    SelectableText(_staffPhone, style: const TextStyle(fontSize: 16)),
-                  ],
-                ),
-              ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-        ],
       ),
     );
   }
@@ -249,11 +305,29 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
                       for (final it in items)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            '${it is Map ? (it['quantity'] ?? it['qty'] ?? 1) : 1}x  '
-                            '${it is Map ? (it['product_name'] ?? it['name'] ?? '') : ''}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                          child: Row(children: [
+                            Builder(builder: (_) {
+                              String img = (it is Map ? (it['image_url'] ?? '') : '').toString();
+                              if (img.isNotEmpty && !img.startsWith('http')) {
+                                img = 'https://gofresh-evl7.onrender.com${img.startsWith('/') ? '' : '/'}$img';
+                              }
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: img.isEmpty
+                                    ? Container(width: 44, height: 44, color: const Color(0xFFF2F4F7), child: const Icon(Icons.image_not_supported_outlined, size: 20, color: Colors.grey))
+                                    : Image.network(img, width: 44, height: 44, fit: BoxFit.cover,
+                                        errorBuilder: (c, e, s) => Container(width: 44, height: 44, color: const Color(0xFFF2F4F7), child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey))),
+                              );
+                            }),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '${it is Map ? (it['quantity'] ?? it['qty'] ?? 1) : 1}x  '
+                                '${it is Map ? (it['product_name'] ?? it['name'] ?? '') : ''}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ]),
                         ),
                       if (pay.isNotEmpty)
                         Padding(

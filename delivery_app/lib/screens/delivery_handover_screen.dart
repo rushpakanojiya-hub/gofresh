@@ -314,11 +314,29 @@ class _DeliveryHandoverScreenState extends State<DeliveryHandoverScreen> {
                       for (final it in items)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            '${it is Map ? (it['quantity'] ?? it['qty'] ?? 1) : 1}x  '
-                            '${it is Map ? (it['product_name'] ?? it['name'] ?? '') : ''}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                          child: Row(children: [
+                            Builder(builder: (_) {
+                              String img = (it is Map ? (it['image_url'] ?? '') : '').toString();
+                              if (img.isNotEmpty && !img.startsWith('http')) {
+                                img = 'https://gofresh-evl7.onrender.com${img.startsWith('/') ? '' : '/'}$img';
+                              }
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: img.isEmpty
+                                    ? Container(width: 44, height: 44, color: const Color(0xFFF2F4F7), child: const Icon(Icons.image_not_supported_outlined, size: 20, color: Colors.grey))
+                                    : Image.network(img, width: 44, height: 44, fit: BoxFit.cover,
+                                        errorBuilder: (c, e, s) => Container(width: 44, height: 44, color: const Color(0xFFF2F4F7), child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey))),
+                              );
+                            }),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '${it is Map ? (it['quantity'] ?? it['qty'] ?? 1) : 1}x  '
+                                '${it is Map ? (it['product_name'] ?? it['name'] ?? '') : ''}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ]),
                         ),
                     ],
                   ),

@@ -316,6 +316,7 @@ func AssignDeliveryPartner(c *gin.Context) {
 // it does not include the customer's account/user record, other saved
 // addresses, product cost/margin fields, etc.
 type OrderItemSummary struct {
+	ImageURL    string  `json:"image_url"`
 	ProductName string  `json:"product_name"`
 	Quantity    int     `json:"quantity"`
 	Price       float64 `json:"price"`
@@ -354,6 +355,7 @@ func toAssignedOrderSummary(o models.Order) AssignedOrderSummary {
 	for _, it := range o.Items {
 		itemSummaries = append(itemSummaries, OrderItemSummary{
 			ProductName: it.Product.Name,
+			ImageURL:    it.Product.ImageURL,
 			Quantity:    it.Quantity,
 			Price:       it.Price,
 		})
