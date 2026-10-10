@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'today_orders.dart';
 import '../services/api_service.dart';
 import '../utils/fmt.dart';
 import 'dates_screen.dart';
@@ -634,6 +635,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        const TodayOrders(),
         Expanded(
           child: Center(
             child: Column(

@@ -145,6 +145,7 @@ func SetupRoutes(router *gin.Engine) {
 			pickerRoutes.POST("/orders/:id/handover", handlers.PickerHandover)
 			pickerRoutes.GET("/summary", handlers.GetPickerSummary)
 			pickerRoutes.GET("/history", handlers.GetPickerHistory)
+                        pickerRoutes.GET("/today", handlers.GetPickerToday)
 			pickerRoutes.GET("/payout", handlers.GetPickerPayout)
 
 			warehouseStockTransfers := warehouse.Group("/stock-transfers")

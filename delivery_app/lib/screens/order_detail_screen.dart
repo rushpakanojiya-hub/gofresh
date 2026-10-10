@@ -521,7 +521,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: Text("${item['product_name']} x${item['quantity']}")),
+                        Expanded(child: Row(children: [
+                          Builder(builder: (_) {
+                            final prod = item['product'];
+                            String img = (prod is Map ? (prod['image_url'] ?? '') : (item['image_url'] ?? '')).toString();
+                            if (img.isNotEmpty && !img.startsWith('http')) {
+                              img = 'https://gofresh-evl7.onrender.com${img.startsWith('/') ? '' : '/'}$img';
+                            }
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: img.isEmpty
+                                  ? Container(width: 44, height: 44, color: const Color(0xFFF2F4F7), child: const Icon(Icons.image_not_supported_outlined, size: 20, color: Colors.grey))
+                                  : Image.network(img, width: 44, height: 44, fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(width: 44, height: 44, color: const Color(0xFFF2F4F7), child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey))),
+                            );
+                          }),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text("${item['product_name']} x${item['quantity']}")),
+                        ])),
                         Text("\u20B9${item['price']}"),
                       ],
                     ),
