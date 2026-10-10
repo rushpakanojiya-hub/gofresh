@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import 'delivery_map_screen.dart';
+import 'qr_scan_screen.dart';
 
 const Color _green = Color(0xFF1ED760);
 const Color _pageBg = Color(0xFFF7F1FB);
@@ -40,6 +41,7 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
   String _staffName = '';
   String _staffPhone = '';
   bool _popupShown = false;
+  bool _verified = false;
 
   @override
   void initState() {
@@ -188,6 +190,47 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
   }
   int get _id => ((widget.order['order_id'] ?? widget.order['id']) as num).toInt();
 
+  Future<void> _scanPicker() async {
+    final token = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (token == null || !mounted) return;
+    try {
+      final r = await ApiService.verifyPickerQr(_id, token);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Pick order now!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Order ID: ${r['order_id']}'),
+              const SizedBox(height: 6),
+              Text('Customer: ${r['customer_name'] ?? ''}'),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white),
+              child: const Text("Okay, I'm ready"),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _verified = true;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   Future<void> _picked() async {
     setState(() {
       _busy = true;
@@ -296,7 +339,40 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
                       ],
                     ),
                   ),
-                  _section(
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    color: Colors.white,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                          child: Text(
+                            _staffName.isEmpty ? 'P' : _staffName[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(_staffName.isEmpty ? 'Store picker' : _staffName,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        ),
+                        _verified
+                            ? const Icon(Icons.check_circle, color: _green)
+                            : ElevatedButton(
+                                onPressed: _scanPicker,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2B2F36),
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Scan Picker QR'),
+                              ),
+                      ],
+                    ),
+                  ),                  _section(
                     icon: Icons.shopping_bag_outlined,
                     title: 'Order details',
                     subtitle: '${items.length} item${items.length == 1 ? '' : 's'}',
@@ -406,7 +482,7 @@ class _OrderPickupScreenState extends State<OrderPickupScreen> {
                   _SwipeToConfirm(
                     label: 'Order picked',
                     busy: _busy,
-                    enabled: _storeReady,
+                    enabled: _storeReady && _verified,
                     onConfirm: _picked,
                   ),
                   if (!_storeReady)

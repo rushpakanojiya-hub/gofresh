@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class PickingScreen extends StatefulWidget {
   final int orderId;
@@ -496,6 +497,29 @@ class _PickingScreenState extends State<PickingScreen> {
     }
   }
 
+  Future<void> _showHandoverQr() async {
+    try {
+      final r = await ApiService.getPickerHandoverQR(widget.orderId);
+      final token = (r['token'] ?? '').toString();
+      if (token.isEmpty || !mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Text('Order #${widget.orderId}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Show this QR to the delivery partner'),
+              SizedBox(height: 12),
+              SizedBox(width: 220, height: 220, child: QrImageView(data: token)),
+            ],
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Done'))],
+        ),
+      );
+    } catch (_) {}
+  }
   Future<void> _handover() async {
     if (_busy) return;
     _retry?.cancel();
@@ -521,6 +545,8 @@ class _PickingScreenState extends State<PickingScreen> {
       if (!mounted) return;
       final st = (h['status'] ?? '').toString();
       if (h['success'] == true && (st == 'handed_over' || st == 'shipped' || st == 'delivered')) {
+        await _showHandoverQr();
+        if (!mounted) return;
         Navigator.pop(context, true);
         return;
       }

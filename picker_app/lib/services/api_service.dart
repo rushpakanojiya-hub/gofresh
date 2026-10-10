@@ -148,6 +148,8 @@ class ApiService {
   static Future<Map<String, dynamic>> completePicking(int orderId) =>
       _put('/warehouse/picking/$orderId/complete', {});
 
+  static Future<Map<String, dynamic>> getPickerHandoverQR(int orderId) => _get('/warehouse/picker/orders/$orderId/handover-qr');
+
   static Future<Map<String, dynamic>> pickerHandover(int orderId, {int packageCount = 1}) =>
       _post('/warehouse/picker/orders/$orderId/handover', {'package_count': packageCount});
 }

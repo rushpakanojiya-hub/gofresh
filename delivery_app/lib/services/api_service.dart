@@ -4,6 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String baseUrl = 'https://gofresh-evl7.onrender.com/api/v1';
+  static Future<Map<String, dynamic>> verifyPickerQr(int orderId, String token) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/delivery/orders/$orderId/verify-picker-qr'),
+      headers: await _headers(),
+      body: jsonEncode({'token': token}),
+    );
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) {
+      throw Exception(data is Map ? (data['error'] ?? 'Invalid QR') : 'Invalid QR');
+    }
+    return Map<String, dynamic>.from(data as Map);
+  }
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -125,11 +137,14 @@ class ApiService {
   }
 
   static Future<void> updateLocation(double lat, double lng) async {
-    await http.put(
+    final res = await http.put(
       Uri.parse('$baseUrl/delivery/location'),
       headers: await _headers(),
       body: jsonEncode({'lat': lat, 'lng': lng}),
-    );
+    ).timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      throw Exception('updateLocation ${res.statusCode}: ${res.body}');
+    }
   }
 
   static Future<Map<String, dynamic>> checkInToStore(String token, double? lat, double? lng) async {
