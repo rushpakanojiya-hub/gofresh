@@ -195,6 +195,9 @@ func AutoAssignDeliveryPartner(orderID uint) {
 
         for i := range partners {
             p := &partners[i]
+            if parseAttemptedIDs(order.DeliveryAttemptedPartnerIDs)[p.ID] {
+                continue // already offered this order (rejected/expired)
+            }
 
             // Capacity: a partner already at (or somehow over) their configured
             // MaxActiveOrders is not a candidate for this assignment at all.
@@ -260,7 +263,7 @@ func AutoAssignDeliveryPartner(orderID uint) {
                 "delivery_status":                models.DeliveryStatusAssigned,
                 "delivery_rejection_reason":      nil,
                 "delivery_assignment_expires_at": time.Now().Add(AssignmentTimeout()),
-                "delivery_attempted_partner_ids": fmt.Sprint(bestPartner.ID),
+                "delivery_attempted_partner_ids": appendAttemptedID(order.DeliveryAttemptedPartnerIDs, bestPartner.ID),
                 "assigned_at":                    time.Now(),
             })
         if result.Error != nil {
