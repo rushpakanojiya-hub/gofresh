@@ -48,6 +48,7 @@ dependencies:
   camera: ^0.12.1
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.2
+  lottie: ^3.6.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -68,6 +69,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/delivery_hero.png
+    - assets/lottie/search.json
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

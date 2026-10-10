@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'order_pickup_screen.dart';
@@ -661,8 +662,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             width: double.infinity,
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
-                            child: const Center(
-                              child: Text('No active delivery right now', style: TextStyle(color: Colors.black45)),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Lottie.asset('assets/lottie/search.json', width: 200, height: 200, fit: BoxFit.contain),
+                                  const SizedBox(height: 8),
+                                  const Text('Searching for orders ...', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                ],
+                              ),
                             ),
                           ),
                       ],
