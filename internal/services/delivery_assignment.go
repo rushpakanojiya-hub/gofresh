@@ -304,7 +304,15 @@ fmt.Sprintf("Order #%d has been assigned to you", orderID),
 func TryAssignPendingOrdersToPartner(partnerID uint) {
     var orderIDs []uint
     err := database.DB.Model(&models.Order{}).
-        Where("delivery_partner_id IS NULL AND status = ?", models.OrderStatusConfirmed).
+        Where("delivery_partner_id IS NULL AND status IN ?", []string{
+            models.OrderStatusConfirmed,
+            models.OrderStatusPicking,
+            models.OrderStatusPicked,
+            models.OrderStatusPacking,
+            models.OrderStatusPacked,
+            models.OrderStatusReadyForDispatch,
+        }).
+        Order("created_at ASC").
         Pluck("id", &orderIDs).Error
     if err != nil {
         log.Printf("[auto-assign] failed to load pending unassigned orders for partner %d: %v", partnerID, err)
