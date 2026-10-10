@@ -317,6 +317,7 @@ func TryAssignPendingOrdersToPartner(partnerID uint) {
             models.OrderStatusPacking,
             models.OrderStatusPacked,
             models.OrderStatusReadyForDispatch,
+            models.OrderStatusHandedOver,
         }).
         Where("created_at > ?", time.Now().Add(-12*time.Hour)).
         Order("created_at ASC").
