@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../utils/fmt.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class SummaryScreen extends StatefulWidget {
   const SummaryScreen({super.key});
@@ -171,6 +172,40 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return '${d.day} ${m[d.month - 1]}, $h:$mm ${d.hour >= 12 ? 'PM' : 'AM'}';
   }
 
+  Future<void> _showQr(dynamic orderId) async {
+    final id = (orderId as num?)?.toInt();
+    if (id == null) return;
+    try {
+      final r = await ApiService.getPickerHandoverQR(id);
+      final token = (r['token'] ?? '').toString();
+      if (!mounted) return;
+      if (token.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text((r['error'] ?? 'QR not available').toString())),
+        );
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Order #$id'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Show this QR to the delivery partner'),
+              SizedBox(height: 12),
+              SizedBox(width: 220, height: 220, child: QrImageView(data: token)),
+            ],
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Done'))],
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Network error. Please try again.')));
+    }
+  }
+
   Widget _historyList() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -221,6 +256,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Show handover QR',
+                    icon: Icon(Icons.qr_code_2),
+                    onPressed: () => _showQr(o['order_id']),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
