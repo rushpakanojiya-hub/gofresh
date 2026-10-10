@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../services/api_service.dart';
 import '../utils/fmt.dart';
 import 'dates_screen.dart';
@@ -640,27 +641,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 130,
-                  height: 130,
-                  decoration: BoxDecoration(color: const Color(0xFFFFF3D0), borderRadius: BorderRadius.circular(26)),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.shopping_basket_outlined, size: 46, color: _green),
-                      const SizedBox(height: 6),
-                      Text.rich(
-                        const TextSpan(
-                          children: [
-                            TextSpan(text: 'go', style: TextStyle(color: _ink)),
-                            TextSpan(text: 'fresh', style: TextStyle(color: _green)),
-                          ],
-                        ),
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-                      ),
-                    ],
-                  ),
-                ),
+                Lottie.asset('assets/lottie/search.json', width: 220, height: 220, fit: BoxFit.contain),
                 const SizedBox(height: 28),
                 const Text('Searching for order ...', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                 if (store.isNotEmpty) ...[

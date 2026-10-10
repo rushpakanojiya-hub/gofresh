@@ -40,6 +40,7 @@ dependencies:
   mobile_scanner: ^7.4.2
   image_picker: ^1.2.4
   qr_flutter: ^4.1.0
+  lottie: ^3.6.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -64,6 +65,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/picker_welcome.png
+    - assets/lottie/search.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:
