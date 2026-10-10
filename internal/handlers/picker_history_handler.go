@@ -24,7 +24,7 @@ func GetPickerHistory(c *gin.Context) {
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -6)
 
 	var tasks []models.PickingTask
-	database.DB.Preload("Items").
+	database.DB.Preload("Items.Product").
 		Where("picker_id = ? AND status = ? AND completed_at >= ?", staffID, "completed", start).
 		Order("completed_at DESC").Limit(100).Find(&tasks)
 
@@ -43,6 +43,16 @@ func GetPickerHistory(c *gin.Context) {
 			duration = int(t.CompletedAt.Sub(*t.StartedAt).Seconds())
 			onTime = pickerSpeedBonus(pickerAllottedSeconds(needed), duration) > 0
 		}
+		items := make([]gin.H, 0, len(t.Items))
+		for _, it := range t.Items {
+			items = append(items, gin.H{
+				"name":      it.Product.Name,
+				"image_url": it.Product.ImageURL,
+				"quantity":  it.QuantityNeeded,
+				"picked":    it.QuantityPicked,
+				"status":    it.Status,
+			})
+		}
 		orders = append(orders, gin.H{
 			"order_id":         t.OrderID,
 			"completed_at":     t.CompletedAt,
@@ -50,6 +60,7 @@ func GetPickerHistory(c *gin.Context) {
 			"items_picked":     picked,
 			"duration_seconds": duration,
 			"on_time":          onTime,
+			"items":            items,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"orders": orders, "total_orders": len(orders), "total_items": totalItems})

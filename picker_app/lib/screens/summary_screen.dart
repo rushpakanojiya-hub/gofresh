@@ -172,6 +172,34 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return '${d.day} ${m[d.month - 1]}, $h:$mm ${d.hour >= 12 ? 'PM' : 'AM'}';
   }
 
+  Widget _itemTile(Map it) {
+    String img = (it['image_url'] ?? '').toString();
+    if (img.isNotEmpty && !img.startsWith('http')) {
+      img = 'https://gofresh-evl7.onrender.com${img.startsWith('/') ? '' : '/'}$img';
+    }
+    Widget box(IconData ic) => Container(
+          width: 44,
+          height: 44,
+          color: const Color(0xFFF2F4F7),
+          child: Icon(ic, size: 20, color: Colors.grey),
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: img.isEmpty
+              ? box(Icons.image_not_supported_outlined)
+              : Image.network(img, width: 44, height: 44, fit: BoxFit.cover,
+                  errorBuilder: (c, e, st) => box(Icons.broken_image_outlined)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Text('${it['name'] ?? ''}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+        Text('${it['picked'] ?? 0}/${it['quantity'] ?? 1}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+      ]),
+    );
+  }
+
   void _showOrderDetail(Map<String, dynamic> o) {
     final mins = (((o['duration_seconds'] as num?) ?? 0) / 60).ceil();
     final onTime = o['on_time'] == true;
@@ -183,6 +211,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ]),
         );
     showModalBottomSheet<void>(
+      isScrollControlled: true,
       context: context,
       builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -196,6 +225,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
             row('Items picked', '${o['items_picked']}/${o['items_needed']}'),
             row('Pick time', '$mins min'),
             row('Status', onTime ? 'On time' : 'Late'),
+            const SizedBox(height: 8),
+            Text('Items', style: const TextStyle(fontWeight: FontWeight.w800)),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final it in (o['items'] is List ? o['items'] as List : const []))
+                    if (it is Map) _itemTile(it),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
