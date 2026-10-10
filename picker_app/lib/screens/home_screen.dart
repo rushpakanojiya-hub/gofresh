@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _busy = false;
   String _workflow = '';
   String _presenceStore = '';
+  Map<String, dynamic> _sum = {};
 
   Map<String, dynamic>? _task;
   int _shownTaskId = 0;
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadStaff();
+    _loadProfileSummary();
     _refresh().then((_) => _pollTask());
     _timer = Timer.periodic(const Duration(seconds: 5), (_) {
       _tick++;
@@ -62,6 +64,66 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _loadProfileSummary() async {
+    try {
+      final r = await ApiService.getPickerSummary();
+      if (!mounted || r['error'] != null) return;
+      setState(() => _sum = r);
+    } catch (_) {}
+  }
+
+  String _roleLabel() {
+    if (_workflow.isEmpty || _workflow == 'picker') return 'PICKER';
+    if (_workflow == 'packer') return 'PUTTER';
+    return _workflow.toUpperCase();
+  }
+
+  int _liveSecs(int base) => base + (_online ? DateTime.now().difference(_statsAt).inSeconds : 0);
+
+  String _pHm(int s) {
+    if (s < 0) s = 0;
+    return '${(s ~/ 3600).toString().padLeft(2, '0')}h ${((s % 3600) ~/ 60).toString().padLeft(2, '0')}m';
+  }
+
+  String _pMoney(num v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Logout?'),
+        content: const Text('You will need to login again with OTP.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Logout', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _logout();
+  }
+
+  Widget _pStat(String value, String label, Color c) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FA),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c)),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+          ],
+        ),
+      ),
+    );
+  }
   Future<void> _loadStaff() async {
     final s = await ApiService.getSavedStaff();
     final n = s?['name']?.toString();
@@ -702,41 +764,98 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _profileTab() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 24),
-          const CircleAvatar(
-            radius: 36,
-            backgroundColor: Color(0xFFE3F2FD),
-            child: Icon(Icons.person, size: 40, color: _blueDark),
+    final isPicker = _workflow.isEmpty || _workflow == 'picker';
+    final initial = _name.trim().isEmpty ? '?' : _name.trim()[0].toUpperCase();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      children: [
+        Center(
+          child: CircleAvatar(
+            radius: 38,
+            backgroundColor: const Color(0xFFE3F2FD),
+            child: Text(initial, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: _blueDark)),
           ),
-          const SizedBox(height: 14),
-          Text(
-            _name,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(_sub, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)),
-          const Spacer(),
-          OutlinedButton(
-            onPressed: _logout,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: const BorderSide(color: Colors.red),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        const SizedBox(height: 14),
+        Text(_name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text(_sub, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(20)),
+              child: Text(_roleLabel(),
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
             ),
-            child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _online ? const Color(0xFFE8F9EE) : const Color(0xFFF1F1F1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, size: 8, color: _online ? _green : Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(_online ? 'Online' : 'Offline',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _online ? _green : Colors.grey.shade700)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (_presenceStore.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.storefront_outlined, size: 16, color: Colors.grey.shade600),
+              const SizedBox(width: 6),
+              Text(_presenceStore, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+            ],
           ),
         ],
-      ),
+        const SizedBox(height: 26),
+        const Text('Today', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _pStat(_pHm(_liveSecs(_activeBase)), 'Active time', _ink),
+            const SizedBox(width: 10),
+            _pStat(_pHm(_liveSecs(_loginBase)), 'Login time', _ink),
+          ],
+        ),
+        if (isPicker) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _pStat('${(_sum['orders_completed'] as num?)?.toInt() ?? 0}', 'Orders', _ink),
+              const SizedBox(width: 10),
+              _pStat('${(_sum['items_picked'] as num?)?.toInt() ?? 0}', 'Items picked', _green),
+              const SizedBox(width: 10),
+              _pStat('\u20B9${_pMoney((_sum['earnings'] as num?) ?? 0)}', 'Earnings', _ink),
+            ],
+          ),
+        ],
+        const SizedBox(height: 32),
+        OutlinedButton(
+          onPressed: _confirmLogout,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            side: const BorderSide(color: Colors.red),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      ],
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final tabs = <Widget>[
@@ -750,7 +869,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(child: tabs[_tab]),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tab,
-        onTap: (i) => setState(() => _tab = i),
+        onTap: (i) {
+          setState(() => _tab = i);
+          if (i == 3) _loadProfileSummary();
+        },
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: Colors.black,
