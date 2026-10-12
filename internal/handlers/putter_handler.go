@@ -219,6 +219,25 @@ func GetPutterDashboard(c *gin.Context) {
 		shift["started_at"] = active.StartedAt
 	}
 
+	var movesToday int64
+	database.DB.Model(&models.StockMovement{}).
+		Where("warehouse_id = ? AND staff_id = ? AND movement_type = ? AND reason = ? AND created_at >= ?",
+			wid, staffID, models.MovementTransfer, "bin_move", dayStart).Count(&movesToday)
+	var reportsToday int64
+	database.DB.Model(&models.PutterPutawayReport{}).
+		Where("warehouse_id = ? AND staff_id = ? AND created_at >= ?", wid, staffID, dayStart).Count(&reportsToday)
+	unitsPlaced := 0
+	for _, t := range done {
+		unitsPlaced += t.Quantity
+	}
+	productivity := gin.H{
+		"putaway_done":  len(done),
+		"units_placed":  unitsPlaced,
+		"moves":         movesToday,
+		"reports":       reportsToday,
+		"shift_seconds": total,
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"staff": gin.H{
 			"id":          staff.ID,
@@ -230,6 +249,7 @@ func GetPutterDashboard(c *gin.Context) {
 		"shift":         shift,
 		"today_booking": booking,
 		"counts":        gin.H{"pending": len(pending), "in_progress": len(inProgress), "completed_today": len(done)},
+		"productivity":  productivity,
 		"pending":       opsPutawayRows(pending),
 		"in_progress":   opsPutawayRows(inProgress),
 		"completed":     opsPutawayRows(done),

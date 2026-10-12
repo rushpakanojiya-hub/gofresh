@@ -109,6 +109,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _productivityCard(Map<String, dynamic> p) {
+    final secs = asInt(p['shift_seconds']);
+    final done = asInt(p['putaway_done']);
+    final rate = secs >= 600 ? (done * 3600 / secs).toStringAsFixed(1) : '-';
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: cardDecoration(radius: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Productivity today', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              _stat('Put-aways', done, AppColors.green),
+              _stat('Units placed', asInt(p['units_placed']), AppColors.blue),
+              _stat('Bin moves', asInt(p['moves']), AppColors.orange),
+            ],
+          ),
+          SizedBox(height: 8),
+          Divider(height: 1, color: AppColors.line),
+          _row(Icons.timer_outlined, 'Shift time', hm(secs)),
+          Divider(height: 1, color: AppColors.line),
+          _row(Icons.speed_rounded, 'Put-aways / hour', rate),
+          Divider(height: 1, color: AppColors.line),
+          _row(Icons.report_gmailerrorred, 'Reports raised', '${asInt(p['reports'])}'),
+        ],
+      ),
+    );
+  }
+
   Widget _logoutButton() {
     return SizedBox(
       width: double.infinity,
@@ -132,6 +164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final store = asMap(_d['store']);
     final shift = asMap(_d['shift']);
     final counts = asMap(_d['counts']);
+    final prod = asMap(_d['productivity']);
     final name = (staff['name'] ?? '').toString();
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
 
@@ -224,6 +257,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
+                SizedBox(height: 14),
+                _productivityCard(prod),
                 SizedBox(height: 20),
                 _logoutButton(),
               ],
