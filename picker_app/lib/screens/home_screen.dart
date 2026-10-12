@@ -9,7 +9,6 @@ import 'login_screen.dart';
 import 'picking_screen.dart';
 import 'summary_screen.dart';
 import 'payout_screen.dart';
-import 'putter_flow.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -258,24 +257,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onToggle() async {
     if (_busy) return;
     if (_online) {
-      await _setPresence(false, _workflow);
+      await _setPresence(false, 'picker');
       return;
     }
     if (_todayBooking == null) {
       _snack('Choose a store and book a slot first');
       return;
     }
-    final wf = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => const _WorkflowSheet(),
-    );
-    if (wf == null) return;
-    await _setPresence(true, wf);
-    if (wf == 'packer' && mounted && _online) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const PutterScanScreen()));
-    }
+    await _setPresence(true, 'picker');
   }
 
   Future<void> _setPresence(bool online, String wf) async {
@@ -893,66 +882,3 @@ class _TimeBox extends StatelessWidget {
   }
 }
 
-class _WorkflowSheet extends StatefulWidget {
-  const _WorkflowSheet();
-
-  @override
-  State<_WorkflowSheet> createState() => _WorkflowSheetState();
-}
-
-class _WorkflowSheetState extends State<_WorkflowSheet> {
-  String _sel = 'picker';
-
-  Widget _item(String value, String label, IconData icon) {
-    final on = _sel == value;
-    return InkWell(
-      onTap: () => setState(() => _sel = value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 32, color: Colors.black87),
-            const SizedBox(width: 16),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-            Icon(
-              on ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: const Color(0xFF16A34A),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Choose Workflow', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const Divider(height: 24),
-            _item('picker', 'PICKER', Icons.shopping_basket_outlined),
-            _item('packer', 'PUTTER', Icons.inventory_2_outlined),
-            _item('auditor', 'AUDITOR', Icons.fact_check_outlined),
-            _item('fnv', 'FNV', Icons.eco_outlined),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, _sel),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Proceed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
