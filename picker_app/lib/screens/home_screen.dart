@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'profile_extras.dart';
 import 'package:lottie/lottie.dart';
 import '../services/api_service.dart';
 import '../utils/fmt.dart';
@@ -813,6 +814,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ],
+        const ProfileExtras(),
         const SizedBox(height: 32),
         OutlinedButton(
           onPressed: _confirmLogout,

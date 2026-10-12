@@ -127,6 +127,9 @@ class ApiService {
   // ---------- picker: tasks ----------
   static Future<Map<String, dynamic>> getPickerTask() => _get('/warehouse/picker/task');
 
+  static Future<Map<String, dynamic>> getPickerProfile() => _get('/warehouse/picker/profile');
+  static Future<Map<String, dynamic>> savePayoutDetails(Map<String, dynamic> body) => _put('/warehouse/picker/payout-details', body);
+
   static Future<Map<String, dynamic>> getPickerSummary() => _get('/warehouse/picker/summary');
   static Future<Map<String, dynamic>> getPickerHistory() => _get('/warehouse/picker/history');
   static Future<Map<String, dynamic>> getPickerToday() => _get('/warehouse/picker/today');
