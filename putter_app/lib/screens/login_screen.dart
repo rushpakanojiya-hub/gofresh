@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 bottom: false,
                 child: ClipRect(
                   child: Align(
-                    alignment: Alignment.bottomCenter,
+                    alignment: Alignment(0, -0.5),
                     child: Image.asset(
                       'assets/images/login_illustration.png',
                       width: double.infinity,
