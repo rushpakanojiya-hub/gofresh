@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../theme.dart';
 import 'login_screen.dart';
 import 'putaway_home_screen.dart';
+import 'movement_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onOpenSlots;
@@ -107,6 +108,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _snack('Network error. Please try again.');
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _openMovement() async {
+    final on = asMap(_d['shift'])['active'] == true;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => MovementScreen(shiftActive: on)));
+    if (mounted) _load(silent: true);
   }
 
   Future<void> _openPutaway() async {
@@ -372,7 +379,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   enabled: true, badge: asInt(counts['pending']), onTap: _openPutaway),
               _tile('Picking', 'Pick single or multi orders', Icons.shopping_cart_rounded, Icons.inventory_rounded, enabled: false),
               _tile('Consolidation', 'Consolidate order items at one place', Icons.layers_rounded, Icons.all_inbox_rounded, enabled: false),
-              _tile('Inventory Movement', 'Move SKUs from one location or bin to another', Icons.alt_route_rounded, Icons.pin_drop_rounded, enabled: false),
+              _tile('Inventory Movement', 'Move SKUs from one location or bin to another', Icons.alt_route_rounded, Icons.pin_drop_rounded, enabled: true, onTap: _openMovement),
             ],
           ),
         ],

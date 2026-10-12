@@ -118,6 +118,13 @@ class ApiService {
   static Future<Map<String, dynamic>> completeTask(int id, int binId) =>
       _put('/warehouse/putaway/tasks/$id/complete', {'bin_id': binId});
 
+  // ---------- movement ----------
+  static Future<Map<String, dynamic>> movementLookup(String code) =>
+      _post('/warehouse/putter/movements/lookup', {'code': code});
+  static Future<Map<String, dynamic>> moveStock(int productId, int fromBin, int toBin) =>
+      _post('/warehouse/putter/movements', {'product_id': productId, 'from_bin_id': fromBin, 'to_bin_id': toBin});
+  static Future<Map<String, dynamic>> movementHistory() => _get('/warehouse/putter/movements');
+
   // ---------- slots ----------
   static Future<Map<String, dynamic>> getSlots(String date) => _get('/warehouse/putter/slots?date=$date');
   static Future<Map<String, dynamic>> bookSlot(int slotId, String date) =>
