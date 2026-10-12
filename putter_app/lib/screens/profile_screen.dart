@@ -97,11 +97,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _stat(String label, int v, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text('$v', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
+          SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 11, color: AppColors.muted, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _logoutButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _confirmLogout,
+        icon: Icon(Icons.logout),
+        label: Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.red,
+          side: BorderSide(color: AppColors.red),
+          padding: EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final staff = asMap(_d['staff']);
     final store = asMap(_d['store']);
     final shift = asMap(_d['shift']);
+    final counts = asMap(_d['counts']);
     final name = (staff['name'] ?? '').toString();
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
 
@@ -112,7 +142,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body = ListView(
         physics: AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(24, 140, 24, 24),
-        children: [Center(child: Text(_error!, style: TextStyle(color: AppColors.muted)))],
+        children: [
+          Center(child: Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted))),
+          SizedBox(height: 16),
+          Center(
+            child: OutlinedButton(
+              onPressed: () {
+                setState(() => _loading = true);
+                _load();
+              },
+              child: Text('Retry'),
+            ),
+          ),
+          SizedBox(height: 24),
+          _logoutButton(),
+        ],
       );
     } else {
       body = ListView(
@@ -160,21 +204,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-                SizedBox(height: 20),
-                SizedBox(
+                SizedBox(height: 14),
+                Container(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _confirmLogout,
-                    icon: Icon(Icons.logout),
-                    label: Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.red,
-                      side: BorderSide(color: AppColors.red),
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: cardDecoration(radius: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Put-away today', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _stat('Pending', asInt(counts['pending']), AppColors.orange),
+                          _stat('In progress', asInt(counts['in_progress']), AppColors.blue),
+                          _stat('Done today', asInt(counts['completed_today']), AppColors.green),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
+                SizedBox(height: 20),
+                _logoutButton(),
               ],
             ),
           ),
