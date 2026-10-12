@@ -17,7 +17,11 @@ type putterDeviceTokenRequest struct {
 
 // RegisterPutterDeviceToken: POST /warehouse/putter/device-token
 func RegisterPutterDeviceToken(c *gin.Context) {
-	staffID := c.MustGet("staff_id").(uint)
+	staffID, ok := pickerStaffID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	var req putterDeviceTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -47,7 +51,11 @@ func RegisterPutterDeviceToken(c *gin.Context) {
 
 // UnregisterPutterDeviceToken: DELETE /warehouse/putter/device-token?token=...
 func UnregisterPutterDeviceToken(c *gin.Context) {
-	staffID := c.MustGet("staff_id").(uint)
+	staffID, ok := pickerStaffID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	tok := strings.TrimSpace(c.Query("token"))
 	if tok == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "token required"})
