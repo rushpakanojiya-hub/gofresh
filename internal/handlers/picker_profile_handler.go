@@ -93,6 +93,7 @@ func GetPickerProfileDetails(c *gin.Context) {
 		"name":         staff.Name,
 		"phone":        staff.Phone,
 		"member_since": staff.CreatedAt,
+		"photo_url":    pickerPhotoURL(staffID),
 		"store": gin.H{
 			"name":    staff.Warehouse.Name,
 			"city":    staff.Warehouse.City,

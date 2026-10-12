@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'profile_photo.dart';
 import 'profile_extras.dart';
 import 'package:lottie/lottie.dart';
 import '../services/api_service.dart';
@@ -741,13 +742,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
       children: [
-        Center(
-          child: CircleAvatar(
-            radius: 38,
-            backgroundColor: const Color(0xFFE3F2FD),
-            child: Text(initial, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: _blueDark)),
-          ),
-        ),
+        ProfilePhotoAvatar(initial: initial),
         const SizedBox(height: 14),
         Text(_name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),

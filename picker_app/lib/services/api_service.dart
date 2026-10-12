@@ -130,6 +130,16 @@ class ApiService {
   static Future<Map<String, dynamic>> getPickerProfile() => _get('/warehouse/picker/profile');
   static Future<Map<String, dynamic>> savePayoutDetails(Map<String, dynamic> body) => _put('/warehouse/picker/payout-details', body);
 
+  static Future<Map<String, dynamic>> uploadProfilePhoto(String filePath) async {
+    final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/warehouse/picker/profile-photo'));
+    final t = await getToken();
+    if (t != null) req.headers['Authorization'] = 'Bearer $t';
+    req.files.add(await http.MultipartFile.fromPath('image', filePath));
+    final streamed = await req.send().timeout(const Duration(seconds: 60));
+    final res = await http.Response.fromStream(streamed);
+    return _decode(res);
+  }
+
   static Future<Map<String, dynamic>> getPickerSummary() => _get('/warehouse/picker/summary');
   static Future<Map<String, dynamic>> getPickerHistory() => _get('/warehouse/picker/history');
   static Future<Map<String, dynamic>> getPickerToday() => _get('/warehouse/picker/today');

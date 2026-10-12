@@ -146,6 +146,7 @@ func SetupRoutes(router *gin.Engine) {
 			pickerRoutes.POST("/orders/:id/handover", handlers.PickerHandover)
 			pickerRoutes.GET("/summary", handlers.GetPickerSummary)
 			pickerRoutes.GET("/history", handlers.GetPickerHistory)
+                        pickerRoutes.POST("/profile-photo", middleware.RateLimit(10, time.Minute), handlers.UploadPickerPhoto)
                         pickerRoutes.GET("/profile", handlers.GetPickerProfileDetails)
                         pickerRoutes.PUT("/payout-details", handlers.SavePickerPayoutDetails)
                         pickerRoutes.GET("/orders/:id/handover-qr", handlers.GetPickerHandoverQR)
