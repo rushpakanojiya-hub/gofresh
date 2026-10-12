@@ -47,6 +47,16 @@ class _ShellScreenState extends State<ShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) setState(() => _tab = 0);
+      },
+      child: _scaffold(),
+    );
+  }
+
+  Widget _scaffold() {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: KeyedSubtree(key: ValueKey('$_tab-$_filter-$_rev'), child: _page()),
