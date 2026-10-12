@@ -22,6 +22,7 @@ class PutterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: PushService.navKey,
       title: 'GoFresh Putter',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -61,6 +62,7 @@ class _SplashDeciderState extends State<SplashDecider> {
       context,
       MaterialPageRoute(builder: (_) => token != null ? const ShellScreen() : const LoginScreen()),
     );
+    PushService.handleInitial();
   }
 
   @override
