@@ -235,6 +235,7 @@ func AssignPutawayTask(c *gin.Context) {
 		return
 	}
 	services.LogWarehouseAction(wid, actorID, c.GetString("staff_name"), "assign_putaway", "putaway_task", strconv.Itoa(int(id)), before, after)
+	go services.SendPushToPutter(uint(req.PutterID), "New put-away task", "A put-away task has been assigned to you. Tap to view.", map[string]string{"type": "putaway_assigned", "task_id": strconv.Itoa(int(id))})
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": id, "putter_id": req.PutterID})
 }
 

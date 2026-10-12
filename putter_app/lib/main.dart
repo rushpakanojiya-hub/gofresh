@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/api_service.dart';
+import 'services/push_service.dart';
 import 'theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
+  await PushService.init();
   runApp(const PutterApp());
 }
 
@@ -52,6 +54,7 @@ class _SplashDeciderState extends State<SplashDecider> {
 
   Future<void> _check() async {
     final token = await ApiService.getToken();
+    if (token != null) PushService.register();
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     Navigator.pushReplacement(

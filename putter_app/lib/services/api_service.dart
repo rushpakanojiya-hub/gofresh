@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'push_service.dart';
 
 class ApiService {
   static const String baseUrl = 'https://gofresh-evl7.onrender.com/api/v1';
@@ -59,6 +60,7 @@ class ApiService {
   }
 
   static Future<void> logout() async {
+    await PushService.unregister();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_staffKey);
@@ -97,6 +99,12 @@ class ApiService {
   static Future<Map<String, dynamic>> getDashboard() => _get('/warehouse/putter/dashboard');
   static Future<Map<String, dynamic>> startShift() => _post('/warehouse/putter/shift/start', {});
   static Future<Map<String, dynamic>> endShift() => _post('/warehouse/putter/shift/end', {});
+
+  static Future<Map<String, dynamic>> registerDeviceToken(String token) =>
+      _post('/warehouse/putter/device-token', {'token': token, 'platform': 'android'});
+
+  static Future<Map<String, dynamic>> unregisterDeviceToken(String token) =>
+      _delete('/warehouse/putter/device-token?token=${Uri.encodeQueryComponent(token)}');
 
   // ---------- putaway ----------
   static Future<Map<String, dynamic>> _put(String path, Map<String, dynamic> body) async {

@@ -151,6 +151,8 @@ func SetupRoutes(router *gin.Engine) {
                     putterRoutes.POST("/movements/lookup", handlers.PutterMovementLookup)
                     putterRoutes.POST("/movements", handlers.PutterMoveStock)
                     putterRoutes.GET("/movements", handlers.GetPutterMovements)
+	putterRoutes.POST("/device-token", handlers.RegisterPutterDeviceToken)
+	putterRoutes.DELETE("/device-token", handlers.UnregisterPutterDeviceToken)
                     pickerRoutes := warehouse.Group("/picker")
 			pickerRoutes.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly(), handlers.PickerRoleOnly())
 			pickerRoutes.GET("/stores", handlers.GetPickerStores)

@@ -9,6 +9,7 @@ type DeviceToken struct {
 	ID                uint      `json:"id" gorm:"primaryKey"`
 	UserID            *uint     `json:"user_id,omitempty"`
 	DeliveryPartnerID *uint     `json:"delivery_partner_id,omitempty"`
+	StaffID           *uint     `json:"staff_id,omitempty" gorm:"index"`
 	Token             string    `json:"token" gorm:"uniqueIndex;not null"`
 	Platform          string    `json:"platform"` // "android" or "ios"
 	CreatedAt         time.Time `json:"created_at"`

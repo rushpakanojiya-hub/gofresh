@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 import 'shell_screen.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -45,6 +46,7 @@ class _OtpScreenState extends State<OtpScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       if (data['token'] != null) {
+        PushService.register();
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const ShellScreen()),
