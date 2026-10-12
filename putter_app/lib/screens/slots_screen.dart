@@ -11,8 +11,7 @@ class SlotsScreen extends StatefulWidget {
 }
 
 class _SlotsScreenState extends State<SlotsScreen> {
-  late final List<DateTime> _days;
-  int _sel = 0;
+  late final DateTime _today;
   Map<String, dynamic> _data = {};
   List<Map<String, dynamic>> _bookings = [];
   bool _loading = true;
@@ -24,7 +23,7 @@ class _SlotsScreenState extends State<SlotsScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _days = List.generate(7, (i) => DateTime(now.year, now.month, now.day + i));
+    _today = DateTime(now.year, now.month, now.day);
     _refresh();
   }
 
@@ -37,7 +36,7 @@ class _SlotsScreenState extends State<SlotsScreen> {
 
   Future<void> _loadSlots() async {
     try {
-      final r = await ApiService.getSlots(dateKey(_days[_sel]));
+      final r = await ApiService.getSlots(dateKey(_today));
       if (!mounted) return;
       setState(() {
         if (r['error'] != null) {
@@ -70,21 +69,12 @@ class _SlotsScreenState extends State<SlotsScreen> {
     await Future.wait([_loadSlots(), _loadBookings()]);
   }
 
-  Future<void> _pickDay(int i) async {
-    if (i == _sel) return;
-    setState(() {
-      _sel = i;
-      _loading = true;
-    });
-    await _loadSlots();
-  }
-
   Future<void> _book() async {
     final id = _selSlot;
     if (id == null || _booking) return;
     setState(() => _booking = true);
     try {
-      final r = await ApiService.bookSlot(id, dateKey(_days[_sel]));
+      final r = await ApiService.bookSlot(id, dateKey(_today));
       if (!mounted) return;
       _snack(r['error'] != null ? r['error'].toString() : 'Slot booked');
       await _refresh();
@@ -113,53 +103,11 @@ class _SlotsScreenState extends State<SlotsScreen> {
     try {
       final r = await ApiService.cancelBooking(id);
       if (!mounted) return;
-      if (r['error'] != null) {
-        _snack(r['error'].toString());
-      } else {
-        _snack('Booking cancelled');
-      }
+      _snack(r['error'] != null ? r['error'].toString() : 'Booking cancelled');
       await _refresh();
     } catch (_) {
       _snack('Network error. Please try again.');
     }
-  }
-
-  Widget _dayChip(int i) {
-    final d = _days[i];
-    final on = i == _sel;
-    final key = dateKey(d);
-    final has = _bookings.any((b) => b['date'] == key);
-    return GestureDetector(
-      onTap: () => _pickDay(i),
-      child: Container(
-        width: 62,
-        margin: EdgeInsets.only(right: 10),
-        padding: EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: on ? AppColors.blue : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: on ? AppColors.blue : AppColors.line),
-        ),
-        child: Column(
-          children: [
-            Text(i == 0 ? 'Today' : weekdayShort(d),
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: on ? Colors.white70 : AppColors.muted)),
-            SizedBox(height: 4),
-            Text('${d.day}',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: on ? Colors.white : AppColors.ink)),
-            SizedBox(height: 4),
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: has ? (on ? Colors.white : AppColors.green) : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _slotCard(Map<String, dynamic> s) {
@@ -169,7 +117,8 @@ class _SlotsScreenState extends State<SlotsScreen> {
     final mine = s['booked_by_me'] == true;
     final ended = s['ended'] == true;
     final full = cap > 0 && booked >= cap;
-    final disabled = mine || full || ended;
+    final hasMine = (asList(_data['slots'])).any((x) => x['booked_by_me'] == true);
+    final disabled = mine || full || ended || hasMine;
     final selected = _selSlot == id;
     String label = 'Open';
     Color color = AppColors.green;
@@ -192,7 +141,7 @@ class _SlotsScreenState extends State<SlotsScreen> {
         child: Opacity(
           opacity: (ended || full) && !mine ? 0.6 : 1,
           child: Container(
-            padding: EdgeInsets.all(14),
+            padding: EdgeInsets.fromLTRB(6, 12, 14, 12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -203,13 +152,11 @@ class _SlotsScreenState extends State<SlotsScreen> {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(color: Color(0xFFEFF5FF), shape: BoxShape.circle),
-                  child: Icon(selected ? Icons.check_rounded : Icons.schedule_rounded, color: AppColors.blue),
+                Checkbox(
+                  value: selected || mine,
+                  activeColor: AppColors.blue,
+                  onChanged: disabled ? null : (v) => setState(() => _selSlot = selected ? null : id),
                 ),
-                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,10 +237,7 @@ class _SlotsScreenState extends State<SlotsScreen> {
 
     Widget slotArea;
     if (_loading) {
-      slotArea = Padding(
-        padding: EdgeInsets.symmetric(vertical: 36),
-        child: Center(child: CircularProgressIndicator()),
-      );
+      slotArea = Padding(padding: EdgeInsets.symmetric(vertical: 36), child: Center(child: CircularProgressIndicator()));
     } else if (_error != null) {
       slotArea = Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -302,7 +246,7 @@ class _SlotsScreenState extends State<SlotsScreen> {
     } else if (slots.isEmpty) {
       slotArea = Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: Text('No slots available for this day', style: TextStyle(color: AppColors.muted))),
+        child: Center(child: Text('No slots available today', style: TextStyle(color: AppColors.muted))),
       );
     } else {
       slotArea = Column(children: [for (final s in slots) _slotCard(s)]);
@@ -314,7 +258,11 @@ class _SlotsScreenState extends State<SlotsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [InkWell(onTap: () => Navigator.pop(context), child: Icon(Icons.arrow_back, color: Colors.white)), SizedBox(width: 12), Text('Book your slot', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))]),
+              Row(children: [
+                InkWell(onTap: () => Navigator.pop(context), child: Icon(Icons.arrow_back, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Book your slot', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+              ]),
               SizedBox(height: 6),
               Row(
                 children: [
@@ -334,42 +282,40 @@ class _SlotsScreenState extends State<SlotsScreen> {
             onRefresh: _refresh,
             child: ListView(
               physics: AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(0, 14, 0, 24),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
-                SizedBox(
-                  height: 94,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _days.length,
-                    itemBuilder: (c, i) => _dayChip(i),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: Color(0xFFEFF5FF), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
                     children: [
-                      _sectionTitle('Available slots - ${longDate(_days[_sel])}'),
-                      slotArea,
-                      SizedBox(height: 12),
-                      _sectionTitle('My bookings'),
-                      if (_bookings.isEmpty)
-                        Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('No upcoming bookings', style: TextStyle(color: AppColors.muted)),
-                        ),
-                      for (final b in _bookings) _bookingTile(b),
+                      Icon(Icons.info_outline, size: 18, color: AppColors.blue),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text("You can book only today's slot. Tick a slot and tap Book slot.",
+                            style: TextStyle(fontSize: 12, color: AppColors.blue, fontWeight: FontWeight.w600)),
+                      ),
                     ],
                   ),
                 ),
+                SizedBox(height: 14),
+                _sectionTitle('Today - ${longDate(_today)}'),
+                slotArea,
+                SizedBox(height: 12),
+                _sectionTitle('My bookings'),
+                if (_bookings.isEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('No upcoming bookings', style: TextStyle(color: AppColors.muted)),
+                  ),
+                for (final b in _bookings) _bookingTile(b),
               ],
             ),
           ),
         ),
         if (_selSlot != null)
           Container(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [BoxShadow(color: Color(0x14101828), blurRadius: 14, offset: Offset(0, -4))],

@@ -383,6 +383,10 @@ func BookPutterSlot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date"})
 		return
 	}
+	if req.Date != putterSlotToday() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You can only book today's slot"})
+		return
+	}
 	slotID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid slot id"})

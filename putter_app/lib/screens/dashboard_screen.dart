@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import 'login_screen.dart';
@@ -36,7 +37,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _snack(String m) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(m)));
   }
 
   Future<void> _forceLogout() async {
@@ -105,73 +108,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
-  Widget _hdrChip(IconData? icon, String text) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white.withAlpha(36), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 13, color: Colors.white), SizedBox(width: 5)],
-          Text(text, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-        ],
-      ),
+  Widget _topBar(Map<String, dynamic> store, bool active) {
+    final storeName = (store['name'] ?? '').toString();
+    return Row(
+      children: [
+        Icon(Icons.location_on_outlined, size: 28, color: AppColors.ink),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(storeName.isEmpty ? 'GoFresh' : storeName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        ),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? Color(0xFFE8F9EE) : Color(0xFFF2F4F7),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.circle, size: 8, color: active ? AppColors.green : Color(0xFF98A2B3)),
+              SizedBox(width: 6),
+              Text(active ? 'On shift' : 'Off shift',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: active ? AppColors.green : AppColors.muted)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _header(Map<String, dynamic> staff, Map<String, dynamic> store, bool active) {
-    final name = (staff['name'] ?? '').toString();
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    final storeName = (store['name'] ?? '').toString();
-    return GradientHeader(
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 27,
-            backgroundColor: Colors.white,
-            child: Text(initial, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.blue)),
-          ),
-          SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_greeting(), style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
-                Text(name, style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-                SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    _hdrChip(Icons.badge_outlined, (staff['employee_id'] ?? '-').toString()),
-                    if (storeName.isNotEmpty) _hdrChip(Icons.storefront_outlined, storeName),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(color: Colors.white.withAlpha(36), borderRadius: BorderRadius.circular(20)),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.circle, size: 8, color: active ? Color(0xFF4ADE80) : Colors.white54),
-                SizedBox(width: 6),
-                Text(active ? 'On shift' : 'Off shift',
-                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Widget _welcome(String name, bool active) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(color: active ? AppColors.green : Color(0xFF98A2B3), shape: BoxShape.circle),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text('Welcome $name!',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        ),
+      ],
     );
   }
 
@@ -216,26 +200,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Row(
             children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(color: active ? AppColors.green : Color(0xFF98A2B3), shape: BoxShape.circle),
-              ),
-              SizedBox(width: 8),
-              Text(active ? 'On shift' : 'Off shift',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
+              Text('My shift', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
               Spacer(),
               Text('Today: ${hm(asInt(shift['today_seconds']))}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
             ],
           ),
           if (active && started != null) ...[
-            SizedBox(height: 12),
+            SizedBox(height: 10),
             _ShiftClock(start: started),
             SizedBox(height: 2),
             Text('Started at ${clock12(started)}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
           ],
           if (hasBooking) ...[
-            SizedBox(height: 14),
+            SizedBox(height: 12),
             InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: widget.onOpenSlots,
@@ -265,7 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ],
-          SizedBox(height: 16),
+          SizedBox(height: 14),
           button,
           if (!active && hint.isNotEmpty)
             Padding(
@@ -283,27 +260,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _stat(String label, int value, String key, Color color, IconData icon) {
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => widget.onOpenTasks(key),
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, size: 20, color: color),
-              SizedBox(height: 6),
-              Text('$value', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
-              SizedBox(height: 2),
-              Text(label, style: TextStyle(fontSize: 11, color: AppColors.muted, fontWeight: FontWeight.w600)),
-            ],
-          ),
+  Widget _art(IconData main, IconData small, bool enabled) {
+    final c = enabled ? AppColors.blue : Color(0xFF98A2B3);
+    return Container(
+      height: 96,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: enabled ? [Color(0xFFE6EDFF), Color(0xFFF6F8FF)] : [Color(0xFFF2F4F7), Color(0xFFFAFAFB)],
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(main, size: 58, color: c),
+          Positioned(right: 18, bottom: 10, child: Icon(small, size: 26, color: enabled ? Color(0xFFD6A25C) : Color(0xFFB0B7C3))),
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(String title, String desc, IconData main, IconData small, {required bool enabled, int badge = 0, VoidCallback? onTap}) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap ?? () => _snack('$title is not available for the putter role yet'),
+      child: Container(
+        padding: EdgeInsets.all(14),
+        decoration: cardDecoration(radius: 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(title,
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: enabled ? AppColors.ink : AppColors.muted)),
+                ),
+                if (badge > 0)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(12)),
+                    child: Text('$badge', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                  ),
+                if (!enabled) StatusPill('Soon', AppColors.muted),
+              ],
+            ),
+            SizedBox(height: 6),
+            Text(desc, style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.3)),
+            Spacer(),
+            _art(main, small, enabled),
+          ],
         ),
       ),
     );
@@ -317,6 +327,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final counts = asMap(_d['counts']);
     final booking = asMap(_d['today_booking']);
     final active = shift['active'] == true;
+    final name = (staff['name'] ?? '').toString();
+    final top = MediaQuery.of(context).padding.top;
 
     Widget body;
     if (_loading) {
@@ -334,34 +346,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else {
       body = ListView(
         physics: AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.zero,
+        padding: EdgeInsets.fromLTRB(18, top + 16, 18, 24),
         children: [
-          _header(staff, store, active),
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _shiftCard(shift, booking),
-                SizedBox(height: 18),
-                Text('Your tasks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                SizedBox(height: 12),
-                Row(
-                  children: [
-                    _stat('Pending', asInt(counts['pending']), 'pending', AppColors.orange, Icons.hourglass_top_rounded),
-                    SizedBox(width: 10),
-                    _stat('In progress', asInt(counts['in_progress']), 'in_progress', AppColors.blue, Icons.sync_rounded),
-                    SizedBox(width: 10),
-                    _stat('Completed', asInt(counts['completed_today']), 'completed', AppColors.green, Icons.task_alt_rounded),
-                  ],
-                ),
-              ],
-            ),
+          _topBar(store, active),
+          SizedBox(height: 22),
+          _welcome(name, active),
+          SizedBox(height: 18),
+          _shiftCard(shift, booking),
+          SizedBox(height: 18),
+          GridView.count(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 14,
+            childAspectRatio: 0.74,
+            children: [
+              _tile('Put-Away', 'Use this for put-away bins and items', Icons.inventory_2_rounded, Icons.move_to_inbox_rounded,
+                  enabled: true, badge: asInt(counts['pending']), onTap: () => widget.onOpenTasks('pending')),
+              _tile('Picking', 'Pick single or multi orders', Icons.shopping_cart_rounded, Icons.inventory_rounded, enabled: false),
+              _tile('Consolidation', 'Consolidate order items at one place', Icons.layers_rounded, Icons.all_inbox_rounded, enabled: false),
+              _tile('Inventory Movement', 'Move SKUs from one location or bin to another', Icons.alt_route_rounded, Icons.pin_drop_rounded, enabled: false),
+            ],
           ),
         ],
       );
     }
-    return RefreshIndicator(onRefresh: () => _load(), child: body);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+      child: Container(color: Colors.white, child: RefreshIndicator(onRefresh: () => _load(), child: body)),
+    );
   }
 }
 
