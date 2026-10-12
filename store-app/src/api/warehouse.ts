@@ -340,6 +340,10 @@ export const assignPutawayTask = (taskId: number, putterId: number) =>
     .put(`/warehouse/putaway/tasks/${taskId}/assign`, { putter_id: putterId })
     .then((r) => r.data as { success: boolean; task_id: number; putter_id: number })
 
+export const getPutawayReports = () =>
+  apiClient
+    .get('/warehouse/putaway/reports')
+    .then((r) => (r.data?.reports ?? []) as import('../types/warehouse').PutawayReportRow[])
 export const getLocationOccupancy = () =>
   apiClient
     .get('/warehouse/locations/occupancy')

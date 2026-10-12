@@ -683,6 +683,19 @@ export interface PutawayData {
   }
 }
 
+export interface PutawayReportRow {
+  id: number
+  task_id: number
+  product_id: number
+  product_name: string
+  putter_id: number
+  putter_name: string
+  type: string
+  quantity: number
+  reason?: string
+  created_at: string
+}
+
 // ---- Location occupancy ----
 
 export interface OccupancyBin {

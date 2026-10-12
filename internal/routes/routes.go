@@ -205,6 +205,7 @@ func SetupRoutes(router *gin.Engine) {
 				warehouseAuthed.GET("/ops/picking-monitor", middleware.RequireWarehouseRole(middleware.RoleManagement...), handlers.GetPickingMonitor)
 				warehouseAuthed.PUT("/ops/picking/:id/reassign", middleware.RequireWarehouseRole(middleware.RoleManagement...), handlers.ReassignPickingTask)
 				warehouseAuthed.GET("/putaway/tasks", middleware.RequireWarehouseRole(middleware.RoleInventoryOps...), handlers.GetPutawayTasks)
+				warehouseAuthed.GET("/putaway/reports", middleware.RequireWarehouseRole(middleware.RoleInventoryOps...), handlers.GetPutawayReports)
 				warehouseAuthed.PUT("/putaway/tasks/:id/assign", middleware.RequireWarehouseRole(middleware.RoleInventoryOps...), handlers.AssignPutawayTask)
 				warehouseAuthed.GET("/putaway/my-tasks", middleware.RequireWarehouseRole(middleware.RolePutters...), handlers.GetMyPutawayTasks)
 				warehouseAuthed.PUT("/putaway/tasks/:id/start", middleware.RequireWarehouseRole(middleware.RolePutters...), handlers.StartPutawayTask)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { assignPutawayTask, getPutawayTasks } from '../api/warehouse'
-import type { PutawayBinRef, PutawayData, PutawayTaskRow } from '../types/warehouse'
+import { assignPutawayTask, getPutawayReports, getPutawayTasks } from '../api/warehouse'
+import type { PutawayBinRef, PutawayData, PutawayReportRow, PutawayTaskRow } from '../types/warehouse'
 import { getErrorMessage } from '../utils/errors'
 
 type Tab = 'open' | 'pending' | 'in_progress' | 'completed'
@@ -38,10 +38,12 @@ export default function Putaway() {
   const [putterId, setPutterId] = useState<number | ''>('')
   const [saving, setSaving] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
+  const [reports, setReports] = useState<PutawayReportRow[]>([])
 
   const load = useCallback(async () => {
     try {
       setData(await getPutawayTasks(tab === 'open' ? undefined : tab))
+      setReports(await getPutawayReports().catch(() => [] as PutawayReportRow[]))
       setError(null)
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load putaway tasks.'))
@@ -211,6 +213,48 @@ export default function Putaway() {
           </table>
         </div>
       )}
+
+      <div className="mt-8">
+        <h2 className="font-display text-lg font-semibold mb-3">Putter reports</h2>
+        {reports.length === 0 ? (
+          <div className="border border-slate-800 rounded-xl bg-slate-900 p-8 text-center text-sm text-slate-500">
+            No damaged or short reports.
+          </div>
+        ) : (
+          <div className="border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase">
+                <tr>
+                  <th className="text-left px-4 py-2.5">Time</th>
+                  <th className="text-left px-4 py-2.5">Product</th>
+                  <th className="text-left px-4 py-2.5">Putter</th>
+                  <th className="text-left px-4 py-2.5">Type</th>
+                  <th className="text-right px-4 py-2.5">Qty</th>
+                  <th className="text-left px-4 py-2.5">Reason</th>
+                  <th className="text-right px-4 py-2.5">Task</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {reports.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-800/30">
+                    <td className="px-4 py-3 text-xs text-slate-400">{fmtDate(r.created_at)}</td>
+                    <td className="px-4 py-3 font-medium">{r.product_name || `Product #${r.product_id}`}</td>
+                    <td className="px-4 py-3">{r.putter_name || `#${r.putter_id}`}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs uppercase ${r.type === 'damaged' ? 'text-rose-300' : 'text-amber-300'}`}>
+                        {r.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">{r.quantity}</td>
+                    <td className="px-4 py-3 text-xs text-slate-400">{r.reason || '\u2014'}</td>
+                    <td className="px-4 py-3 text-right text-xs text-slate-500">#{r.task_id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {target && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
