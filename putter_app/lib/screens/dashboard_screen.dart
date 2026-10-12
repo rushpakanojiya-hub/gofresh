@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import 'login_screen.dart';
+import 'putaway_home_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onOpenSlots;
@@ -106,6 +107,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _snack('Network error. Please try again.');
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _openPutaway() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => PutawayHomeScreen()));
+    if (mounted) _load(silent: true);
   }
 
   Widget _topBar(Map<String, dynamic> store, bool active) {
@@ -363,7 +369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             childAspectRatio: 0.74,
             children: [
               _tile('Put-Away', 'Use this for put-away bins and items', Icons.inventory_2_rounded, Icons.move_to_inbox_rounded,
-                  enabled: true, badge: asInt(counts['pending']), onTap: () => widget.onOpenTasks('pending')),
+                  enabled: true, badge: asInt(counts['pending']), onTap: _openPutaway),
               _tile('Picking', 'Pick single or multi orders', Icons.shopping_cart_rounded, Icons.inventory_rounded, enabled: false),
               _tile('Consolidation', 'Consolidate order items at one place', Icons.layers_rounded, Icons.all_inbox_rounded, enabled: false),
               _tile('Inventory Movement', 'Move SKUs from one location or bin to another', Icons.alt_route_rounded, Icons.pin_drop_rounded, enabled: false),

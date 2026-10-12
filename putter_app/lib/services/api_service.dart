@@ -98,6 +98,26 @@ class ApiService {
   static Future<Map<String, dynamic>> startShift() => _post('/warehouse/putter/shift/start', {});
   static Future<Map<String, dynamic>> endShift() => _post('/warehouse/putter/shift/end', {});
 
+  // ---------- putaway ----------
+  static Future<Map<String, dynamic>> _put(String path, Map<String, dynamic> body) async {
+    final res = await http
+        .put(Uri.parse('$baseUrl$path'), headers: await _headers(), body: jsonEncode(body))
+        .timeout(const Duration(seconds: 25));
+    return _decode(res);
+  }
+
+  static Future<Map<String, dynamic>> putawayTask(int id) => _get('/warehouse/putter/tasks/$id');
+  static Future<Map<String, dynamic>> verifyItem(int id, String code) =>
+      _post('/warehouse/putter/tasks/$id/verify-item', {'code': code});
+  static Future<Map<String, dynamic>> scanBin(int id, String code) =>
+      _post('/warehouse/putter/tasks/$id/scan-bin', {'code': code});
+  static Future<Map<String, dynamic>> reportIssue(int id, String type, int qty, String reason) =>
+      _post('/warehouse/putter/tasks/$id/report', {'type': type, 'quantity': qty, 'reason': reason});
+  static Future<Map<String, dynamic>> putawayHistory() => _get('/warehouse/putter/history');
+  static Future<Map<String, dynamic>> startTask(int id) => _put('/warehouse/putaway/tasks/$id/start', {});
+  static Future<Map<String, dynamic>> completeTask(int id, int binId) =>
+      _put('/warehouse/putaway/tasks/$id/complete', {'bin_id': binId});
+
   // ---------- slots ----------
   static Future<Map<String, dynamic>> getSlots(String date) => _get('/warehouse/putter/slots?date=$date');
   static Future<Map<String, dynamic>> bookSlot(int slotId, String date) =>
