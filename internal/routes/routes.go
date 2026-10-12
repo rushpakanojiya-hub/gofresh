@@ -134,7 +134,12 @@ func SetupRoutes(router *gin.Engine) {
 			warehouse.POST("/send-otp", middleware.RateLimit(5, time.Minute), handlers.SendWarehouseStaffOTP)
 			warehouse.POST("/verify-otp", middleware.RateLimit(10, time.Minute), handlers.VerifyWarehouseStaffOTP)
 
-			pickerRoutes := warehouse.Group("/picker")
+			putterRoutes := warehouse.Group("/putter")
+                    putterRoutes.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly(), handlers.PutterRoleOnly())
+                    putterRoutes.GET("/dashboard", handlers.GetPutterDashboard)
+                    putterRoutes.POST("/shift/start", handlers.StartPutterShift)
+                    putterRoutes.POST("/shift/end", handlers.EndPutterShift)
+                    pickerRoutes := warehouse.Group("/picker")
 			pickerRoutes.Use(middleware.AuthMiddleware(), middleware.WarehouseStaffOnly(), handlers.PickerRoleOnly())
 			pickerRoutes.GET("/stores", handlers.GetPickerStores)
 			pickerRoutes.POST("/slots/:id/book", handlers.BookPickerSlot)
