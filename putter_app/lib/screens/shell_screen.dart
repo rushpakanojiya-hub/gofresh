@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'dashboard_screen.dart';
+import 'tasks_screen.dart';
+import 'scan_screen.dart';
 import 'slots_screen.dart';
 import 'profile_screen.dart';
 
@@ -14,15 +16,32 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> {
   int _tab = 0;
+  int _rev = 0;
+  String _filter = 'pending';
+
+  Future<void> _openSlots() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => Scaffold(backgroundColor: AppColors.bg, body: SlotsScreen())),
+    );
+    if (mounted) setState(() => _rev++);
+  }
+
+  void _openTasks(String key) => setState(() {
+        _filter = key;
+        _tab = 1;
+      });
 
   Widget _page() {
     switch (_tab) {
       case 1:
-        return SlotsScreen();
+        return TasksScreen(initial: _filter);
       case 2:
+        return ScanScreen();
+      case 3:
         return ProfileScreen();
       default:
-        return DashboardScreen(onOpenSlots: () => setState(() => _tab = 1));
+        return DashboardScreen(onOpenSlots: _openSlots, onOpenTasks: _openTasks);
     }
   }
 
@@ -30,17 +49,14 @@ class _ShellScreenState extends State<ShellScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: KeyedSubtree(key: ValueKey(_tab), child: _page()),
+      body: KeyedSubtree(key: ValueKey('$_tab-$_filter-$_rev'), child: _page()),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Slots',
-          ),
+          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Tasks'),
+          NavigationDestination(icon: Icon(Icons.qr_code_scanner), selectedIcon: Icon(Icons.qr_code_scanner), label: 'Scan'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

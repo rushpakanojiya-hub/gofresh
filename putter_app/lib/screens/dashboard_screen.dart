@@ -1,24 +1,14 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import 'login_screen.dart';
 
-String _binLabel(dynamic bin, dynamic id) {
-  if (bin is Map) {
-    for (final k in ['code', 'bin_code', 'name', 'label']) {
-      final v = bin[k];
-      if (v != null && '$v'.trim().isNotEmpty) return '$v';
-    }
-  }
-  return id == null ? '-' : 'Bin #$id';
-}
-
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onOpenSlots;
-  const DashboardScreen({super.key, required this.onOpenSlots});
+  final void Function(String key) onOpenTasks;
+  const DashboardScreen({super.key, required this.onOpenSlots, required this.onOpenTasks});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -29,7 +19,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loading = true;
   bool _busy = false;
   String? _error;
-  String _tab = 'pending';
   Timer? _poll;
 
   @override
@@ -53,11 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _forceLogout() async {
     await ApiService.logout();
     if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -251,27 +236,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
           if (hasBooking) ...[
             SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(color: Color(0xFFEFF5FF), borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                children: [
-                  Icon(Icons.event_available_outlined, size: 20, color: AppColors.blue),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Today's slot", style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                        Text(
-                          '${time12((booking['start_time'] ?? '').toString())} - ${time12((booking['end_time'] ?? '').toString())}',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.blue),
-                        ),
-                      ],
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: widget.onOpenSlots,
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(color: Color(0xFFEFF5FF), borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_available_outlined, size: 20, color: AppColors.blue),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Today's slot", style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                          Text(
+                            '${time12((booking['start_time'] ?? '').toString())} - ${time12((booking['end_time'] ?? '').toString())}',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.blue),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Icon(Icons.chevron_right, color: AppColors.muted),
+                  ],
+                ),
               ),
             ),
           ],
@@ -294,17 +284,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _stat(String label, int value, String key, Color color, IconData icon) {
-    final on = _tab == key;
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => setState(() => _tab = key),
+        onTap: () => widget.onOpenTasks(key),
         child: Container(
           padding: EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           decoration: BoxDecoration(
-            color: on ? color.withAlpha(22) : Colors.white,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: on ? color : AppColors.line, width: on ? 1.6 : 1),
+            border: Border.all(color: AppColors.line),
           ),
           child: Column(
             children: [
@@ -320,115 +309,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _taskTile(Map<String, dynamic> t) {
-    final product = asMap(t['product']);
-    final name = (product['name'] ?? 'Product #${t['product_id'] ?? ''}').toString();
-    String img = (product['image_url'] ?? '').toString();
-    if (img.isNotEmpty && !img.startsWith('http')) {
-      img = '$kOrigin${img.startsWith('/') ? '' : '/'}$img';
-    }
-    final status = (t['status'] ?? '').toString();
-    final done = status == 'completed';
-    final bin = done ? _binLabel(t['actual_bin'], t['actual_bin_id']) : _binLabel(t['suggested_bin'], t['suggested_bin_id']);
-    final raw = done ? t['completed_at'] : (t['started_at'] ?? t['assigned_at'] ?? t['created_at']);
-    final when = DateTime.tryParse('$raw')?.toLocal();
-    final color = done ? AppColors.green : (status == 'in_progress' ? AppColors.blue : AppColors.orange);
-    final label = done ? 'Completed' : (status == 'in_progress' ? 'In progress' : 'Pending');
-
-    Widget box(IconData ic) => Container(
-          width: 54,
-          height: 54,
-          color: Color(0xFFF2F4F7),
-          child: Icon(ic, size: 22, color: Colors.grey),
-        );
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 10),
-      padding: EdgeInsets.all(12),
-      decoration: cardDecoration(),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: img.isEmpty
-                ? box(Icons.inventory_2_outlined)
-                : Image.network(
-                    img,
-                    width: 54,
-                    height: 54,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => box(Icons.broken_image_outlined),
-                  ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: Color(0xFFF2F4F7), borderRadius: BorderRadius.circular(8)),
-                      child: Text('Qty ${asInt(t['quantity'])}',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: Color(0xFFEFF5FF), borderRadius: BorderRadius.circular(8)),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.place_outlined, size: 12, color: AppColors.blue),
-                          SizedBox(width: 3),
-                          Text(bin, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.blue)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (when != null)
-                  Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(clock12(when), style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                  ),
-                if (t['wrong_location'] == true)
-                  Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Text('Different bin used', style: TextStyle(fontSize: 11, color: AppColors.orange)),
-                  ),
-              ],
-            ),
-          ),
-          SizedBox(width: 8),
-          StatusPill(label, color),
-        ],
-      ),
-    );
-  }
-
-  Widget _empty(String text) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        children: [
-          Lottie.asset(
-            'assets/lottie/search.json',
-            width: 170,
-            height: 170,
-            errorBuilder: (c, e, s) => SizedBox(height: 40),
-          ),
-          Text(text, style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final staff = asMap(_d['staff']);
@@ -437,11 +317,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final counts = asMap(_d['counts']);
     final booking = asMap(_d['today_booking']);
     final active = shift['active'] == true;
-    final tasks = asList(_d[_tab]);
-    final title = _tab == 'pending' ? 'Pending tasks' : (_tab == 'in_progress' ? 'In progress' : 'Completed today');
-    final emptyText = _tab == 'pending'
-        ? 'No pending tasks assigned to you'
-        : (_tab == 'in_progress' ? 'No tasks in progress' : 'No tasks completed today');
 
     Widget body;
     if (_loading) {
@@ -469,6 +344,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 _shiftCard(shift, booking),
                 SizedBox(height: 18),
+                Text('Your tasks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                SizedBox(height: 12),
                 Row(
                   children: [
                     _stat('Pending', asInt(counts['pending']), 'pending', AppColors.orange, Icons.hourglass_top_rounded),
@@ -478,17 +355,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _stat('Completed', asInt(counts['completed_today']), 'completed', AppColors.green, Icons.task_alt_rounded),
                   ],
                 ),
-                SizedBox(height: 22),
-                Row(
-                  children: [
-                    Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                    Spacer(),
-                    Text('${tasks.length}', style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w700)),
-                  ],
-                ),
-                SizedBox(height: 12),
-                if (tasks.isEmpty) _empty(emptyText),
-                for (final t in tasks) _taskTile(t),
               ],
             ),
           ),

@@ -314,7 +314,7 @@ class _SlotsScreenState extends State<SlotsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Book your slot', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+              Row(children: [InkWell(onTap: () => Navigator.pop(context), child: Icon(Icons.arrow_back, color: Colors.white)), SizedBox(width: 12), Text('Book your slot', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))]),
               SizedBox(height: 6),
               Row(
                 children: [
