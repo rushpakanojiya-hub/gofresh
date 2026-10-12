@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
-import 'dashboard_screen.dart';
+import 'shell_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -47,7 +47,7 @@ class _OtpScreenState extends State<OtpScreen> {
       if (data['token'] != null) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: (_) => const ShellScreen()),
           (route) => false,
         );
       } else {

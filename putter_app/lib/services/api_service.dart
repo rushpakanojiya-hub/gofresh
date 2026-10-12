@@ -86,8 +86,22 @@ class ApiService {
     return _decode(res);
   }
 
+  static Future<Map<String, dynamic>> _delete(String path) async {
+    final res = await http
+        .delete(Uri.parse('$baseUrl$path'), headers: await _headers())
+        .timeout(const Duration(seconds: 25));
+    return _decode(res);
+  }
+
   // ---------- putter ----------
   static Future<Map<String, dynamic>> getDashboard() => _get('/warehouse/putter/dashboard');
   static Future<Map<String, dynamic>> startShift() => _post('/warehouse/putter/shift/start', {});
   static Future<Map<String, dynamic>> endShift() => _post('/warehouse/putter/shift/end', {});
+
+  // ---------- slots ----------
+  static Future<Map<String, dynamic>> getSlots(String date) => _get('/warehouse/putter/slots?date=$date');
+  static Future<Map<String, dynamic>> bookSlot(int slotId, String date) =>
+      _post('/warehouse/putter/slots/$slotId/book', {'date': date});
+  static Future<Map<String, dynamic>> myBookings() => _get('/warehouse/putter/bookings/me');
+  static Future<Map<String, dynamic>> cancelBooking(int id) => _delete('/warehouse/putter/bookings/$id');
 }

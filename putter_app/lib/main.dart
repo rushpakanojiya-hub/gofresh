@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'services/api_service.dart';
+import 'theme.dart';
 import 'screens/login_screen.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/shell_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
   runApp(const PutterApp());
 }
 
@@ -17,8 +23,13 @@ class PutterApp extends StatelessWidget {
       title: 'GoFresh Putter',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0D47A1)),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.blue),
+        scaffoldBackgroundColor: AppColors.bg,
         useMaterial3: true,
+        navigationBarTheme: const NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          indicatorColor: Color(0xFFDCE9FF),
+        ),
       ),
       home: const SplashDecider(),
     );
@@ -45,7 +56,7 @@ class _SplashDeciderState extends State<SplashDecider> {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => token != null ? const DashboardScreen() : const LoginScreen()),
+      MaterialPageRoute(builder: (_) => token != null ? const ShellScreen() : const LoginScreen()),
     );
   }
 
