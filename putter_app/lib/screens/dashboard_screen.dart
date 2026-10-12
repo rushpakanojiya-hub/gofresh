@@ -373,7 +373,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisCount: 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 0.85,
+            padding: EdgeInsets.zero,
+            childAspectRatio: 1.2,
             children: [
               _tile('Put-Away', 'Use this for put-away bins and items', Icons.inventory_2_rounded, Icons.move_to_inbox_rounded,
                   enabled: true, badge: asInt(counts['pending']), onTap: _openPutaway),
