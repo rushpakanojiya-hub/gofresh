@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'dashboard_screen.dart';
 import 'tasks_screen.dart';
-import 'scan_screen.dart';
 import 'slots_screen.dart';
 import 'profile_screen.dart';
 
@@ -37,8 +36,6 @@ class _ShellScreenState extends State<ShellScreen> {
       case 1:
         return TasksScreen(initial: _filter);
       case 2:
-        return ScanScreen();
-      case 3:
         return ProfileScreen();
       default:
         return DashboardScreen(onOpenSlots: _openSlots, onOpenTasks: _openTasks);
@@ -66,7 +63,6 @@ class _ShellScreenState extends State<ShellScreen> {
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Tasks'),
-          NavigationDestination(icon: Icon(Icons.qr_code_scanner), selectedIcon: Icon(Icons.qr_code_scanner), label: 'Scan'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
