@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"net/http"
@@ -129,7 +129,7 @@ func GetDashboardOverview(c *gin.Context) {
 	database.DB.Model(&models.Inventory{}).Where("stock <= 0").Count(&stats.OutOfStockProducts)
 
 	database.DB.Model(&models.DeliveryPartner{}).Where("is_active = ?", true).Count(&stats.ActiveDeliveryPartners)
-	database.DB.Model(&models.Warehouse{}).Count(&stats.TotalWarehouses)
+	database.DB.Model(&models.Warehouse{}).Where("(warehouse_type IS NULL OR warehouse_type <> ?)", "mother_warehouse").Count(&stats.TotalWarehouses)
 	database.DB.Model(&models.SupportTicket{}).Where("status IN ?", []string{"open", "in_progress"}).Count(&stats.OpenSupportTickets)
 
 	database.DB.Model(&models.Order{}).
