@@ -292,6 +292,9 @@ func pickerPresenceResponse(p models.PickerPresence) gin.H {
 
 // GetPickerPresence GET /warehouse/picker/presence
 func GetPickerPresence(c *gin.Context) {
+	if sid, okSid := pickerStaffID(c); okSid {
+		pickerSyncPresence(sid)
+	}
 	database.EnsurePickerTables()
 	staffID, ok := pickerStaffID(c)
 	if !ok {
@@ -341,6 +344,10 @@ func SetPickerPresence(c *gin.Context) {
 		if err := database.DB.Where("staff_id = ? AND booking_date = ? AND status = ?", staffID, pickerToday(), "booked").
 			Order("id DESC").First(&b).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Book a slot for today first"})
+			return
+		}
+		if msg := pickerSlotGate(b); msg != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": msg})
 			return
 		}
 		p.WarehouseID = b.WarehouseID
