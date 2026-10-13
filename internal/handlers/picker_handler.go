@@ -169,14 +169,21 @@ func BookPickerSlot(c *gin.Context) {
 	}
 	var existing int64
 	database.DB.Model(&models.PickerSlotBooking{}).
-		Where("staff_id = ? AND booking_date = ? AND status = ?", staffID, req.Date, "booked").Count(&existing)
+		Where("staff_id = ? AND booking_date = ? AND slot_id = ? AND status = ?", staffID, req.Date, slot.ID, "booked").Count(&existing)
 	if existing > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "You already have a slot booked for this date"})
+		c.JSON(http.StatusConflict, gin.H{"error": "You have already booked this slot"})
 		return
 	}
 	var n int64
 	database.DB.Model(&models.PickerSlotBooking{}).
 		Where("slot_id = ? AND booking_date = ? AND status = ?", slot.ID, req.Date, "booked").Count(&n)
+	var otherWh int64
+	database.DB.Model(&models.PickerSlotBooking{}).
+		Where("staff_id = ? AND booking_date = ? AND status = ? AND warehouse_id <> ?", staffID, req.Date, "booked", slot.WarehouseID).Count(&otherWh)
+	if otherWh > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "You can book slots of only one store per day"})
+		return
+	}
 	if slot.Capacity > 0 && int(n) >= slot.Capacity {
 		c.JSON(http.StatusConflict, gin.H{"error": "Slot is full"})
 		return

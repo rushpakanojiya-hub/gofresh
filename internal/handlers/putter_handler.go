@@ -152,7 +152,7 @@ func putterActiveShift(staffID uint) (models.PutterShift, bool) {
 	return s, res.Error == nil && res.RowsAffected > 0
 }
 
-func putterTodayBooking(staffID uint) (models.PutterSlotBooking, models.PutterSlot, bool) {
+func putterTodayBookingOld(staffID uint) (models.PutterSlotBooking, models.PutterSlot, bool) {
 	var b models.PutterSlotBooking
 	res := database.DB.Where("staff_id = ? AND booking_date = ? AND status = ?", staffID, putterSlotToday(), "booked").
 		Order("id DESC").Limit(1).Find(&b)
@@ -360,7 +360,7 @@ func GetPutterSlots(c *gin.Context) {
 	for _, r := range rows {
 		counts[r.SlotID] = r.N
 	}
-	mineSlot := map[uint]bool{}
+	mineSlot := putterMineSlots(staff.ID, date)
 	var my models.PutterSlotBooking
 	res := database.DB.Where("staff_id = ? AND booking_date = ? AND status = ?", staff.ID, date, "booked").Limit(1).Find(&my)
 	if res.Error == nil && res.RowsAffected > 0 {
@@ -390,6 +390,7 @@ func GetPutterSlots(c *gin.Context) {
 
 // BookPutterSlot POST /warehouse/putter/slots/:id/book {"date":"YYYY-MM-DD"}
 func BookPutterSlot(c *gin.Context) {
+	putterDropOldIndex()
 	ensurePutterTables()
 	staff, ok := putterLoadStaff(c)
 	if !ok {
@@ -431,10 +432,10 @@ func BookPutterSlot(c *gin.Context) {
 		}
 		var existing int64
 		tx.Model(&models.PutterSlotBooking{}).
-			Where("staff_id = ? AND booking_date = ? AND status = ?", staff.ID, req.Date, "booked").Count(&existing)
+			Where("staff_id = ? AND booking_date = ? AND slot_id = ? AND status = ?", staff.ID, req.Date, slot.ID, "booked").Count(&existing)
 		if existing > 0 {
 			code = http.StatusConflict
-			return errors.New("You already have a slot booked for this date")
+			return errors.New("You have already booked this slot")
 		}
 		var n int64
 		tx.Model(&models.PutterSlotBooking{}).
