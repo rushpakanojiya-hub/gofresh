@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   listMyStockTransfers,
   requestStockTransfer,
@@ -6,9 +6,14 @@ import {
   approveStockTransfer,
   rejectStockTransfer,
   listProducts,
+  listTransferSuppliers,
+  getSupplierStock,
 } from '../api/warehouse'
 import { useAuth } from '../context/AuthContext'
 import type { StockTransfer, Product } from '../types/warehouse'
+
+type Supplier = { id: number; name: string; city: string }
+type Row = { key: number; product: Product | null; qty: string; error?: string }
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Awaiting approval',
@@ -26,17 +31,108 @@ function statusColor(status: string) {
   return 'bg-amber-500/15 text-amber-400'
 }
 
+function ProductPicker({
+  value,
+  onPick,
+  onClear,
+}: {
+  value: Product | null
+  onPick: (p: Product) => void
+  onClear: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<Product[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const term = q.trim()
+    if (term.length < 2) {
+      setResults([])
+      setLoading(false)
+      return undefined
+    }
+    let alive = true
+    setLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const res = await listProducts({ search: term, limit: 8 })
+        if (alive) setResults(res.products ?? [])
+      } catch {
+        if (alive) setResults([])
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }, 300)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [q])
+
+  if (value) {
+    return (
+      <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+        <span className="truncate">{value.name}</span>
+        <button type="button" onClick={onClear} className="ml-2 text-slate-400 hover:text-slate-200 text-xs">
+          Change
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search product (type 2+ letters)"
+        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+      />
+      {open && q.trim().length >= 2 && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-auto bg-slate-900 border border-slate-700 rounded-lg shadow-lg">
+          {loading && <p className="px-3 py-2 text-xs text-slate-400">Searching...</p>}
+          {!loading && results.length === 0 && <p className="px-3 py-2 text-xs text-slate-500">No products found</p>}
+          {results.map((p) => (
+            <button
+              type="button"
+              key={p.id}
+              onClick={() => {
+                onPick(p)
+                setQ('')
+                setOpen(false)
+              }}
+              className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-800"
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StockTransfers() {
   const { staff } = useAuth()
   const myWarehouseId = staff?.warehouse_id
   const [transfers, setTransfers] = useState<StockTransfer[]>([])
-  const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<number | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ product_id: '', to_warehouse_id: '', quantity: '' })
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [supplierId, setSupplierId] = useState('')
+  const keyRef = useRef(1)
+  const [rows, setRows] = useState<Row[]>([{ key: 0, product: null, qty: '' }])
+  const [stockMap, setStockMap] = useState<Record<string, number>>({})
+  const [stockFor, setStockFor] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -44,12 +140,8 @@ export default function StockTransfers() {
     if (!silent) setIsLoading(true)
     setError(null)
     try {
-      const [transfersRes, productsRes] = await Promise.all([
-        listMyStockTransfers(),
-        listProducts({ limit: 100 }),
-      ])
-      setTransfers(transfersRes.stock_transfers ?? [])
-      setProducts(productsRes.products ?? [])
+      const res = await listMyStockTransfers()
+      setTransfers(res.stock_transfers ?? [])
     } catch (err: any) {
       setError(err.response?.data?.error ?? 'Failed to load stock requests.')
     } finally {
@@ -60,6 +152,66 @@ export default function StockTransfers() {
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    listTransferSuppliers()
+      .then((res) => {
+        const list = res.suppliers ?? []
+        setSuppliers(list)
+        if (list.length === 1) setSupplierId(String(list[0].id))
+      })
+      .catch(() => {})
+  }, [])
+
+  const idsKey = rows
+    .map((r) => r.product?.id)
+    .filter((x): x is number => typeof x === 'number')
+    .join(',')
+  const stockKey = `${supplierId}|${idsKey}`
+
+  useEffect(() => {
+    if (!supplierId || !idsKey) return undefined
+    let alive = true
+    getSupplierStock(Number(supplierId), idsKey)
+      .then((res) => {
+        if (alive) {
+          setStockMap(res.stock ?? {})
+          setStockFor(stockKey)
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setStockMap({})
+          setStockFor('')
+        }
+      })
+    return () => {
+      alive = false
+    }
+  }, [supplierId, idsKey, stockKey])
+
+  function stockLabel(r: Row) {
+    if (!r.product || !supplierId) return ''
+    if (stockFor !== stockKey) return 'checking...'
+    return `${stockMap[r.product.id] ?? 0} at supplier`
+  }
+
+  function newRow(): Row {
+    return { key: keyRef.current++, product: null, qty: '' }
+  }
+  function updateRow(key: number, patch: Partial<Row>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch, error: undefined } : r)))
+  }
+  function removeRow(key: number) {
+    setRows((prev) => (prev.length === 1 ? [newRow()] : prev.filter((r) => r.key !== key)))
+  }
+  function toggleCreate() {
+    if (!showCreate) {
+      setRows([newRow()])
+      setFormError(null)
+    }
+    setShowCreate((v) => !v)
+  }
 
   async function act(id: number, fn: (id: number) => Promise<unknown>, failMsg: string) {
     setActingId(id)
@@ -76,34 +228,64 @@ export default function StockTransfers() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setFormError(null)
+    setNotice(null)
 
-    const productId = parseInt(form.product_id, 10)
-    const supplierId = parseInt(form.to_warehouse_id, 10)
-    const quantity = parseInt(form.quantity, 10)
-
-    if (!productId || !supplierId || !quantity || quantity <= 0) {
-      setFormError('Please fill all fields with valid values.')
+    const sid = parseInt(supplierId, 10)
+    if (!sid) {
+      setFormError('Choose a supplying warehouse.')
       return
     }
-    if (supplierId === myWarehouseId) {
+    if (sid === myWarehouseId) {
       setFormError('The supplying warehouse cannot be your own store.')
+      return
+    }
+    if (!rows.some((r) => r.product)) {
+      setFormError('Add at least one product.')
+      return
+    }
+
+    const seen = new Set<number>()
+    const checked = rows.map((r) => {
+      if (!r.product) return r
+      const q = parseInt(r.qty, 10)
+      const available = stockMap[r.product.id] ?? 0
+      let err: string | undefined
+      if (!q || q <= 0) err = 'Enter a quantity'
+      else if (seen.has(r.product.id)) err = 'Product added twice'
+      else if (stockFor === stockKey && q > available) err = `Only ${available} available at supplier`
+      seen.add(r.product.id)
+      return { ...r, error: err }
+    })
+    if (checked.some((r) => r.error)) {
+      setRows(checked)
+      setFormError('Fix the highlighted rows.')
       return
     }
 
     setIsSaving(true)
-    try {
-      await requestStockTransfer({
-        product_id: productId,
-        to_warehouse_id: supplierId,
-        quantity,
-      })
-      setForm({ product_id: '', to_warehouse_id: '', quantity: '' })
+    const failed: Row[] = []
+    let ok = 0
+    for (const r of checked.filter((x) => x.product)) {
+      try {
+        await requestStockTransfer({
+          product_id: r.product!.id,
+          to_warehouse_id: sid,
+          quantity: parseInt(r.qty, 10),
+        })
+        ok++
+      } catch (err: any) {
+        failed.push({ ...r, error: err.response?.data?.error ?? 'Failed to send this request' })
+      }
+    }
+    setIsSaving(false)
+    await load(true)
+    if (failed.length === 0) {
       setShowCreate(false)
-      load(true)
-    } catch (err: any) {
-      setFormError(err.response?.data?.error ?? 'Failed to request stock.')
-    } finally {
-      setIsSaving(false)
+      setRows([newRow()])
+      setNotice(`${ok} stock request${ok !== 1 ? 's' : ''} sent.`)
+    } else {
+      setRows(failed)
+      setFormError(`${ok} sent, ${failed.length} failed. The failed products are still in the list.`)
     }
   }
 
@@ -117,62 +299,96 @@ export default function StockTransfers() {
           </p>
         </div>
         <button
-          onClick={() => setShowCreate((v) => !v)}
+          onClick={toggleCreate}
           className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors"
         >
           {showCreate ? 'Cancel' : '+ Request stock'}
         </button>
       </div>
 
+      {notice && <p className="text-emerald-400 text-sm mb-4">{notice}</p>}
+
       {showCreate && (
-        <div className="border border-slate-800 rounded-xl p-5 bg-slate-900 mb-6 max-w-md">
-          <h2 className="text-sm font-medium mb-3">Request stock for your store</h2>
-          <p className="text-xs text-slate-500 mb-3">
-            Stock will be sent to your store ({staff?.warehouse?.name ?? `#${myWarehouseId}`}). The
-            supplying warehouse has to approve the request first.
+        <div className="border border-slate-800 rounded-xl p-5 bg-slate-900 mb-6 max-w-2xl">
+          <h2 className="text-sm font-medium mb-1">Request stock for your store</h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Stock will be sent to your store ({staff?.warehouse?.name ?? `#${myWarehouseId}`}). The supplying
+            warehouse has to approve each product first.
           </p>
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Product</label>
-              <select
-                value={form.product_id}
-                onChange={(e) => setForm({ ...form, product_id: e.target.value })}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+              <label className="text-xs text-slate-400 block mb-1">Supplying warehouse</label>
+              {suppliers.length === 0 ? (
+                <p className="text-xs text-amber-400">
+                  No supplying warehouse found. Ask the admin to add a Mother Warehouse.
+                </p>
+              ) : (
+                <select
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">Select a warehouse</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.city})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-[1fr_96px_120px_28px] gap-2 text-xs text-slate-400">
+                <span>Product</span>
+                <span>Quantity</span>
+                <span>Supplier stock</span>
+                <span></span>
+              </div>
+              {rows.map((r) => (
+                <div key={r.key}>
+                  <div className="grid grid-cols-[1fr_96px_120px_28px] gap-2 items-center">
+                    <ProductPicker
+                      value={r.product}
+                      onPick={(p) => updateRow(r.key, { product: p })}
+                      onClear={() => updateRow(r.key, { product: null })}
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      value={r.qty}
+                      onChange={(e) => updateRow(r.key, { qty: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                    />
+                    <span className="text-xs text-slate-400">{stockLabel(r)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(r.key)}
+                      className="text-slate-500 hover:text-red-400"
+                      title="Remove"
+                    >
+                      &#10005;
+                    </button>
+                  </div>
+                  {r.error && <p className="text-red-400 text-xs mt-1">{r.error}</p>}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setRows((prev) => [...prev, newRow()])}
+                className="text-xs text-red-400 hover:text-red-300"
               >
-                <option value="">Select a product</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                + Add product
+              </button>
             </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Supplying warehouse ID</label>
-              <input
-                type="number"
-                value={form.to_warehouse_id}
-                onChange={(e) => setForm({ ...form, to_warehouse_id: e.target.value })}
-                placeholder="e.g. 2"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Quantity</label>
-              <input
-                type="number"
-                value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
+
             {formError && <p className="text-red-400 text-xs">{formError}</p>}
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || suppliers.length === 0}
               className="w-full py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {isSaving ? 'Requesting...' : 'Send request'}
+              {isSaving ? 'Sending...' : 'Send request'}
             </button>
           </form>
         </div>

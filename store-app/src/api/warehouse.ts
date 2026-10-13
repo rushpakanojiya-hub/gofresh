@@ -48,6 +48,15 @@ export const rejectStockTransfer = (id: number) =>
 export const listProducts = (params?: Record<string, any>) =>
   apiClient.get('/products', { params }).then((r) => r.data)
 
+export const listTransferSuppliers = () =>
+  apiClient
+    .get('/warehouse/stock-transfers/suppliers')
+    .then((r) => r.data as { suppliers: { id: number; name: string; city: string }[] })
+export const getSupplierStock = (supplierId: number, productIds: string) =>
+  apiClient
+    .get(`/warehouse/stock-transfers/suppliers/${supplierId}/stock`, { params: { product_ids: productIds } })
+    .then((r) => r.data as { stock: Record<string, number> })
+
 // ---- Dashboard ----
 
 export const getDashboard = () =>
