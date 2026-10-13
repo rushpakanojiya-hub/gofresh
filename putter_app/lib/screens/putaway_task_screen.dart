@@ -576,6 +576,16 @@ class _PutawayTaskScreenState extends State<PutawayTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _step == 0 || _step == 6,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _snack('Finish this put-away, or report an issue if you are stuck');
+      },
+      child: _scaffold(),
+    );
+  }
+
+  Widget _scaffold() {
     Widget body;
     if (_loading) {
       body = Center(child: CircularProgressIndicator());
@@ -600,8 +610,10 @@ class _PutawayTaskScreenState extends State<PutawayTaskScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  InkWell(onTap: _back, child: Icon(Icons.arrow_back, color: Colors.white)),
-                  SizedBox(width: 12),
+                  if (_step == 0 || _step == 6) ...[
+                    InkWell(onTap: _back, child: Icon(Icons.arrow_back, color: Colors.white)),
+                    SizedBox(width: 12),
+                  ],
                   Expanded(child: Text(_titles[_step], style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800))),
                   if (_step < 6 && !_loading)
                     IconButton(onPressed: () => _openReport(), tooltip: 'Report damaged / short', icon: Icon(Icons.report_gmailerrorred, color: Colors.white)),
