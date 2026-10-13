@@ -1,13 +1,23 @@
 package handlers
 
 import (
+	"sync"
 	"time"
 
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 )
 
-type pickerWin struct{ s, e time.Time }
+type pickerWin struct {
+	id uint
+	wh uint
+	s  time.Time
+	e  time.Time
+}
+
+// pickerAutoDone remembers bookings that were already auto-started, so a picker
+// who goes offline by hand during a slot is not put back online again.
+var pickerAutoDone sync.Map
 
 // pickerTodayWindows returns the time windows of all of today's booked slots.
 func pickerTodayWindows(staffID uint) []pickerWin {
@@ -22,7 +32,7 @@ func pickerTodayWindows(staffID uint) []pickerWin {
 		s, ok1 := putterSlotAt(b.BookingDate, slot.StartTime)
 		e, ok2 := putterSlotAt(b.BookingDate, slot.EndTime)
 		if ok1 && ok2 {
-			out = append(out, pickerWin{s, e})
+			out = append(out, pickerWin{id: b.ID, wh: b.WarehouseID, s: s, e: e})
 		}
 	}
 	return out
@@ -51,21 +61,46 @@ func pickerSlotGate(b models.PickerSlotBooking) string {
 	return "Your slot for today has ended"
 }
 
-// pickerSyncPresence takes an online picker offline when no booked slot is running.
+// pickerSyncPresence keeps a picker's online state in step with the booked slots:
+// offline when no booked slot is running, and online automatically when one starts.
 func pickerSyncPresence(staffID uint) {
-	var p models.PickerPresence
-	if err := database.DB.Where("staff_id = ? AND is_online = ?", staffID, true).First(&p).Error; err != nil {
-		return
-	}
 	now := time.Now()
-	for _, w := range pickerTodayWindows(staffID) {
-		if !now.Before(w.s) && now.Before(w.e) {
-			return
+	ws := pickerTodayWindows(staffID)
+	var running *pickerWin
+	for i := range ws {
+		if !now.Before(ws[i].s) && now.Before(ws[i].e) {
+			running = &ws[i]
+			break
 		}
 	}
-	database.DB.Model(&models.PickingTask{}).
-		Where("picker_id = ? AND status = ?", staffID, "pending").Update("picker_id", nil)
-	pickerForceOffline(staffID)
+
+	var p models.PickerPresence
+	found := database.DB.Where("staff_id = ?", staffID).First(&p).Error == nil
+	if found && p.IsOnline {
+		if running == nil {
+			database.DB.Model(&models.PickingTask{}).
+				Where("picker_id = ? AND status = ?", staffID, "pending").Update("picker_id", nil)
+			pickerForceOffline(staffID)
+		}
+		return
+	}
+	if running == nil {
+		return
+	}
+	if _, done := pickerAutoDone.LoadOrStore(running.id, true); done {
+		return
+	}
+	p.StaffID = staffID
+	if p.Workflow == "" {
+		p.Workflow = "picker"
+	}
+	p.WarehouseID = running.wh
+	p.IsOnline = true
+	if err := database.DB.Save(&p).Error; err != nil {
+		pickerAutoDone.Delete(running.id)
+		return
+	}
+	pickerGoOnline(staffID, now)
 }
 
 func init() {
@@ -75,9 +110,18 @@ func init() {
 			if database.DB == nil {
 				continue
 			}
-			var ids []uint
-			database.DB.Model(&models.PickerPresence{}).Where("is_online = ?", true).Pluck("staff_id", &ids)
-			for _, id := range ids {
+			seen := map[uint]bool{}
+			var online []uint
+			database.DB.Model(&models.PickerPresence{}).Where("is_online = ?", true).Pluck("staff_id", &online)
+			var booked []uint
+			database.DB.Model(&models.PickerSlotBooking{}).
+				Where("booking_date = ? AND status = ?", pickerToday(), "booked").
+				Distinct("staff_id").Pluck("staff_id", &booked)
+			for _, id := range append(online, booked...) {
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
 				pickerSyncPresence(id)
 			}
 		}
