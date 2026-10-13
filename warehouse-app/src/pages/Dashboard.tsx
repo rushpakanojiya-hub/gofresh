@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getDashboard } from '../api/warehouse'
 import type { WarehouseDashboardStats } from '../types/warehouse'
@@ -47,6 +47,14 @@ function StatCard({
       </p>
     </div>
   )
+}
+
+function isMotherWarehouse(): boolean {
+  try {
+    return JSON.parse(localStorage.getItem('warehouse_staff') ?? '{}')?.warehouse?.warehouse_type === 'mother_warehouse'
+  } catch {
+    return false
+  }
 }
 
 export default function Dashboard() {
@@ -173,31 +181,31 @@ export default function Dashboard() {
             </div>
           )}
 
-          <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Today</p>
+          {!isMotherWarehouse() && <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Today</p>}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Today's Orders" value={stats.today_orders} />
-            <StatCard label="New Orders" value={stats.new_orders} tone={stats.new_orders > 0 ? 'warning' : 'default'} />
-            <StatCard label="Picking" value={stats.picking} />
-            <StatCard label="Packed" value={stats.packed} />
-            <StatCard label="Ready for Dispatch" value={stats.ready_for_dispatch} tone="success" />
-            <StatCard label="Completed Today" value={stats.completed_today} tone="success" />
-            <StatCard label="Cancelled Today" value={stats.cancelled_today} tone={stats.cancelled_today > 0 ? 'danger' : 'default'} />
-            <StatCard label="Fulfillment Rate" value={stats.fulfillment_rate.toFixed(0)} suffix="%" tone="success" />
+            {!isMotherWarehouse() && <StatCard label="Today's Orders" value={stats.today_orders} />}
+            {!isMotherWarehouse() && <StatCard label="New Orders" value={stats.new_orders} tone={stats.new_orders > 0 ? 'warning' : 'default'} />}
+            {!isMotherWarehouse() && <StatCard label="Picking" value={stats.picking} />}
+            {!isMotherWarehouse() && <StatCard label="Packed" value={stats.packed} />}
+            {!isMotherWarehouse() && <StatCard label="Ready for Dispatch" value={stats.ready_for_dispatch} tone="success" />}
+            {!isMotherWarehouse() && <StatCard label="Completed Today" value={stats.completed_today} tone="success" />}
+            {!isMotherWarehouse() && <StatCard label="Cancelled Today" value={stats.cancelled_today} tone={stats.cancelled_today > 0 ? 'danger' : 'default'} />}
+            {!isMotherWarehouse() && <StatCard label="Fulfillment Rate" value={stats.fulfillment_rate.toFixed(0)} suffix="%" tone="success" />}
           </div>
 
           <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Operational Alerts</p>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <StatCard label="Open Exceptions" value={stats.open_exceptions} tone={stats.open_exceptions > 0 ? 'danger' : 'default'} />
-            <StatCard label="Pending Handovers" value={stats.pending_handovers} tone={stats.pending_handovers > 0 ? 'warning' : 'default'} />
-            <StatCard label="Delayed Orders" value={stats.delayed_orders} tone={stats.delayed_orders > 0 ? 'danger' : 'default'} />
+            {!isMotherWarehouse() && <StatCard label="Pending Handovers" value={stats.pending_handovers} tone={stats.pending_handovers > 0 ? 'warning' : 'default'} />}
+            {!isMotherWarehouse() && <StatCard label="Delayed Orders" value={stats.delayed_orders} tone={stats.delayed_orders > 0 ? 'danger' : 'default'} />}
             <StatCard label="Pending Receivings" value={stats.pending_receivings} tone={stats.pending_receivings > 0 ? 'warning' : 'default'} />
             <StatCard label="Expiring Batches (7d)" value={stats.expiring_stock_batches} tone={stats.expiring_stock_batches > 0 ? 'warning' : 'default'} />
           </div>
 
           <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Performance</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Avg Picking Time" value={stats.avg_picking_minutes.toFixed(1)} suffix="min" />
-            <StatCard label="Avg Packing Time" value={stats.avg_packing_minutes.toFixed(1)} suffix="min" />
+            {!isMotherWarehouse() && <StatCard label="Avg Picking Time" value={stats.avg_picking_minutes.toFixed(1)} suffix="min" />}
+            {!isMotherWarehouse() && <StatCard label="Avg Packing Time" value={stats.avg_packing_minutes.toFixed(1)} suffix="min" />}
             <StatCard label="Active Staff" value={stats.active_staff} />
           </div>
 
