@@ -20,7 +20,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic> _d = {};
   bool _loading = true;
-  bool _busy = false;
   String? _error;
   Timer? _poll;
 
@@ -75,39 +74,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = false;
       });
     }
-  }
-
-  Future<void> _toggleShift(bool active) async {
-    if (_busy) return;
-    if (active) {
-      final running = asInt(asMap(_d['counts'])['in_progress']);
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('End shift?'),
-          content: Text(running > 0
-              ? 'You still have $running task(s) in progress. End your shift anyway?'
-              : 'Your shift time will stop counting.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel')),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('End shift', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return;
-    }
-    setState(() => _busy = true);
-    try {
-      final r = active ? await ApiService.endShift() : await ApiService.startShift();
-      if (r['error'] != null) _snack(r['error'].toString());
-      await _load(silent: true);
-    } catch (_) {
-      _snack('Network error. Please try again.');
-    }
-    if (mounted) setState(() => _busy = false);
   }
 
   Future<void> _openMovement() async {
@@ -175,33 +141,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _shiftCard(Map<String, dynamic> shift, Map<String, dynamic> booking) {
     final active = shift['active'] == true;
     final started = DateTime.tryParse('${shift['started_at'] ?? ''}')?.toLocal();
-    final canStart = shift['can_start'] == true;
+    final endsAt = DateTime.tryParse('${shift['ends_at'] ?? ''}')?.toLocal();
     final hint = (shift['hint'] ?? '').toString();
     final slotOver = shift['slot_over'] == true;
     final hasBooking = booking.isNotEmpty;
 
-    final Widget button;
-    if (active) {
-      button = PrimaryButton(
-        label: 'End shift',
-        icon: Icons.stop_circle_outlined,
-        color: AppColors.red,
-        busy: _busy,
-        onPressed: () => _toggleShift(true),
-      );
-    } else if (!hasBooking) {
+    Widget? button;
+    if (!active && !hasBooking) {
       button = PrimaryButton(
         label: 'Book a slot',
         icon: Icons.event_available_outlined,
         color: AppColors.blue,
         onPressed: widget.onOpenSlots,
-      );
-    } else {
-      button = PrimaryButton(
-        label: 'Start shift',
-        icon: Icons.play_circle_outline,
-        busy: _busy,
-        onPressed: canStart ? () => _toggleShift(false) : null,
       );
     }
 
@@ -222,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SizedBox(height: 10),
             _ShiftClock(start: started),
             SizedBox(height: 2),
-            Text('Started at ${clock12(started)}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            Text('Started at ${clock12(started)}${endsAt != null ? '  |  Ends at ${clock12(endsAt)}' : ''}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
           ],
           if (hasBooking) ...[
             SizedBox(height: 12),
@@ -256,7 +207,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
           SizedBox(height: 14),
-          button,
+          if (button != null) button,
           if (!active && hint.isNotEmpty)
             Padding(
               padding: EdgeInsets.only(top: 10),

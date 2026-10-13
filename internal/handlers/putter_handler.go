@@ -146,6 +146,7 @@ func putterLoadStaff(c *gin.Context) (models.WarehouseStaff, bool) {
 }
 
 func putterActiveShift(staffID uint) (models.PutterShift, bool) {
+	putterSyncShift(staffID)
 	var s models.PutterShift
 	res := database.DB.Where("staff_id = ? AND ended_at IS NULL", staffID).Order("id DESC").Limit(1).Find(&s)
 	return s, res.Error == nil && res.RowsAffected > 0
@@ -176,6 +177,7 @@ func GetPutterDashboard(c *gin.Context) {
 		return
 	}
 	staffID := staff.ID
+	putterSyncShift(staff.ID)
 	wid := staff.WarehouseID
 	loc := putterSlotLoc()
 	now := time.Now().In(loc)
@@ -202,11 +204,11 @@ func GetPutterDashboard(c *gin.Context) {
 
 	active, hasActive := putterActiveShift(staffID)
 	b, bslot, hasB := putterTodayBooking(staffID)
-	canStart, hint, slotOver := false, "Book a slot for today to start your shift", false
+	canStart, hint, slotOver := false, "Book a slot for today. Your shift will start and end automatically with the slot", false
 	var booking interface{}
 	if hasB {
 		booking = gin.H{"id": b.ID, "slot_id": b.SlotID, "date": b.BookingDate, "start_time": bslot.StartTime, "end_time": bslot.EndTime}
-		canStart, hint = putterShiftGate(b.BookingDate, bslot)
+		canStart, hint = false, putterAutoHint(b.BookingDate, bslot)
 		if endAt, okEnd := putterSlotAt(b.BookingDate, bslot.EndTime); okEnd && time.Now().After(endAt) {
 			slotOver = true
 		}
@@ -217,6 +219,7 @@ func GetPutterDashboard(c *gin.Context) {
 	shift := gin.H{"active": hasActive, "today_seconds": total, "started_at": nil, "can_start": canStart, "hint": hint, "slot_over": slotOver}
 	if hasActive {
 		shift["started_at"] = active.StartedAt
+		shift["ends_at"] = putterShiftEndsAt(active)
 	}
 
 	var movesToday int64
