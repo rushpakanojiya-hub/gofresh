@@ -405,52 +405,6 @@ class _PickingScreenState extends State<PickingScreen> {
     );
   }
 
-  Future<void> _cantFind() async {
-    final need = _need(_items[_idx]);
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        Widget opt(IconData icon, String title, String sub, String value) => ListTile(
-              leading: Icon(icon, color: Colors.black87),
-              title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(sub, style: const TextStyle(fontSize: 12)),
-              onTap: () => Navigator.pop(ctx, value),
-            );
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 18, 20, 6),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text("Why can't you pick this item?",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                ),
-              ),
-              opt(Icons.search_off, 'Not on shelf', 'Item is missing from its bin', 'notfound'),
-              opt(Icons.broken_image_outlined, 'Damaged', 'Packaging or product is damaged', 'damaged'),
-              opt(Icons.event_busy_outlined, 'Expired', 'Past its expiry date', 'expired'),
-              if (need > 1)
-                opt(Icons.remove_circle_outline, 'Short quantity', 'Fewer units than needed', 'short'),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-    if (choice == null || !mounted) return;
-    if (choice == 'short') {
-      final q = await _askQty(need);
-      if (q == null || !mounted) return;
-      await _mark('short', qty: q, reason: 'Short quantity');
-    } else {
-      const reasons = {'notfound': 'Item not found', 'damaged': 'Damaged', 'expired': 'Expired'};
-      await _mark('unavailable', reason: reasons[choice] ?? 'Item not found');
-    }
-  }
   Future<void> _mark(String status, {int? qty, String? reason}) async {
     if (_items.isEmpty || _busy) return;
     final it = _items[_idx];
@@ -597,17 +551,6 @@ class _PickingScreenState extends State<PickingScreen> {
     } else {
       actions = Row(
         children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _busy ? null : _cantFind,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text("Can't find", style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             flex: 2,
             child: ElevatedButton(
