@@ -82,7 +82,7 @@ func GetPickerStores(c *gin.Context) {
 	hasLoc := errLat == nil && errLng == nil
 
 	var whs []models.Warehouse
-	if err := database.DB.Where("is_active = ?", true).Find(&whs).Error; err != nil {
+	if err := database.DB.Where("is_active = ? AND (warehouse_type IS NULL OR warehouse_type <> ?)", true, "mother_warehouse").Find(&whs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load stores"})
 		return
 	}
