@@ -1,57 +1,62 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
-/* ============================================================
-   WAREHOUSE PANEL THEME — "Industrial Logistics"
-   Reskins Tailwind's default `slate` (neutrals) and `indigo`
-   (brand accent) scales, which is what almost every page in this
-   app already uses (bg-slate-900, border-slate-800, text-indigo-400,
-   etc). Overriding the scales here changes the whole app's palette
-   without editing every page individually.
-   ============================================================ */
+/* LIGHT THEME (GoFresh green). The slate scale is inverted on purpose:
+   pages keep using bg-slate-950 / bg-slate-900 / text-slate-100 etc.,
+   which now resolve to light surfaces and dark text. indigo = brand green. */
 @theme {
-  /* Graphite/steel neutrals — cool, slightly blue-grey, evokes
-     warehouse racking and steel shelving rather than a generic
-     near-black SaaS dark theme. */
-  --color-slate-50: #f4f5f6;
-  --color-slate-100: #e7e9eb;
-  --color-slate-200: #cbd0d5;
-  --color-slate-300: #a7aeb6;
-  --color-slate-400: #7c848f;
-  --color-slate-500: #5b636d;
-  --color-slate-600: #454c55;
-  --color-slate-700: #343940;
-  --color-slate-800: #24272c;
-  --color-slate-900: #1a1c20;
-  --color-slate-950: #121316;
+  --color-slate-50: #0b0f0d;
+  --color-slate-100: #161b18;
+  --color-slate-200: #2c332f;
+  --color-slate-300: #444d48;
+  --color-slate-400: #5f6963;
+  --color-slate-500: #7b857f;
+  --color-slate-600: #a9b2ad;
+  --color-slate-700: #d3d9d6;
+  --color-slate-800: #e5e9e7;
+  --color-slate-900: #ffffff;
+  --color-slate-950: #f4f7f5;
 
-  /* Safety amber — the brand/interactive accent, standing in for
-     hazard-stripe amber used on real warehouse floors and signage,
-     replacing the generic indigo SaaS accent. */
-  --color-indigo-50: #fff8e8;
-  --color-indigo-100: #ffedc2;
-  --color-indigo-200: #ffdd8a;
-  --color-indigo-300: #ffc94d;
-  --color-indigo-400: #ffb627;
-  --color-indigo-500: #f5a623;
-  --color-indigo-600: #d98a0e;
-  --color-indigo-700: #b06e08;
-  --color-indigo-800: #8a560a;
-  --color-indigo-900: #6e440e;
-  --color-indigo-950: #3d2405;
+  --color-indigo-50: #f0fdf4;
+  --color-indigo-100: #dcfce7;
+  --color-indigo-200: #bbf7d0;
+  --color-indigo-300: #15803d;
+  --color-indigo-400: #16a34a;
+  --color-indigo-500: #16a34a;
+  --color-indigo-600: #15803d;
+  --color-indigo-700: #166534;
+  --color-indigo-800: #14532d;
+  --color-indigo-900: #14532d;
+  --color-indigo-950: #052e16;
+
+  /* status colors were pale shades made for dark backgrounds */
+  --color-amber-300: #b45309;
+  --color-amber-900: #fde68a;
+  --color-amber-950: #fef3c7;
+  --color-rose-300: #be123c;
+  --color-rose-900: #fecdd3;
+  --color-rose-950: #ffe4e6;
+  --color-emerald-300: #047857;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #0284c7;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #2563eb;
 
   --font-sans: "Inter", system-ui, sans-serif;
-  --font-display: "Big Shoulders Display", "Inter", system-ui, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 body {
   font-family: var(--font-sans);
+  background: #f4f7f5;
 }
 
-/* Utility for stenciled, signage-style headers. Applied selectively
-   to page titles and the sidebar wordmark, not body text. */
 .font-display {
   font-family: var(--font-display);
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
