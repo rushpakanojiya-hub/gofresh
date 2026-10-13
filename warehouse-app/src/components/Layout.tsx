@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -19,8 +19,11 @@ const navItems = [
   { to: '/audit-logs', label: 'Audit Logs' },
 ]
 
+const hiddenForMother = ['/orders', '/substitutions']
+
 export default function Layout({ children }: { children: ReactNode }) {
   const { staff, logout } = useAuth()
+  const isMother = (staff?.warehouse as unknown as { warehouse_type?: string } | undefined)?.warehouse_type === 'mother_warehouse'
   const warehouseLabel = staff?.warehouse?.name ?? `WAREHOUSE #${staff?.warehouse_id ?? '—'}`
 
   return (
@@ -33,7 +36,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <p className="font-display text-xl leading-none">Warehouse Panel</p>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-0.5">
-          {navItems.map((item) => (
+          {navItems.filter((item) => !(isMother && hiddenForMother.includes(item.to))).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
