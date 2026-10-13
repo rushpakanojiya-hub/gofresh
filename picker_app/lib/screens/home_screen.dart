@@ -349,11 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           _onlineToggle(),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: () => _snack('No notifications yet'),
-            icon: const Icon(Icons.notifications_none),
-          ),
+          
         ],
       ),
     );
