@@ -221,7 +221,36 @@ class _HomeScreenState extends State<HomeScreen> {
     _pollTask();
   }
 
+  Map<String, dynamic>? _pickTodayBooking() {
+    final now = DateTime.now();
+    final t = fmtDate(now);
+    final nowM = now.hour * 60 + now.minute;
+    int mins(Object? v) {
+      final p = '${v ?? ''}'.split(':');
+      if (p.length < 2) return 0;
+      return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+    }
+    Map<String, dynamic>? run;
+    Map<String, dynamic>? next;
+    Map<String, dynamic>? last;
+    for (final b in _bookings) {
+      if (b['date'] != t) continue;
+      final s = mins(b['start_time']);
+      final e = mins(b['end_time']);
+      if (nowM >= s && nowM < e) {
+        run ??= b;
+      } else if (nowM < s) {
+        if (next == null || s < mins(next['start_time'])) next = b;
+      } else {
+        if (last == null || e > mins(last['end_time'])) last = b;
+      }
+    }
+    return run ?? next ?? last;
+  }
+
   Map<String, dynamic>? get _todayBooking {
+    final pick = _pickTodayBooking();
+    if (pick != null) return pick;
     final t = fmtDate(DateTime.now());
     for (final b in _bookings) {
       if (b['date'] == t) return b;
@@ -481,7 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_online) {
       final store = _presenceStore.isNotEmpty ? _presenceStore : (tb?['warehouse_name'] ?? '').toString();
       title = 'YOU\u2019RE\nONLINE';
-      msg = '$store\nWaiting for orders...';
+      msg = '$store\n${tb == null ? '' : '${fmtTime((tb['start_time'] ?? '').toString())} - ${fmtTime((tb['end_time'] ?? '').toString())}'}\nWaiting for orders...';
       btn = 'Go offline';
       onTap = _onToggle;
     } else if (tb != null) {

@@ -16,6 +16,7 @@ class _StoresScreenState extends State<StoresScreen> {
   static const Color _blueDark = Color(0xFF0D47A1);
   static const Color _green = Color(0xFF16A34A);
   static const Color _orange = Color(0xFFEA580C);
+  static const Color _indigo = Color(0xFF3F51B5);
 
   bool _loading = true;
   bool _booking = false;
@@ -23,7 +24,8 @@ class _StoresScreenState extends State<StoresScreen> {
   String? _error;
   double? _lat;
   double? _lng;
-  int? _selSlotId;
+  String _filter = 'all';
+  final Set<int> _sel = {};
   List<Map<String, dynamic>> _stores = [];
 
   @override
@@ -33,6 +35,7 @@ class _StoresScreenState extends State<StoresScreen> {
   }
 
   String get _date => fmtDate(widget.date);
+  bool get _isToday => fmtDate(DateTime.now()) == _date;
 
   void _snack(String m) {
     ScaffoldMessenger.of(context)
@@ -76,7 +79,7 @@ class _StoresScreenState extends State<StoresScreen> {
     setState(() {
       _loading = true;
       _error = null;
-      _selSlotId = null;
+      _sel.clear();
     });
     try {
       final r = await ApiService.getPickerStores(lat: _lat, lng: _lng, date: _date);
@@ -104,34 +107,76 @@ class _StoresScreenState extends State<StoresScreen> {
     }
   }
 
-  bool _slotEnded(Map<String, dynamic> s) {
-    if (fmtDate(DateTime.now()) != _date) return false;
-    final p = (s['end_time'] ?? '').toString().split(':');
-    if (p.length < 2) return false;
-    final now = DateTime.now();
-    final end = DateTime(now.year, now.month, now.day, int.tryParse(p[0]) ?? 0, int.tryParse(p[1]) ?? 0);
-    return now.isAfter(end);
+  int _mins(String t) {
+    final p = t.split(':');
+    if (p.length < 2) return 0;
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
   }
 
+  int get _nowMins {
+    final n = DateTime.now();
+    return n.hour * 60 + n.minute;
+  }
+
+  String _st(Map<String, dynamic> s) => (s['start_time'] ?? '').toString();
+  String _en(Map<String, dynamic> s) => (s['end_time'] ?? '').toString();
+  bool _ended(Map<String, dynamic> s) => _isToday && _nowMins >= _mins(_en(s));
+  bool _started(Map<String, dynamic> s) => _isToday && _nowMins >= _mins(_st(s));
+  bool _mine(Map<String, dynamic> s) => s['booked_by_me'] == true;
+  bool _full(Map<String, dynamic> s) {
+    final cap = (s['capacity'] as num?)?.toInt() ?? 0;
+    final booked = (s['booked'] as num?)?.toInt() ?? 0;
+    return cap > 0 && booked >= cap;
+  }
+
+  bool _open(Map<String, dynamic> s) => !_mine(s) && !_full(s) && !_ended(s);
+
+  bool _passes(Map<String, dynamic> s) {
+    if (_filter == 'open') return _open(s);
+    if (_filter == 'booked') return _mine(s);
+    return true;
+  }
+
+  String _groupOf(Map<String, dynamic> s) {
+    final m = _mins(_st(s));
+    if (m < 720) return 'Morning';
+    if (m < 1020) return 'Afternoon';
+    return 'Evening';
+  }
+
+  List<Map<String, dynamic>> _slotsOf(Map<String, dynamic> st) {
+    final r = st['slots'];
+    return r is List ? r.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : <Map<String, dynamic>>[];
+  }
+
+  String _hrs(double h) => h == h.roundToDouble() ? '${h.round()}' : h.toStringAsFixed(1);
+
   Future<void> _book() async {
-    final id = _selSlotId;
-    if (id == null || _booking) return;
+    if (_sel.isEmpty || _booking) return;
     setState(() => _booking = true);
-    try {
-      final r = await ApiService.bookSlot(id, _date);
-      if (!mounted) return;
-      if (r['error'] != null) {
-        setState(() => _booking = false);
-        _snack(r['error'].toString());
-        await _load();
-        return;
+    var ok = 0;
+    String? err;
+    for (final id in _sel.toList()) {
+      try {
+        final r = await ApiService.bookSlot(id, _date);
+        if (r['error'] != null) {
+          err = r['error'].toString();
+        } else {
+          ok++;
+        }
+      } catch (_) {
+        err = 'Network error. Please try again.';
       }
-      Navigator.pop(context, true);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _booking = false);
-      _snack('Network error. Please try again.');
     }
+    if (!mounted) return;
+    if (ok > 0) {
+      if (err != null) _snack('$ok booked. $err');
+      Navigator.pop(context, true);
+      return;
+    }
+    setState(() => _booking = false);
+    if (err != null) _snack(err);
+    await _load();
   }
 
   Widget _banner() {
@@ -143,7 +188,7 @@ class _StoresScreenState extends State<StoresScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Book your slot',
+            'Book your slots',
             style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
@@ -176,23 +221,67 @@ class _StoresScreenState extends State<StoresScreen> {
     );
   }
 
+  Widget _chip(String id, String label) {
+    final sel = _filter == id;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(color: sel ? Colors.white : Colors.black87, fontSize: 12)),
+        selected: sel,
+        selectedColor: const Color(0xFF455A64),
+        backgroundColor: Colors.white,
+        showCheckmark: false,
+        onSelected: (_) => setState(() => _filter = id),
+      ),
+    );
+  }
+
   Widget _slotRow(Map<String, dynamic> s) {
     final id = (s['id'] as num).toInt();
     final cap = (s['capacity'] as num?)?.toInt() ?? 0;
     final booked = (s['booked'] as num?)?.toInt() ?? 0;
-    final mine = s['booked_by_me'] == true;
-    final full = cap > 0 && booked >= cap;
-    final ended = _slotEnded(s);
-    final disabled = mine || full || ended;
-    final selected = _selSlotId == id;
-    String note = '$booked/$cap booked';
-    if (mine) note = 'Already booked by you';
-    if (full) note = 'Slot full';
-    if (ended) note = 'Slot over';
+    final mine = _mine(s);
+    final ended = _ended(s);
+    final full = _full(s);
+    final started = _started(s);
+    final canPick = _open(s);
+    final dim = ended && !mine;
+
+    Widget trailing;
+    if (mine) {
+      trailing = Padding(
+        padding: const EdgeInsets.all(12),
+        child: Icon(started && !ended ? Icons.play_circle_fill : Icons.check_circle, color: _green),
+      );
+    } else if (ended) {
+      trailing = const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Closed', style: TextStyle(fontSize: 12, color: Colors.black45)),
+      );
+    } else if (full) {
+      trailing = const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Full', style: TextStyle(fontSize: 12, color: Colors.black45)),
+      );
+    } else {
+      trailing = Checkbox(
+        value: _sel.contains(id),
+        activeColor: _green,
+        onChanged: _booking ? null : (_) => setState(() { if (!_sel.add(id)) _sel.remove(id); }),
+      );
+    }
+
     return InkWell(
-      onTap: disabled ? null : () => setState(() => _selSlotId = selected ? null : id),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      onTap: (!canPick || _booking) ? null : () => setState(() { if (!_sel.add(id)) _sel.remove(id); }),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            left: BorderSide(color: mine ? _indigo : Colors.transparent, width: 3),
+            bottom: const BorderSide(color: Color(0xFFEDEDED)),
+          ),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -200,36 +289,63 @@ class _StoresScreenState extends State<StoresScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${fmtTime((s['start_time'] ?? '').toString())} - ${fmtTime((s['end_time'] ?? '').toString())}',
+                    '${fmtTime(_st(s))} - ${fmtTime(_en(s))}',
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: disabled ? Colors.grey : Colors.black87,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: dim ? Colors.black38 : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(note, style: const TextStyle(fontSize: 12, color: _orange, fontWeight: FontWeight.w600)),
+                  if (mine)
+                    Text(started && !ended ? 'Booked - running now' : 'Booked',
+                        style: const TextStyle(fontSize: 12, color: _indigo, fontWeight: FontWeight.w600))
+                  else
+                    Text('$booked/$cap booked',
+                        style: TextStyle(fontSize: 12, color: dim ? Colors.black38 : _orange, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-            Icon(
-              mine
-                  ? Icons.check_circle
-                  : (selected ? Icons.check_box : Icons.check_box_outline_blank),
-              color: disabled && !mine ? Colors.grey.shade400 : _green,
-            ),
+            trailing,
           ],
         ),
       ),
     );
   }
 
+  List<Widget> _groups(List<Map<String, dynamic>> slots) {
+    final out = <Widget>[];
+    for (final g in const ['Morning', 'Afternoon', 'Evening']) {
+      final all = slots.where((s) => _groupOf(s) == g).toList();
+      final shown = all.where(_passes).toList();
+      if (shown.isEmpty) continue;
+      out.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        color: const Color(0xFF5F6368),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$g slots', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 2),
+            Text('${fmtTime(_st(all.first))} - ${fmtTime(_en(all.last))} \u2022 ${all.length} Slots',
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+        ),
+      ));
+      for (final s in shown) {
+        out.add(_slotRow(s));
+      }
+    }
+    if (out.isEmpty) {
+      out.add(const Padding(padding: EdgeInsets.all(16), child: Text('No slots here')));
+    }
+    return out;
+  }
+
   Widget _storeCard(Map<String, dynamic> st) {
     final dist = (st['distance_km'] as num?)?.toDouble() ?? 0;
-    final slotsRaw = st['slots'];
-    final slots = slotsRaw is List
-        ? slotsRaw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
-        : <Map<String, dynamic>>[];
+    final slots = _slotsOf(st);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -257,16 +373,12 @@ class _StoresScreenState extends State<StoresScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        (st['name'] ?? '').toString(),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                      ),
-                      Text(
-                        (st['address'] ?? '').toString(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                      ),
+                      Text((st['name'] ?? '').toString(),
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text((st['address'] ?? '').toString(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
                     ],
                   ),
                 ),
@@ -279,13 +391,38 @@ class _StoresScreenState extends State<StoresScreen> {
               border: Border.all(color: const Color(0xFFD6E6FF)),
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
             ),
+            clipBehavior: Clip.antiAlias,
             child: slots.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('No slots available'),
-                  )
-                : Column(children: slots.map(_slotRow).toList()),
+                ? const Padding(padding: EdgeInsets.all(16), child: Text('No slots available'))
+                : Column(children: _groups(slots)),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryBar() {
+    final all = <Map<String, dynamic>>[for (final st in _stores) ..._slotsOf(st)];
+    final chosen = _sel.isNotEmpty
+        ? all.where((s) => _sel.contains((s['id'] as num).toInt())).toList()
+        : all.where(_mine).toList();
+    var hours = 0.0;
+    for (final s in chosen) {
+      hours += (_mins(_en(s)) - _mins(_st(s))) / 60.0;
+    }
+    final n = chosen.length;
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF1E88E5),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(_sel.isNotEmpty ? 'Selected slots' : 'Booked slots',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+          Text('$n Slot${n == 1 ? '' : 's'} (${_hrs(hours)} hours)',
+              style: const TextStyle(color: Colors.white, fontSize: 13)),
         ],
       ),
     );
@@ -294,7 +431,7 @@ class _StoresScreenState extends State<StoresScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF3F7FF),
       appBar: AppBar(
         backgroundColor: _blueDark,
         foregroundColor: Colors.white,
@@ -303,6 +440,10 @@ class _StoresScreenState extends State<StoresScreen> {
       body: Column(
         children: [
           _banner(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Row(children: [_chip('all', 'All'), _chip('open', 'Open'), _chip('booked', 'Booked')]),
+          ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -319,11 +460,15 @@ class _StoresScreenState extends State<StoresScreen> {
                       )
                     : _stores.isEmpty
                         ? const Center(child: Text('No stores found'))
-                        : ListView(
-                            padding: const EdgeInsets.all(16),
-                            children: _stores.map(_storeCard).toList(),
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView(
+                              padding: const EdgeInsets.all(16),
+                              children: _stores.map(_storeCard).toList(),
+                            ),
                           ),
           ),
+          _summaryBar(),
           SafeArea(
             top: false,
             child: Padding(
@@ -331,9 +476,9 @@ class _StoresScreenState extends State<StoresScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (_selSlotId == null || _booking) ? null : _book,
+                  onPressed: (_sel.isEmpty || _booking) ? null : _book,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
+                    backgroundColor: _green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -344,7 +489,8 @@ class _StoresScreenState extends State<StoresScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Book slot', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      : Text(_sel.length > 1 ? 'Book ${_sel.length} slots' : 'Book slot',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
               ),
             ),

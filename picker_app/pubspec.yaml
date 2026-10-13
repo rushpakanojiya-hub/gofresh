@@ -67,6 +67,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/picker_welcome.png
+    - assets/images/login_bg.png
     - assets/lottie/search.json
 
   # To add assets to your application, add an assets section, like this:
