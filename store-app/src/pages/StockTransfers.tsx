@@ -16,8 +16,8 @@ type Supplier = { id: number; name: string; city: string }
 type Row = { key: number; product: Product | null; qty: string; error?: string }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: 'Awaiting approval',
-  in_transit: 'On the way',
+  pending: 'Waiting for warehouse',
+  in_transit: 'Truck on the way',
   received: 'Received',
   rejected: 'Rejected',
   cancelled: 'Cancelled',
@@ -302,7 +302,7 @@ export default function StockTransfers() {
           onClick={toggleCreate}
           className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors"
         >
-          {showCreate ? 'Cancel' : '+ Request stock'}
+          {showCreate ? 'Cancel' : '+ Request truck'}
         </button>
       </div>
 
@@ -388,7 +388,7 @@ export default function StockTransfers() {
               disabled={isSaving || suppliers.length === 0}
               className="w-full py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {isSaving ? 'Sending...' : 'Send request'}
+              {isSaving ? 'Sending...' : 'Request truck'}
             </button>
           </form>
         </div>
@@ -464,7 +464,7 @@ export default function StockTransfers() {
                           disabled={busy}
                           className="text-emerald-400 hover:text-emerald-300 text-xs disabled:opacity-50"
                         >
-                          {busy ? 'Receiving...' : 'Mark Received'}
+                          {busy ? 'Receiving...' : 'Truck arrived'}
                         </button>
                       )}
                     </td>

@@ -231,7 +231,7 @@ export default function StockTransfers() {
                       <td className="px-4 py-3">{t.quantity}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded-full ${statusColor(t.status)}`}>
-                          {t.status}
+                          {({ pending: 'Truck requested', in_transit: 'Truck on the way', received: 'Truck arrived', rejected: 'Rejected', cancelled: 'Cancelled' } as Record<string, string>)[t.status] ?? t.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-3">
@@ -242,7 +242,7 @@ export default function StockTransfers() {
                               disabled={actingId === t.id}
                               className="text-emerald-400 hover:text-emerald-300 text-xs disabled:opacity-50"
                             >
-                              {actingId === t.id ? 'Approving...' : 'Approve'}
+                              {actingId === t.id ? 'Dispatching...' : 'Load & dispatch truck'}
                             </button>
                             <button
                               onClick={() => handleReject(t.id)}
@@ -259,7 +259,7 @@ export default function StockTransfers() {
                             disabled={actingId === t.id}
                             className="text-emerald-400 hover:text-emerald-300 text-xs disabled:opacity-50"
                           >
-                            {actingId === t.id ? 'Receiving...' : 'Mark Received'}
+                            {actingId === t.id ? 'Receiving...' : 'Truck arrived'}
                           </button>
                         )}
                       </td>
