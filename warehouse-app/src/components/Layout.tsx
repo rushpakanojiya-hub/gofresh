@@ -104,13 +104,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/notifications" className="text-slate-300 hover:text-slate-100">
             <span className="relative inline-block"><Icon name="bell" size={20} />{unread > 0 && <span className="absolute -top-2 -right-2 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center">{unread}</span>}</span>
           </NavLink>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-indigo-500 text-white text-xs font-bold flex items-center justify-center">{initials}</div>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold">{staff?.name}</p>
-              <p className="text-xs text-slate-400 capitalize">{roleText}</p>
-            </div>
-          </div>
         </header>
         <main className="flex-1 min-w-0">{children}</main>
       </div>
