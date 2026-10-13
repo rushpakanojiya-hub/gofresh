@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   listMyStockTransfers,
   requestStockTransfer,
@@ -218,6 +218,7 @@ export default function StockTransfers() {
               <tbody>
                 {transfers.map((t) => {
                   const isIncoming = t.to_warehouse_id === staff?.warehouse_id
+                  const isSupplier = t.from_warehouse_id === staff?.warehouse_id
                   return (
                     <tr key={t.id} className="border-t border-slate-800">
                       <td className="px-4 py-3">{t.product?.name ?? `#${t.product_id}`}</td>
@@ -234,7 +235,7 @@ export default function StockTransfers() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-3">
-                        {isIncoming && t.status === 'pending' && (
+                        {isSupplier && t.status === 'pending' && (
                           <>
                             <button
                               onClick={() => handleApprove(t.id)}
