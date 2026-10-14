@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { listWarehouseOrders } from '../api/warehouse'
+import { listWarehouseOrders, listReceivings } from '../api/warehouse'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -26,6 +26,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { staff, logout } = useAuth()
 
   const [newCount, setNewCount] = useState(0)
+  const [recvCount, setRecvCount] = useState(0)
   useEffect(() => {
     if (!staff) return
     let alive = true
@@ -34,6 +35,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       try {
         const data = await listWarehouseOrders({ page: 1, limit: 100 })
         if (alive) setNewCount((data.orders ?? []).filter((o) => NEW_VIEW.includes(o.status)).length)
+        const rec = await listReceivings({ page: 1, limit: 100 })
+        if (alive) setRecvCount((rec.receivings ?? []).filter((r) => ['pending', 'received', 'accepted'].includes(r.status)).length)
       } catch {
         // badge is optional; ignore errors
       }
@@ -68,7 +71,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 }`
               }
             >
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{item.label}{item.to === '/receiving' && recvCount > 0 ? ` (${recvCount})` : ''}</span>
               {item.to === '/orders' && newCount > 0 && (
                 <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-semibold flex items-center justify-center">
                   {newCount}
