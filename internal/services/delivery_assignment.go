@@ -142,9 +142,11 @@ func AutoAssignDeliveryPartner(orderID uint) {
         // A partner also needs a valid (non-null) current GPS fix to be
         // eligible at all - "valid location" is a hard eligibility gate here,
         // distinct from the freshness *preference* applied further down.
-        var partners []models.DeliveryPartner
+        // BUG-45: only riders checked in at the order's own warehouse are eligible.
+	whAny, whID := orderWarehouseScope(&order)
+	var partners []models.DeliveryPartner
         if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-            Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL AND checked_in_warehouse_id IS NOT NULL AND checked_in_at > ?", true, true, time.Now().Add(-StoreCheckinMaxAge)).
+            Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL AND checked_in_warehouse_id IS NOT NULL AND (?::boolean OR checked_in_warehouse_id = ?) AND checked_in_at > ?", true, true, whAny, whID, time.Now().Add(-StoreCheckinMaxAge)).
             Order("id").
             Find(&partners).Error; err != nil {
             return fmt.Errorf("failed to load delivery partners: %w", err)

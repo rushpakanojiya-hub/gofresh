@@ -148,9 +148,11 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 		return nil, nil
 	}
 
+	// BUG-45: only riders checked in at the order's own warehouse are eligible.
+	whAny, whID := orderWarehouseScope(order)
 	var partners []models.DeliveryPartner
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL AND checked_in_warehouse_id IS NOT NULL AND checked_in_at > ?", true, true, time.Now().Add(-StoreCheckinMaxAge)).
+		Where("is_active = ? AND is_online = ? AND current_lat IS NOT NULL AND current_lng IS NOT NULL AND checked_in_warehouse_id IS NOT NULL AND (?::boolean OR checked_in_warehouse_id = ?) AND checked_in_at > ?", true, true, whAny, whID, time.Now().Add(-StoreCheckinMaxAge)).
 		Order("id").
 		Find(&partners).Error; err != nil {
 		return nil, fmt.Errorf("failed to load delivery partners: %w", err)
