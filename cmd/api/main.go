@@ -73,6 +73,10 @@ func main() {
 			services.ExpireStaleAssignments()
 		}
 	}()
+	// BUG-15: refund wallet + cancel online orders whose gateway payment never completed.
+	c.AddFunc("*/5 * * * *", func() {
+		services.ExpireUnpaidWalletOrders()
+	})
 	c.Start()
 
 	// 6. Setup Gin router
