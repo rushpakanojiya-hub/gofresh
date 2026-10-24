@@ -105,7 +105,7 @@ func RequestReturn(c *gin.Context) {
 	if err := database.DB.Table("return_request_items").
 		Select("order_item_id, SUM(quantity) as total").
 		Joins("JOIN return_requests ON return_requests.id = return_request_items.return_request_id").
-		Where("return_requests.order_id = ? AND return_requests.status IN ?", order.ID, []string{models.ReturnStatusPending, models.ReturnStatusApproved}).
+		Where("return_requests.order_id = ? AND return_requests.status IN ?", order.ID, []string{models.ReturnStatusPending, models.ReturnStatusApproved, models.ReturnStatusCompleted}). // BUG-20: completed returns still count as returned
 		Group("order_item_id").
 		Scan(&existingRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate return quantities"})
@@ -188,6 +188,7 @@ func RequestReturn(c *gin.Context) {
 		Status:       models.ReturnStatusApproved,
 		RefundAmount: refundAmount,
 		ImageURL:     imageURL,
+		ImageURLs:    req.ImageURLs,
 		Items:        returnItems,
 	}
 
