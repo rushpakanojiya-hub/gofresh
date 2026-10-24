@@ -20,7 +20,7 @@ func adminCancelOrderTx(tx *gorm.DB, order *models.Order) (float64, error) {
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, order.ID).Error; err != nil {
 		return 0, err
 	}
-	if locked.Status != models.OrderStatusPending && locked.Status != models.OrderStatusConfirmed {
+	if !adminCancellableStatus[locked.Status] {
 		return 0, errOrderAlreadyCancelled
 	}
 
@@ -109,4 +109,11 @@ func adminPostCancelRefund(orderID uint, total float64) {
 	if err := services.PostWalletRefundLedgerEntry(orderID, total); err != nil {
 		log.Printf("failed to post refund ledger entry for order %d: %v", orderID, err)
 	}
+}
+
+// BUG-30: statuses from which an admin may cancel an order.
+var adminCancellableStatus = map[string]bool{
+	models.OrderStatusPending: true, models.OrderStatusConfirmed: true, models.OrderStatusPicking: true,
+	models.OrderStatusPicked: true, models.OrderStatusPacking: true, models.OrderStatusPacked: true,
+	models.OrderStatusReadyForDispatch: true,
 }

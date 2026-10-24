@@ -365,7 +365,13 @@ func UpdateInventory(c *gin.Context) {
 var validOrderTransitions = map[string]map[string]bool{
 	models.OrderStatusPending:   {models.OrderStatusConfirmed: true, models.OrderStatusCancelled: true},
 	models.OrderStatusConfirmed: {models.OrderStatusShipped: true, models.OrderStatusCancelled: true},
-	models.OrderStatusShipped:   {models.OrderStatusDelivered: true},
+	models.OrderStatusShipped: {models.OrderStatusDelivered: true},
+	// BUG-30: warehouse in-progress statuses can still be cancelled by admin.
+	models.OrderStatusPicking: {models.OrderStatusCancelled: true},
+	models.OrderStatusPicked: {models.OrderStatusCancelled: true},
+	models.OrderStatusPacking: {models.OrderStatusCancelled: true},
+	models.OrderStatusPacked: {models.OrderStatusCancelled: true},
+	models.OrderStatusReadyForDispatch: {models.OrderStatusCancelled: true},
 }
 
 // GetAllOrders godoc
