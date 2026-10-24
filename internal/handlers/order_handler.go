@@ -149,6 +149,10 @@ func Checkout(c *gin.Context) {
 		}
 
 		serviceability := services.CalculateServiceability(address.Pincode, address.Lat, address.Lng)
+		// BUG-50: unzoned pincodes must not get free delivery or pass checkout.
+		if !serviceability.Serviceable {
+			return errors.New("Delivery is not available for this address")
+		}
 		if paymentMethod == models.PaymentMethodCOD && !serviceability.CODAvailable {
 			return errors.New("Cash on Delivery is not available for this address")
 		}
