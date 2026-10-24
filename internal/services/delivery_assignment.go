@@ -178,7 +178,9 @@ func AutoAssignDeliveryPartner(orderID uint) {
             loadByPartner[l.DeliveryPartnerID] = l.Cnt
         }
 
-        isCOD := order.PaymentMethod == models.PaymentMethodCOD
+        // BUG-48: in-flight COD orders count toward the cash limit.
+	inFlightCOD, _ := InFlightCODByPartner(tx)
+	isCOD := order.PaymentMethod == models.PaymentMethodCOD
         var pendingCOD map[uint]float64
         {
             var pErr error
@@ -214,7 +216,7 @@ func AutoAssignDeliveryPartner(orderID uint) {
             if pendingCOD[p.ID] >= CODHardStopLimit {
                 continue
             }
-            if isCOD && pendingCOD[p.ID] > 0 && pendingCOD[p.ID]+order.TotalAmount > CODCashLimit {
+            if isCOD && pendingCOD[p.ID]+inFlightCOD[p.ID] > 0 && pendingCOD[p.ID]+inFlightCOD[p.ID]+order.TotalAmount > CODCashLimit {
                 continue // partner already holds the cash limit
             }
 

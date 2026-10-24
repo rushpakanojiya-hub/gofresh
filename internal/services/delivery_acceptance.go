@@ -178,6 +178,8 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 		loadByPartner[l.DeliveryPartnerID] = l.Cnt
 	}
 
+	// BUG-48: in-flight COD orders count toward the cash limit.
+	inFlightCOD, _ := InFlightCODByPartner(tx)
 	isCOD := order.PaymentMethod == models.PaymentMethodCOD
         var pendingCOD map[uint]float64
         {
@@ -210,7 +212,7 @@ func pickEligiblePartnerExcluding(tx *gorm.DB, order *models.Order, exclude map[
 		if pendingCOD[p.ID] >= CODHardStopLimit {
                 continue
             }
-            if isCOD && pendingCOD[p.ID] > 0 && pendingCOD[p.ID]+order.TotalAmount > CODCashLimit {
+            if isCOD && pendingCOD[p.ID]+inFlightCOD[p.ID] > 0 && pendingCOD[p.ID]+inFlightCOD[p.ID]+order.TotalAmount > CODCashLimit {
                         continue
                 }
                 fresh := p.LastLocationUpdate != nil && p.LastLocationUpdate.After(staleCutoff)
