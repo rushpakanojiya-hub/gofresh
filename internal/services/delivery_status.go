@@ -276,6 +276,7 @@ func VerifyDeliveryGeofenceForOrder(order *models.Order, partnerID uint) error {
 // existing field rather than adding a new one for what is conceptually the
 // same "why didn't this go through" note.
 func ResolveFailedDelivery(orderID, partnerID uint, action, reason string) (*models.Order, string, error) {
+	var returnRefundTotal float64 // BUG-44
 	var order models.Order
 	var plaintextOTP string
 
@@ -342,11 +343,19 @@ func ResolveFailedDelivery(orderID, partnerID uint, action, reason string) (*mod
 		if result.RowsAffected == 0 {
 			return ErrDeliveryStatusInvalidTransition
 		}
+		if action == "return" {
+			amt, rerr := returnedOrderRestockRefundTx(tx, &order)
+			if rerr != nil {
+				return rerr
+			}
+			returnRefundTotal = amt
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, "", err
 	}
+	postReturnedOrderRefundLedger(order.ID, returnRefundTotal)
 
 	notifTitle := "Delivery marked as returned"
 	notifMsg := fmt.Sprintf("Order #%d has been returned to the store.", order.ID)
