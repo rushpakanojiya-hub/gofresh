@@ -193,7 +193,7 @@ func AssignDeliveryPartner(c *gin.Context) {
 			return errAssignOrderNotFound
 		}
 
-		if order.Status != models.OrderStatusConfirmed && order.Status != models.OrderStatusReadyForDispatch && order.Status != models.OrderStatusShipped {
+		if !adminAssignableStatus[order.Status] { // BUG-49
 			return errAssignBadOrderStatus
 		}
 
@@ -241,6 +241,11 @@ func AssignDeliveryPartner(c *gin.Context) {
 			return errAssignPartnerAtCapacity
 		}
 
+		// BUG-49: same check-in and COD-limit rules as auto-assign.
+		if err := adminAssignExtraChecks(tx, &order, partner.ID); err != nil {
+			return err
+		}
+
 		// AssignedAt is set once, on the very first successful
 		// assignment - later re-assignments (e.g. after a rejection)
 		// must not overwrite the original confirmed-to-assigned
@@ -284,6 +289,10 @@ func AssignDeliveryPartner(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery partner is not active"})
 		case errors.Is(err, errAssignPartnerOffline):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery partner is offline and cannot receive new assignments"})
+		case errors.Is(err, errAssignPartnerNotCheckedIn):
+			c.JSON(http.StatusConflict, gin.H{"error": "Delivery partner is not checked in at this order's store"})
+		case errors.Is(err, errAssignPartnerCODLimit):
+			c.JSON(http.StatusConflict, gin.H{"error": "Delivery partner would exceed the COD cash limit"})
 		case errors.Is(err, errAssignPartnerAtCapacity):
 			c.JSON(http.StatusConflict, gin.H{"error": "Delivery partner already has the maximum number of active orders and cannot receive another assignment"})
 		default:
