@@ -452,21 +452,19 @@ func UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
-	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-		if req.Status == models.OrderStatusCancelled {
-			for _, item := range order.Items {
-				var inventory models.Inventory
-				if err := tx.Where("product_id = ?", item.ProductID).Order("id").First(&inventory).Error; err == nil {
-					inventory.Stock += item.Quantity
-					inventory.InStock = true
-					if err := tx.Save(&inventory).Error; err != nil {
-						return err
-					}
-				}
-			}
-		}
-		return tx.Model(&order).Update("status", req.Status).Error
-	})
+	// BUG-29: admin cancel refunds wallet/gateway, restocks the right warehouse, logs stock movement, reinstates coupon.
+    var adminGatewayRefund float64
+    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+        if req.Status == models.OrderStatusCancelled {
+            amt, err := adminCancelOrderTx(tx, &order)
+            adminGatewayRefund = amt
+            return err
+        }
+        return tx.Model(&order).Update("status", req.Status).Error
+    })
+    if txErr == nil && req.Status == models.OrderStatusCancelled {
+        adminPostCancelRefund(order.ID, adminGatewayRefund+order.WalletAmountUsed)
+    }
 
 	if txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order status"})
