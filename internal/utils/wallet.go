@@ -22,11 +22,16 @@ return &wallet, nil
 if !errors.Is(err, gorm.ErrRecordNotFound) {
 return nil, err
 }
-wallet = models.Wallet{UserID: userID, Balance: 0}
-if err := tx.Create(&wallet).Error; err != nil {
-return nil, err
-}
-return &wallet, nil
+// BUG-36: concurrent first-time creates must not duplicate or fail; insert-if-absent, then re-read under lock.
+	newWallet := models.Wallet{UserID: userID, Balance: 0}
+	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&newWallet).Error; err != nil {
+		return nil, err
+	}
+	var locked models.Wallet
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ?", userID).First(&locked).Error; err != nil {
+		return nil, err
+	}
+	return &locked, nil
 }
 
 // CreditWallet adds amount to the user's wallet balance and writes a ledger
