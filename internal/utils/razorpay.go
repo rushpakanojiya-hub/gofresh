@@ -82,6 +82,10 @@ func CreateRazorpayOrder(amountRupees float64, receipt string) (string, error) {
 // See: https://razorpay.com/docs/payments/server-integration/php/payment-gateway/build-integration/#step-5-verify-payment-signature
 func VerifyRazorpaySignature(razorpayOrderID, razorpayPaymentID, signature string) bool {
 	cfg := config.AppConfig
+	// BUG-33: never HMAC with an empty key or accept an empty signature.
+	if cfg.RazorpayKeySecret == "" || signature == "" {
+		return false
+	}
 	payload := razorpayOrderID + "|" + razorpayPaymentID
 
 	mac := hmac.New(sha256.New, []byte(cfg.RazorpayKeySecret))
