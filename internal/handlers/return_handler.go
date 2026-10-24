@@ -30,6 +30,9 @@ func RequestReturn(c *gin.Context) {
 	userID := c.MustGet("user_id").(uint)
 	orderID := c.Param("id")
 
+	// BUG-22: serialize concurrent return requests per order.
+	unlockReturn := lockReturnOrder(orderID)
+	defer unlockReturn()
 	var order models.Order
 	if err := database.DB.Preload("Items").First(&order, orderID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
