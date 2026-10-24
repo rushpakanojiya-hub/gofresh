@@ -601,6 +601,7 @@ items?: ReturnRequestItem[]
 processed_by?: number
 rejection_reason?: string
 image_url?: string
+  image_urls?: string[]
 created_at: string
 updated_at: string
 customer_name: string

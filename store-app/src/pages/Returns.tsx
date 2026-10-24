@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { listStoreReturns, approveStoreReturn, rejectStoreReturn } from '../api/warehouse'
 import type { StoreReturnRequest } from '../types/warehouse'
 import StatusBadge from '../components/StatusBadge'
@@ -126,15 +126,26 @@ export default function Returns() {
                   )}
                 </div>
 
-                {req.image_url && (
-                  <a href={req.image_url} target="_blank" rel="noreferrer" className="shrink-0">
-                    <img
-                      src={req.image_url}
-                      alt="Return evidence"
-                      className="w-20 h-20 object-cover rounded-lg border border-slate-700"
-                    />
-                  </a>
-                )}
+                {(() => {
+                  const returnPhotos = req.image_urls && req.image_urls.length > 0
+                    ? req.image_urls
+                    : req.image_url
+                      ? [req.image_url]
+                      : []
+                  return returnPhotos.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 shrink-0 max-w-[10.5rem]">
+                      {returnPhotos.map((u, i) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer">
+                          <img
+                            src={u}
+                            alt={`Return evidence ${i + 1}`}
+                            className="w-20 h-20 object-cover rounded-lg border border-slate-700"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null
+                })()}
 
                 <StatusBadge status={req.status} />
               </div>
