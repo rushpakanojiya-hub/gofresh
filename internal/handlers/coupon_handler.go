@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"errors"
 	"net/http"
 	"strconv"
@@ -65,7 +66,7 @@ func ValidateCoupon(db *gorm.DB, code string, orderAmount float64, userID uint) 
 	if coupon.DiscountType == models.CouponTypeFlat {
 		discount = coupon.DiscountValue
 	} else {
-		discount = orderAmount * (coupon.DiscountValue / 100)
+		discount = math.Round(orderAmount*(coupon.DiscountValue/100)*100) / 100 // BUG-41: round to paise
 	}
 	if coupon.MaxDiscountAmount != nil && discount > *coupon.MaxDiscountAmount {
 		discount = *coupon.MaxDiscountAmount
@@ -149,6 +150,11 @@ func CreateCoupon(c *gin.Context) {
 	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expiry_date, use YYYY-MM-DD"})
+		return
+	}
+	// BUG-41: a percentage coupon can never exceed 100%.
+	if req.DiscountType != models.CouponTypeFlat && (req.DiscountValue <= 0 || req.DiscountValue > 100) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "percentage discount_value must be between 0 and 100"})
 		return
 	}
 	usageLimit := req.UsageLimit
