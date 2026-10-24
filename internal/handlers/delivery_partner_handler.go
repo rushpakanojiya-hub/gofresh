@@ -698,6 +698,14 @@ func ConfirmDelivery(c *gin.Context) {
 	}
 
 	if order.Status == models.OrderStatusDelivered {
+		// BUG-03: a retry must still book the invoice and sales ledger if the first
+		// attempt saved the order but failed afterwards (both calls are idempotent).
+		if _, err := services.GenerateInvoiceIfNotExists(order.ID); err != nil {
+			log.Printf("CRITICAL: failed to generate invoice for delivered order %s on retry: %v", orderID, err)
+		}
+		if err := services.PostSalesLedgerEntry(order.ID); err != nil {
+			log.Printf("CRITICAL: failed to post sales ledger entry for order %s on retry - revenue untracked: %v", orderID, err)
+		}
 		c.JSON(http.StatusOK, gin.H{"message": "Order is already marked delivered", "order": order})
 		return
 	}
