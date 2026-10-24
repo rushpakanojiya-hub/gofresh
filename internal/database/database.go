@@ -1,15 +1,18 @@
 package database
+
 import (
-	"log"
-	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/config"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"log"
+	"time"
 )
+
 var DB *gorm.DB
+
 // ConnectDatabase opens a connection to PostgreSQL and stores it in DB.
 func ConnectDatabase(cfg *config.Config) {
 	// Only log every SQL query in dev mode. In production this slows down
@@ -37,6 +40,7 @@ func ConnectDatabase(cfg *config.Config) {
 	DB = db
 	log.Println("Database connected successfully")
 }
+
 // AutoMigrate creates/updates all tables based on the models.
 // This covers: Users, OTPs, Categories, Products, Inventory, Cart,
 // CartItems, Addresses, Orders, OrderItems, Payments.
@@ -90,24 +94,25 @@ func AutoMigrate() {
 		&models.Batch{},
 		&models.Invoice{},
 		&models.InvoiceItem{},
-                &models.Expense{},
-                &models.Payroll{},
-                &models.Vendor{},
-                &models.VendorBill{},
-                &models.Account{},
-                &models.LedgerEntry{},
-                &models.BankTransaction{},
+		&models.Expense{},
+		&models.Payroll{},
+		&models.Vendor{},
+		&models.VendorBill{},
+		&models.Account{},
+		&models.LedgerEntry{},
+		&models.BankTransaction{},
 		&models.WarehouseNotification{},
-            &models.CreditNote{},
-            &models.CreditNoteItem{},
-            &models.DebitNote{},
-            &models.VendorBankChangeRequest{},
-            &models.PendingJournalEntry{},
+		&models.CreditNote{},
+		&models.CreditNoteItem{},
+		&models.DebitNote{},
+		&models.VendorBankChangeRequest{},
+		&models.PendingJournalEntry{},
 		&models.MismatchDismissal{},
-            &models.RiderCODDeposit{},
-            &models.RiderPayout{},
-&models.DeliveryNotification{},
-&models.WalletTopup{},
+		&models.RiderCODDeposit{},
+		&models.RiderPayout{},
+		&models.DeliveryNotification{},
+		&models.WalletTopup{},
+		&models.GiftCard{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto-migrate database: %v", err)
@@ -119,9 +124,10 @@ func AutoMigrate() {
 		log.Fatalf("Failed to add gst_percent column: %v", err)
 	}
 	seedDefaultSettings()
-seedChartOfAccounts()
+	seedChartOfAccounts()
 	log.Println("Database migration completed")
 }
+
 // EnsureProductionSchemaPatches applies small, idempotent schema patches
 // that are needed even in production (GIN_MODE=release), where the full
 // AutoMigrate() is skipped in favor of versioned migrations. This lets a
@@ -129,14 +135,27 @@ seedChartOfAccounts()
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
-if err := DB.Exec(`ALTER TABLE orders
+	if err := DB.Exec(`ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS email VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS gender VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS dob VARCHAR(32),
+    ADD COLUMN IF NOT EXISTS avatar_id VARCHAR(64)`).Error; err != nil {
+		log.Printf("Failed to add profile columns to users: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs TEXT`).Error; err != nil {
+		log.Printf("Failed to add notification_prefs column to users: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS image_urls TEXT`).Error; err != nil {
+		log.Printf("Failed to add image_urls column to return_requests: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE orders
     ADD COLUMN IF NOT EXISTS collected_via VARCHAR(10),
     ADD COLUMN IF NOT EXISTS upi_status VARCHAR(12),
     ADD COLUMN IF NOT EXISTS upi_verified_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS upi_utr VARCHAR(40)`).Error; err != nil {
-log.Fatalf("Failed to add UPI columns to orders: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE delivery_partners
+		log.Fatalf("Failed to add UPI columns to orders: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE delivery_partners
     ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS warehouse_id BIGINT,
     ADD COLUMN IF NOT EXISTS licence_url TEXT NOT NULL DEFAULT '',
@@ -149,38 +168,38 @@ if err := DB.Exec(`ALTER TABLE delivery_partners
     ADD COLUMN IF NOT EXISTS upi_id VARCHAR(80) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS onboarding_step INT NOT NULL DEFAULT 5,
     ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'`).Error; err != nil {
-log.Fatalf("Failed to add onboarding columns to delivery_partners: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE delivery_partners
+		log.Fatalf("Failed to add onboarding columns to delivery_partners: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE delivery_partners
     ADD COLUMN IF NOT EXISTS id_doc_type VARCHAR(20) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS voter_url TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS pan_url TEXT NOT NULL DEFAULT ''`).Error; err != nil {
-log.Fatalf("Failed to add id document columns to delivery_partners: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_percent DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
-log.Fatalf("Failed to add gst_percent column: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
-log.Fatalf("Failed to add platform_fee column to orders: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
-log.Fatalf("Failed to add platform_fee column to invoices: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
-log.Fatalf("Failed to add is_online column to delivery_partners: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE delivery_partners
+		log.Fatalf("Failed to add id document columns to delivery_partners: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_percent DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Fatalf("Failed to add gst_percent column: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Fatalf("Failed to add platform_fee column to orders: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Fatalf("Failed to add platform_fee column to invoices: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS is_online BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
+		log.Fatalf("Failed to add is_online column to delivery_partners: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE delivery_partners
     ADD COLUMN IF NOT EXISTS checked_in_warehouse_id BIGINT,
     ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ`).Error; err != nil {
-log.Fatalf("Failed to add store check-in columns to delivery_partners: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_delivery_partners_checked_in_warehouse_id ON delivery_partners (checked_in_warehouse_id)`).Error; err != nil {
-log.Fatalf("Failed to add check-in index to delivery_partners: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS profile_photo_url TEXT NOT NULL DEFAULT ''`).Error; err != nil {
-log.Fatalf("Failed to add profile_photo_url column to delivery_partners: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS subcategories (
+		log.Fatalf("Failed to add store check-in columns to delivery_partners: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_delivery_partners_checked_in_warehouse_id ON delivery_partners (checked_in_warehouse_id)`).Error; err != nil {
+		log.Fatalf("Failed to add check-in index to delivery_partners: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS profile_photo_url TEXT NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatalf("Failed to add profile_photo_url column to delivery_partners: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS subcategories (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     category_id BIGINT NOT NULL REFERENCES categories(id),
@@ -189,12 +208,12 @@ if err := DB.Exec(`CREATE TABLE IF NOT EXISTS subcategories (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 )`).Error; err != nil {
-log.Fatalf("Failed to create subcategories table: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id BIGINT REFERENCES subcategories(id)`).Error; err != nil {
-log.Fatalf("Failed to add subcategory_id column to products: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS expenses (
+		log.Fatalf("Failed to create subcategories table: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id BIGINT REFERENCES subcategories(id)`).Error; err != nil {
+		log.Fatalf("Failed to add subcategory_id column to products: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS expenses (
 id BIGSERIAL PRIMARY KEY,
 amount DOUBLE PRECISION NOT NULL,
 category VARCHAR(30) NOT NULL,
@@ -206,18 +225,18 @@ added_by_id BIGINT NOT NULL REFERENCES users(id),
 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`).Error; err != nil {
-log.Fatalf("Failed to create expenses table: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)`).Error; err != nil {
-log.Fatalf("Failed to create expenses category index: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_expense_date ON expenses(expense_date)`).Error; err != nil {
-log.Fatalf("Failed to create expenses date index: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_warehouse_id ON expenses(warehouse_id)`).Error; err != nil {
-log.Fatalf("Failed to create expenses warehouse index: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS payrolls (
+		log.Fatalf("Failed to create expenses table: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)`).Error; err != nil {
+		log.Fatalf("Failed to create expenses category index: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_expense_date ON expenses(expense_date)`).Error; err != nil {
+		log.Fatalf("Failed to create expenses date index: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_warehouse_id ON expenses(warehouse_id)`).Error; err != nil {
+		log.Fatalf("Failed to create expenses warehouse index: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS payrolls (
 id BIGSERIAL PRIMARY KEY,
 staff_id BIGINT NOT NULL REFERENCES warehouse_staffs(id),
 amount DOUBLE PRECISION NOT NULL,
@@ -231,21 +250,21 @@ paid_at TIMESTAMPTZ NULL,
 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`).Error; err != nil {
-log.Fatalf("Failed to create payrolls table: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_payrolls_staff_id ON payrolls(staff_id)`).Error; err != nil {
-log.Fatalf("Failed to create payrolls staff index: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_payrolls_status ON payrolls(status)`).Error; err != nil {
-log.Fatalf("Failed to create payrolls status index: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_payrolls_month_year ON payrolls(month, year)`).Error; err != nil {
-log.Fatalf("Failed to create payrolls month_year index: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
-log.Fatalf("Failed to add cost_price column to products: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS vendors (
+		log.Fatalf("Failed to create payrolls table: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_payrolls_staff_id ON payrolls(staff_id)`).Error; err != nil {
+		log.Fatalf("Failed to create payrolls staff index: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_payrolls_status ON payrolls(status)`).Error; err != nil {
+		log.Fatalf("Failed to create payrolls status index: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_payrolls_month_year ON payrolls(month, year)`).Error; err != nil {
+		log.Fatalf("Failed to create payrolls month_year index: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Fatalf("Failed to add cost_price column to products: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS vendors (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     contact_name VARCHAR(255),
@@ -315,36 +334,36 @@ CREATE TABLE IF NOT EXISTS bank_transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_bank_transactions_status ON bank_transactions(status);
 CREATE INDEX IF NOT EXISTS idx_bank_transactions_transaction_date ON bank_transactions(transaction_date);`).Error; err != nil {
-log.Fatalf("Failed to create accounting module tables: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS gst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
-log.Fatalf("Failed to add gst_amount column to vendor_bills: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS hold_status VARCHAR(20) NOT NULL DEFAULT ''`).Error; err != nil {
-log.Fatalf("Failed to add hold_status column to vendor_bills: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS hold_reason TEXT`).Error; err != nil {
-log.Fatalf("Failed to add hold_reason column to vendor_bills: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`).Error; err != nil {
-log.Fatalf("Failed to add voided_at column to vendor_bills: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS void_reason TEXT`).Error; err != nil {
-log.Fatalf("Failed to add void_reason column to vendor_bills: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS voided_by_id BIGINT NULL REFERENCES users(id)`).Error; err != nil {
-log.Fatalf("Failed to add voided_by_id column to vendor_bills: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`).Error; err != nil {
-log.Fatalf("Failed to add voided_at column to bank_transactions: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS void_reason TEXT`).Error; err != nil {
-log.Fatalf("Failed to add void_reason column to bank_transactions: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS voided_by_id BIGINT NULL REFERENCES users(id)`).Error; err != nil {
-log.Fatalf("Failed to add voided_by_id column to bank_transactions: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS credit_notes (
+		log.Fatalf("Failed to create accounting module tables: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS gst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Fatalf("Failed to add gst_amount column to vendor_bills: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS hold_status VARCHAR(20) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatalf("Failed to add hold_status column to vendor_bills: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS hold_reason TEXT`).Error; err != nil {
+		log.Fatalf("Failed to add hold_reason column to vendor_bills: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`).Error; err != nil {
+		log.Fatalf("Failed to add voided_at column to vendor_bills: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS void_reason TEXT`).Error; err != nil {
+		log.Fatalf("Failed to add void_reason column to vendor_bills: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendor_bills ADD COLUMN IF NOT EXISTS voided_by_id BIGINT NULL REFERENCES users(id)`).Error; err != nil {
+		log.Fatalf("Failed to add voided_by_id column to vendor_bills: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`).Error; err != nil {
+		log.Fatalf("Failed to add voided_at column to bank_transactions: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS void_reason TEXT`).Error; err != nil {
+		log.Fatalf("Failed to add void_reason column to bank_transactions: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS voided_by_id BIGINT NULL REFERENCES users(id)`).Error; err != nil {
+		log.Fatalf("Failed to add voided_by_id column to bank_transactions: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS credit_notes (
     id BIGSERIAL PRIMARY KEY,
     credit_note_number VARCHAR(50) UNIQUE NOT NULL,
     invoice_id BIGINT NOT NULL REFERENCES invoices(id),
@@ -391,42 +410,42 @@ CREATE TABLE IF NOT EXISTS debit_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_debit_notes_vendor_bill_id ON debit_notes(vendor_bill_id);
 CREATE INDEX IF NOT EXISTS idx_debit_notes_vendor_id ON debit_notes(vendor_id);`).Error; err != nil {
-log.Fatalf("Failed to create credit/debit note tables: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20)`).Error; err != nil {
-log.Fatalf("Failed to add delivery_status column to orders: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_orders_delivery_status ON orders(delivery_status)`).Error; err != nil {
-log.Fatalf("Failed to create delivery_status index on orders: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'draft'`).Error; err != nil {
-log.Fatalf("Failed to add approval_status column to expenses: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approved_by_id BIGINT NULL REFERENCES users(id)`).Error; err != nil {
-log.Fatalf("Failed to add approved_by_id column to expenses: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`).Error; err != nil {
-log.Fatalf("Failed to add approved_at column to expenses: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS rejection_reason TEXT`).Error; err != nil {
-log.Fatalf("Failed to add rejection_reason column to expenses: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`).Error; err != nil {
-log.Fatalf("Failed to add paid_at column to expenses: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_approval_status ON expenses(approval_status)`).Error; err != nil {
-log.Fatalf("Failed to create approval_status index on expenses: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_account_holder VARCHAR(255) NOT NULL DEFAULT ''`).Error; err != nil {
-log.Fatalf("Failed to add bank_account_holder column to vendors: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(50) NOT NULL DEFAULT ''`).Error; err != nil {
-log.Fatalf("Failed to add bank_account_number column to vendors: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_ifsc VARCHAR(20) NOT NULL DEFAULT ''`).Error; err != nil {
-log.Fatalf("Failed to add bank_ifsc column to vendors: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS vendor_bank_change_requests (
+		log.Fatalf("Failed to create credit/debit note tables: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20)`).Error; err != nil {
+		log.Fatalf("Failed to add delivery_status column to orders: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_orders_delivery_status ON orders(delivery_status)`).Error; err != nil {
+		log.Fatalf("Failed to create delivery_status index on orders: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'draft'`).Error; err != nil {
+		log.Fatalf("Failed to add approval_status column to expenses: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approved_by_id BIGINT NULL REFERENCES users(id)`).Error; err != nil {
+		log.Fatalf("Failed to add approved_by_id column to expenses: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`).Error; err != nil {
+		log.Fatalf("Failed to add approved_at column to expenses: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS rejection_reason TEXT`).Error; err != nil {
+		log.Fatalf("Failed to add rejection_reason column to expenses: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`).Error; err != nil {
+		log.Fatalf("Failed to add paid_at column to expenses: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_expenses_approval_status ON expenses(approval_status)`).Error; err != nil {
+		log.Fatalf("Failed to create approval_status index on expenses: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_account_holder VARCHAR(255) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatalf("Failed to add bank_account_holder column to vendors: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(50) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatalf("Failed to add bank_account_number column to vendors: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_ifsc VARCHAR(20) NOT NULL DEFAULT ''`).Error; err != nil {
+		log.Fatalf("Failed to add bank_ifsc column to vendors: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS vendor_bank_change_requests (
     id BIGSERIAL PRIMARY KEY,
     vendor_id BIGINT NOT NULL REFERENCES vendors(id),
     new_account_holder VARCHAR(255),
@@ -441,9 +460,9 @@ if err := DB.Exec(`CREATE TABLE IF NOT EXISTS vendor_bank_change_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_vendor_bank_change_requests_vendor_id ON vendor_bank_change_requests(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_vendor_bank_change_requests_status ON vendor_bank_change_requests(status);`).Error; err != nil {
-log.Fatalf("Failed to create vendor_bank_change_requests table: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS pending_journal_entries (
+		log.Fatalf("Failed to create vendor_bank_change_requests table: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS pending_journal_entries (
     id BIGSERIAL PRIMARY KEY,
     entry_date VARCHAR(10),
     lines_json TEXT,
@@ -457,18 +476,18 @@ if err := DB.Exec(`CREATE TABLE IF NOT EXISTS pending_journal_entries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_pending_journal_entries_status ON pending_journal_entries(status);`).Error; err != nil {
-log.Fatalf("Failed to create pending_journal_entries table: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS gateway_fee DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
-log.Fatalf("Failed to add gateway_fee column to payments: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS is_settled BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
-log.Fatalf("Failed to add is_settled column to payments: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ`).Error; err != nil {
-log.Fatalf("Failed to add settled_at column to payments: %v", err)
-}
-if err := DB.Exec(`CREATE TABLE IF NOT EXISTS rider_cod_deposits (
+		log.Fatalf("Failed to create pending_journal_entries table: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS gateway_fee DOUBLE PRECISION NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Fatalf("Failed to add gateway_fee column to payments: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS is_settled BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
+		log.Fatalf("Failed to add is_settled column to payments: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ`).Error; err != nil {
+		log.Fatalf("Failed to add settled_at column to payments: %v", err)
+	}
+	if err := DB.Exec(`CREATE TABLE IF NOT EXISTS rider_cod_deposits (
     id BIGSERIAL PRIMARY KEY,
     delivery_partner_id BIGINT NOT NULL REFERENCES delivery_partners(id),
     amount DOUBLE PRECISION NOT NULL,
@@ -498,19 +517,19 @@ CREATE TABLE IF NOT EXISTS rider_payouts (
 );
 CREATE INDEX IF NOT EXISTS idx_rider_payouts_partner_id ON rider_payouts(delivery_partner_id);
 CREATE INDEX IF NOT EXISTS idx_rider_payouts_status ON rider_payouts(status);`).Error; err != nil {
-log.Fatalf("Failed to create rider_cod_deposits/rider_payouts tables: %v", err)
-}
-seedDefaultSettings()
-seedChartOfAccounts()
-if err := DB.Exec(`ALTER TABLE ledger_entries ALTER COLUMN created_by_id DROP NOT NULL`).Error; err != nil {
-log.Fatalf("Failed to drop NOT NULL on ledger_entries.created_by_id: %v", err)
-}
-if err := DB.Exec(`ALTER TABLE addresses ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
-log.Fatalf("Failed to add is_deleted column to addresses: %v", err)
-}
-if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_addresses_is_deleted ON addresses(is_deleted)`).Error; err != nil {
-log.Fatalf("Failed to create addresses is_deleted index: %v", err)
-}
+		log.Fatalf("Failed to create rider_cod_deposits/rider_payouts tables: %v", err)
+	}
+	seedDefaultSettings()
+	seedChartOfAccounts()
+	if err := DB.Exec(`ALTER TABLE ledger_entries ALTER COLUMN created_by_id DROP NOT NULL`).Error; err != nil {
+		log.Fatalf("Failed to drop NOT NULL on ledger_entries.created_by_id: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE addresses ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
+		log.Fatalf("Failed to add is_deleted column to addresses: %v", err)
+	}
+	if err := DB.Exec(`CREATE INDEX IF NOT EXISTS idx_addresses_is_deleted ON addresses(is_deleted)`).Error; err != nil {
+		log.Fatalf("Failed to create addresses is_deleted index: %v", err)
+	}
 	_ = DB.Exec(`CREATE SEQUENCE IF NOT EXISTS public.po_number_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1`)
 	_ = DB.Exec(`ALTER TABLE otps ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0`)
 	_ = DB.Exec(`CREATE TABLE IF NOT EXISTS wallet_topups (
@@ -529,40 +548,40 @@ log.Fatalf("Failed to create addresses is_deleted index: %v", err)
 	_ = DB.Exec(`ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT`)
 	_ = DB.Exec(`ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS image_url TEXT`)
 
-    RunMISMigration()
+	RunMISMigration()
 }
+
 // EnsureInvoiceSchemaPatches applies the invoice-related idempotent schema
 // patches once at startup, instead of running them inside every
 // GenerateInvoiceIfNotExists transaction (which took an ACCESS EXCLUSIVE
 // lock on orders/invoices on every call and deadlocked against
 // AutoAssignDeliveryPartner row locks).
 func EnsureInvoiceSchemaPatches() {
-if err := DB.Exec("CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1").Error; err != nil {
-log.Fatalf("Failed to ensure invoice sequence exists: %v", err)
+	if err := DB.Exec("CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1").Error; err != nil {
+		log.Fatalf("Failed to ensure invoice sequence exists: %v", err)
+	}
+	invoiceColumnStatements := []string{
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_line1 VARCHAR(255) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_line2 VARCHAR(255) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_city VARCHAR(100) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_state VARCHAR(100) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_pincode VARCHAR(20) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS is_inter_state BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS taxable_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cgst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sgst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS igst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS sku VARCHAR(100) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS gst_percent DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS hsn_code VARCHAR(20) NOT NULL DEFAULT ''`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS hsn_code VARCHAR(20) NOT NULL DEFAULT ''`,
+		`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS gst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
+	}
+	for _, stmt := range invoiceColumnStatements {
+		if err := DB.Exec(stmt).Error; err != nil {
+			log.Fatalf("Failed to ensure invoice columns exist: %v", err)
+		}
+	}
 }
-invoiceColumnStatements := []string{
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_line1 VARCHAR(255) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_line2 VARCHAR(255) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_city VARCHAR(100) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_state VARCHAR(100) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS address_pincode VARCHAR(20) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS is_inter_state BOOLEAN NOT NULL DEFAULT false`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS taxable_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cgst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sgst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
-`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS igst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
-`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS sku VARCHAR(100) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS gst_percent DOUBLE PRECISION NOT NULL DEFAULT 0`,
-`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS hsn_code VARCHAR(20) NOT NULL DEFAULT ''`,
-`ALTER TABLE products ADD COLUMN IF NOT EXISTS hsn_code VARCHAR(20) NOT NULL DEFAULT ''`,
-`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS gst_amount DOUBLE PRECISION NOT NULL DEFAULT 0`,
-}
-for _, stmt := range invoiceColumnStatements {
-if err := DB.Exec(stmt).Error; err != nil {
-log.Fatalf("Failed to ensure invoice columns exist: %v", err)
-}
-}
-}
-

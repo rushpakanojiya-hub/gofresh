@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import "time"
 
@@ -11,6 +11,10 @@ type User struct {
 	Role      string    `gorm:"default:customer" json:"role"` // customer / admin
 	IsBlocked bool      `gorm:"default:false" json:"is_blocked"`
 	AdminRole string    `gorm:"default:''" json:"admin_role,omitempty"` // super_admin/admin/ops_manager/warehouse_manager/support_agent/finance_manager (only meaningful when Role=admin)
+	Email     string    `gorm:"size:255" json:"email"`
+	Gender    string    `gorm:"size:20" json:"gender"`
+	Dob       string    `gorm:"size:32" json:"dob"`
+	AvatarID  string    `gorm:"size:64" json:"avatar_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -38,5 +42,9 @@ type AuthResponse struct {
 // excluded â€” it's the login identity, so changing it goes through a
 // separate OTP-verified flow, not a plain profile edit.
 type UpdateProfileRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name     string  `json:"name" binding:"required"`
+	Email    *string `json:"email"`
+	Gender   *string `json:"gender"`
+	Dob      *string `json:"dob"`
+	AvatarID *string `json:"avatar_id"`
 }
