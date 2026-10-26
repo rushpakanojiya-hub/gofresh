@@ -135,6 +135,10 @@ func AutoMigrate() {
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
+    // BUG-83: ReserveStock upserts ON CONFLICT (user_id, product_id, warehouse_id); that needs this unique index even when AutoMigrate is skipped.
+    if err := DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_reservation_user_product_wh ON cart_reservations (user_id, product_id, warehouse_id)`).Error; err != nil {
+        log.Printf("Failed to create cart_reservations unique index: %v", err)
+    }
 	if err := DB.Exec(`ALTER TABLE users
     ADD COLUMN IF NOT EXISTS email VARCHAR(255),
     ADD COLUMN IF NOT EXISTS gender VARCHAR(20),
