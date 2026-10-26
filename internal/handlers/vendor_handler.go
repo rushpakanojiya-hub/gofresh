@@ -213,6 +213,10 @@ func ListVendorBills(c *gin.Context) {
 
 	var totalOutstanding float64
 	for _, b := range all {
+		// BUG-08: voided bills are not outstanding.
+		if b.VoidedAt != nil {
+			continue
+		}
 		totalOutstanding += b.Amount - b.AmountPaid
 	}
 
@@ -306,6 +310,11 @@ func PayVendorBill(c *gin.Context) {
 			return err
 		}
 
+		// BUG-08: no payments against voided or on-hold bills.
+		if bill.VoidedAt != nil || bill.HoldStatus != "" {
+			return gorm.ErrInvalidField
+		}
+
 		remaining := bill.Amount - bill.AmountPaid
 		if req.Amount > remaining {
 			return gorm.ErrInvalidData
@@ -318,6 +327,10 @@ func PayVendorBill(c *gin.Context) {
 	if txErr != nil {
 		if txErr == gorm.ErrInvalidData {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment exceeds remaining balance of the bill"})
+			return
+		}
+		if txErr == gorm.ErrInvalidField {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cannot pay a voided or on-hold bill"})
 			return
 		}
 		if txErr == gorm.ErrRecordNotFound {
