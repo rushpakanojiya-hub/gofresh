@@ -292,6 +292,7 @@ func CompletePutawayTask(c *gin.Context) {
 		return
 	}
 	EnsurePutawayTables()
+	ensurePutterReportTable() // BUG-65: report table must exist before the tx reads it
 
 	var wrong bool
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -337,14 +338,23 @@ func CompletePutawayTask(c *gin.Context) {
 		}
 		binID := req.BinID
 		prev := inv.Stock
-		inv.Stock += rec.AcceptedQuantity
+		// BUG-65: units the putter reported damaged/short never reach sellable stock.
+        var reportedQty int
+        if rerr := tx.Model(&models.PutterPutawayReport{}).Where("task_id = ?", t.ID).Select("COALESCE(SUM(quantity), 0)").Scan(&reportedQty).Error; rerr != nil {
+            return rerr
+        }
+        putQty := rec.AcceptedQuantity - reportedQty
+        if putQty < 0 {
+            putQty = 0
+        }
+        inv.Stock += putQty
 		inv.InStock = inv.Stock > 0
 		inv.BinID = &binID
 		if err := tx.Save(&inv).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&models.StockMovement{
-			ProductID: rec.ProductID, WarehouseID: wid, PreviousQty: prev, Change: rec.AcceptedQuantity,
+			ProductID: rec.ProductID, WarehouseID: wid, PreviousQty: prev, Change: putQty,
 			NewQty: inv.Stock, MovementType: models.MovementReceive, StaffID: &staffID, ReferenceID: &rec.ID,
 			Notes: fmt.Sprintf("Receiving #%d from %s (putaway task #%d)", rec.ID, rec.SupplierName, t.ID),
 		}).Error; err != nil {

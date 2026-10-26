@@ -75,10 +75,20 @@ func GetProducts(c *gin.Context) {
 	}
 
 	// Filter by stock availability (correlated subquery avoids duplicate rows from a JOIN)
-	if query.InStock != nil {
-		db = db.Where("EXISTS (SELECT 1 FROM inventories JOIN warehouses ON warehouses.id = inventories.warehouse_id WHERE inventories.product_id = products.id AND inventories.in_stock = ? AND (warehouses.warehouse_type IS NULL OR warehouses.warehouse_type <> ?))", *query.InStock, "mother_warehouse")
-
-	}
+	// BUG-67: resolve the serving warehouse first, so in_stock looks at it and not at every warehouse nationwide.
+    var nearestWarehouse *models.Warehouse
+    if query.Lat != nil && query.Lng != nil {
+        if nw, _, nerr := FindNearestWarehouse(*query.Lat, *query.Lng); nerr == nil {
+            nearestWarehouse = nw
+        }
+    }
+    if query.InStock != nil {
+        if nearestWarehouse != nil {
+            db = db.Where("EXISTS (SELECT 1 FROM inventories WHERE inventories.product_id = products.id AND inventories.warehouse_id = ? AND inventories.in_stock = ?)", nearestWarehouse.ID, *query.InStock)
+        } else {
+            db = db.Where("EXISTS (SELECT 1 FROM inventories JOIN warehouses ON warehouses.id = inventories.warehouse_id WHERE inventories.product_id = products.id AND inventories.in_stock = ? AND (warehouses.warehouse_type IS NULL OR warehouses.warehouse_type <> ?))", *query.InStock, "mother_warehouse")
+        }
+    }
 
 	// Count total before pagination
 	var total int64
@@ -118,8 +128,7 @@ func GetProducts(c *gin.Context) {
 	// rather than "in stock somewhere" which is misleading when the
 	// nearest warehouse is empty but a distant one still has stock.
 	if query.Lat != nil && query.Lng != nil {
-		nearestWarehouse, _, err := FindNearestWarehouse(*query.Lat, *query.Lng)
-		if err == nil && nearestWarehouse != nil {
+		if nearestWarehouse != nil {
 			for i := range products {
 				stock := 0
 				inStock := false
