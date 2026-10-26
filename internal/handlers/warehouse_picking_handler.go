@@ -227,6 +227,7 @@ func CompletePicking(c *gin.Context) {
 	var packTask models.PackingTask
 	var order models.Order
 	var refundAmount float64
+	var ledgerWalletRefund float64 // BUG-55 ledger: wallet credit made inside the tx, posted to the ledger after commit
 	statusCode := http.StatusInternalServerError
 
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -344,6 +345,7 @@ func CompletePicking(c *gin.Context) {
 				if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for short/unavailable items during picking"); err != nil {
 					return err
 				}
+					ledgerWalletRefund += walletCredit
 				if order.PaymentMethod == models.PaymentMethodCOD {
 					if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", walletCredit)).Error; err != nil {
 						return err
@@ -377,6 +379,7 @@ func CompletePicking(c *gin.Context) {
                 if err := utils.CreditWallet(tx, order.UserID, order.TotalAmount, models.WalletReasonOrderRefund, "order", &noPickRef, "Refund for order with no available items"); err != nil {
                     return err
                 }
+			ledgerWalletRefund += order.TotalAmount
 			// BUG-56b: mark the payment as refunded once the wallet credit is made.
 			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("payment_status", models.OrderPaymentStatusRefunded).Error; err != nil {
 				return err
@@ -407,6 +410,13 @@ func CompletePicking(c *gin.Context) {
 		c.JSON(statusCode, gin.H{"error": txErr.Error()})
 		return
 	}
+
+	// BUG-55 ledger: PostWalletRefundLedgerEntry uses its own DB handle, so it runs only after the tx has committed.
+    if ledgerWalletRefund > 0 {
+        if lerr := services.PostWalletRefundLedgerEntry(order.ID, ledgerWalletRefund); lerr != nil {
+            fmt.Printf("ledger: wallet refund entry failed for order %d: %v\n", order.ID, lerr)
+        }
+    }
 
 	staffName, _ := c.Get("staff_name")
 	services.LogWarehouseAction(warehouseID, staffID, fmt.Sprint(staffName), "complete_picking", "order", orderID,

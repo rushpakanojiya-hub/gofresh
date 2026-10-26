@@ -147,6 +147,7 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 	var sub models.SubstitutionRequest
 	var previousStatus string
 	var refundAmount float64
+	var ledgerWalletRefund float64 // BUG-55 ledger: wallet credit made inside the tx, posted to the ledger after commit
 	statusCode := http.StatusInternalServerError
 
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -335,6 +336,7 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 					if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for cheaper substitute item"); err != nil {
 						return err
 					}
+					ledgerWalletRefund += walletCredit
 					if order.PaymentMethod == models.PaymentMethodCOD {
 						if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", walletCredit)).Error; err != nil {
 							return err
@@ -366,6 +368,13 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 		c.JSON(statusCode, gin.H{"error": txErr.Error()})
 		return
 	}
+
+	// BUG-55 ledger: PostWalletRefundLedgerEntry uses its own DB handle, so it runs only after the tx has committed.
+    if ledgerWalletRefund > 0 {
+        if lerr := services.PostWalletRefundLedgerEntry(sub.OrderID, ledgerWalletRefund); lerr != nil {
+            fmt.Printf("ledger: wallet refund entry failed for order %d: %v\n", sub.OrderID, lerr)
+        }
+    }
 
 	staffName, _ := c.Get("staff_name")
 	services.LogWarehouseAction(warehouseID, staffID, fmt.Sprint(staffName), auditAction, "substitution_request",
