@@ -561,7 +561,8 @@ func ConfirmReturnReceived(c *gin.Context) {
 		}
 
 		returnReq.Status = models.ReturnStatusCompleted
-		return tx.Save(&returnReq).Error
+		// BUG-23: update the locked row only; saving the stale copy would overwrite concurrent changes.
+		return tx.Model(&models.ReturnRequest{}).Where("id = ?", lockedReq.ID).Update("status", models.ReturnStatusCompleted).Error
 	})
 
 	if txErr != nil {
