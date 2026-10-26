@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 	"strings"
@@ -62,21 +63,23 @@ func CreateTicket(c *gin.Context) {
 		IssueType: issueType,
 	}
 
-	if err := database.DB.Create(&ticket).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ticket"})
-		return
-	}
-
-	firstMsg := models.SupportMessage{
-		TicketID:   ticket.ID,
-		SenderID:   userID,
-		SenderType: "customer",
-		Message:    req.Message,
-	}
-	if err := database.DB.Create(&firstMsg).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save ticket message"})
-		return
-	}
+	// BUG-75: ticket and its first message are created atomically.
+    var firstMsg models.SupportMessage
+    if err := database.DB.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Create(&ticket).Error; err != nil {
+            return err
+        }
+        firstMsg = models.SupportMessage{
+            TicketID:   ticket.ID,
+            SenderID:   userID,
+            SenderType: "customer",
+            Message:    req.Message,
+        }
+        return tx.Create(&firstMsg).Error
+    }); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ticket"})
+        return
+    }
 
 	c.JSON(http.StatusCreated, gin.H{"ticket": ticket, "message": firstMsg})
 }
@@ -148,7 +151,13 @@ func ReplyToTicket(c *gin.Context) {
 		return
 	}
 
-	msg := models.SupportMessage{
+	// BUG-75: a closed ticket is final; the customer must open a new one.
+    if ticket.Status == "closed" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "This ticket is closed. Please create a new ticket.", "code": "ticket_closed"})
+        return
+    }
+
+    msg := models.SupportMessage{
 		TicketID:   uint(id),
 		SenderID:   userID,
 		SenderType: "customer",
@@ -160,7 +169,7 @@ func ReplyToTicket(c *gin.Context) {
 	}
 
 	// Reopen ticket if customer replies after it was resolved/closed.
-	if ticket.Status == "resolved" || ticket.Status == "closed" {
+	if ticket.Status == "resolved" {
 		ticket.Status = "open"
 		database.DB.Save(&ticket)
 	}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"time"
 	"net/http"
 	"strings"
 
@@ -57,37 +58,45 @@ func GetCustomers(c *gin.Context) {
 		return
 	}
 
-	summaries := make([]models.CustomerSummary, 0, len(users))
-	for _, u := range users {
-		var totalOrders int64
-		var totalSpent float64
-		var lastOrderAt *string
+	// BUG-76: one grouped query for the whole page instead of 3 queries per user.
+    ids := make([]uint, 0, len(users))
+    for _, u := range users {
+        ids = append(ids, u.ID)
+    }
+    type orderAgg struct {
+        UserID      uint
+        TotalOrders int64
+        TotalSpent  float64
+        LastOrderAt *time.Time
+    }
+    aggByUser := make(map[uint]orderAgg, len(users))
+    if len(ids) > 0 {
+        var aggs []orderAgg
+        if err := database.DB.Model(&models.Order{}).
+            Select("user_id, COUNT(*) AS total_orders, COALESCE(SUM(CASE WHEN payment_status = 'paid' AND status <> 'returned' THEN total_amount ELSE 0 END), 0) AS total_spent, MAX(created_at) AS last_order_at").
+            Where("user_id IN ?", ids).Group("user_id").Scan(&aggs).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch customer order stats"})
+            return
+        }
+        for _, a := range aggs {
+            aggByUser[a.UserID] = a
+        }
+    }
 
-		database.DB.Model(&models.Order{}).Where("user_id = ?", u.ID).Count(&totalOrders)
-		database.DB.Model(&models.Order{}).Where("user_id = ? AND payment_status = ?", u.ID, "paid").
-			Select("COALESCE(SUM(total_amount), 0)").Scan(&totalSpent)
-
-		var lastOrder models.Order
-		var lastOrderPtr *models.Order
-		if err := database.DB.Where("user_id = ?", u.ID).Order("created_at DESC").First(&lastOrder).Error; err == nil {
-			lastOrderPtr = &lastOrder
-		}
-		_ = lastOrderAt
-
-		summary := models.CustomerSummary{
-			ID:          u.ID,
-			Name:        u.Name,
-			Phone:       u.Phone,
-			IsBlocked:   u.IsBlocked,
-			CreatedAt:   u.CreatedAt,
-			TotalOrders: totalOrders,
-			TotalSpent:  totalSpent,
-		}
-		if lastOrderPtr != nil {
-			summary.LastOrderAt = &lastOrderPtr.CreatedAt
-		}
-		summaries = append(summaries, summary)
-	}
+    summaries := make([]models.CustomerSummary, 0, len(users))
+    for _, u := range users {
+        a := aggByUser[u.ID]
+        summaries = append(summaries, models.CustomerSummary{
+            ID:          u.ID,
+            Name:        u.Name,
+            Phone:       u.Phone,
+            IsBlocked:   u.IsBlocked,
+            CreatedAt:   u.CreatedAt,
+            TotalOrders: a.TotalOrders,
+            TotalSpent:  a.TotalSpent,
+            LastOrderAt: a.LastOrderAt,
+        })
+    }
 
 	c.JSON(http.StatusOK, models.CustomerListResponse{
 		Customers:  summaries,
@@ -113,7 +122,7 @@ func GetCustomerByID(c *gin.Context) {
 	database.DB.Preload("Items.Product").Preload("Address").Where("user_id = ?", user.ID).Order("created_at DESC").Find(&orders)
 
 	var addresses []models.Address
-	database.DB.Where("user_id = ?", user.ID).Find(&addresses)
+	database.DB.Where("user_id = ? AND is_deleted = ?", user.ID, false).Find(&addresses) // BUG-76
 
 	var wallet models.Wallet
 	var walletPtr *models.Wallet
@@ -128,7 +137,7 @@ func GetCustomerByID(c *gin.Context) {
 
 	var totalOrders int64 = int64(len(orders))
 	var totalSpent float64
-	database.DB.Model(&models.Order{}).Where("user_id = ? AND payment_status = ?", user.ID, "paid").
+	database.DB.Model(&models.Order{}).Where("user_id = ? AND payment_status = ? AND status <> ?", user.ID, "paid", "returned").
 		Select("COALESCE(SUM(total_amount), 0)").Scan(&totalSpent)
 
 	c.JSON(http.StatusOK, models.CustomerDetail{
