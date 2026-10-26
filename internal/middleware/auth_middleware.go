@@ -51,6 +51,14 @@ func AdminOnly() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		// BUG-78: re-check the admin account in the DB so demoted/blocked admins lose access immediately.
+		var adminUser models.User
+		uid, _ := c.Get("user_id")
+		if err := database.DB.Select("id", "role", "is_blocked").First(&adminUser, uid).Error; err != nil || adminUser.Role != "admin" || adminUser.IsBlocked {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

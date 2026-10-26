@@ -33,7 +33,14 @@ c.Abort()
 return
 }
 
-if user.AdminRole == "" || user.AdminRole == "super_admin" || user.AdminRole == "finance_manager" {
+// BUG-77: role was changed or account blocked since the token was issued.
+	if user.Role != "admin" || user.IsBlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		c.Abort()
+		return
+	}
+
+	if user.AdminRole == "" || user.AdminRole == "super_admin" || user.AdminRole == "finance_manager" {
 c.Next()
 return
 }

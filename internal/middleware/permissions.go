@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 "net/http"
@@ -63,7 +63,14 @@ c.Abort()
 return
 }
 
-// super_admin, or legacy admin accounts with no sub-role set yet,
+// BUG-77: role was changed or account blocked since the token was issued.
+	if user.Role != "admin" || user.IsBlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		c.Abort()
+		return
+	}
+
+	// super_admin, or legacy admin accounts with no sub-role set yet,
 // retain full access so existing admins aren't locked out.
 if user.AdminRole == "" || user.AdminRole == "super_admin" {
 c.Next()
