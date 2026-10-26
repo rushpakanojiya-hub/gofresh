@@ -11,6 +11,7 @@ import (
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -30,7 +31,8 @@ var (
 // the read is consistent with the rest of that transaction.
 func ValidateCoupon(db *gorm.DB, code string, orderAmount float64, userID uint) (*models.Coupon, float64, error) {
 	var coupon models.Coupon
-	if err := db.Where("UPPER(code) = UPPER(?)", code).First(&coupon).Error; err != nil {
+	// BUG-35: lock the coupon row so concurrent checkouts using it run one after another until commit.
+	if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("UPPER(code) = UPPER(?)", code).First(&coupon).Error; err != nil {
 		return nil, 0, ErrCouponNotFound
 	}
 	if !coupon.IsActive {
@@ -51,10 +53,13 @@ func ValidateCoupon(db *gorm.DB, code string, orderAmount float64, userID uint) 
 		perUserLimit = 1
 	}
 	var userUsage int64
-	db.Table("order_coupons").
+	// BUG-35: a failed count must not be read as zero usage.
+	if err := db.Table("order_coupons").
 		Joins("JOIN orders ON orders.id = order_coupons.order_id").
 		Where("order_coupons.coupon_id = ? AND orders.user_id = ? AND orders.status != ?", coupon.ID, userID, models.OrderStatusCancelled).
-		Count(&userUsage)
+		Count(&userUsage).Error; err != nil {
+		return nil, 0, err
+	}
 	if int(userUsage) >= perUserLimit {
 		return nil, 0, ErrCouponUserLimitReached
 	}
