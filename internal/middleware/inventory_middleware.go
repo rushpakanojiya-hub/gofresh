@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 "net/http"
@@ -21,7 +21,7 @@ allowedRoles := map[string]bool{
 }
 return func(c *gin.Context) {
 staffRole, exists := c.Get("staff_role")
-if !exists || !allowedRoles[staffRole.(string)] {
+if !exists || !allowedRoles[func() string { s, _ := staffRole.(string); return s }()] {
 c.JSON(http.StatusForbidden, gin.H{"error": "Inventory management access required"})
 c.Abort()
 return
