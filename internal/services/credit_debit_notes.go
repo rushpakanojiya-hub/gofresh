@@ -278,7 +278,9 @@ func GenerateDebitNote(billID uint, amount, gstAmount float64, reason string, ad
         }
         if alreadyDebited+amount+gstAmount > lockedBill.Amount+lockedBill.GSTAmount+0.005 {
             return ErrDebitNoteInvalid
-        }		if err := tx.Exec("CREATE SEQUENCE IF NOT EXISTS debit_note_number_seq START 1").Error; err != nil {
+        }
+
+		if err := tx.Exec("CREATE SEQUENCE IF NOT EXISTS debit_note_number_seq START 1").Error; err != nil {
 			return fmt.Errorf("failed to ensure debit note sequence exists: %w", err)
 		}
 		var seqVal int64
