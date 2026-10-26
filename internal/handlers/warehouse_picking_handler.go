@@ -355,7 +355,35 @@ func CompletePicking(c *gin.Context) {
 			return err
 		}
 
-		packTask = models.PackingTask{
+		// BUG-56: if nothing at all was picked, cancel the order instead of packing an empty box.
+        totalPicked := 0
+        for _, it := range task.Items {
+            totalPicked += it.QuantityPicked
+        }
+        if totalPicked == 0 {
+            var noPickCoupon models.OrderCoupon
+            if cerr := tx.Where("order_id = ?", order.ID).First(&noPickCoupon).Error; cerr == nil {
+                if err := tx.Model(&models.Coupon{}).Where("id = ? AND used_count > 0", noPickCoupon.CouponID).
+                    UpdateColumn("used_count", gorm.Expr("used_count - 1")).Error; err != nil {
+                    return err
+                }
+            }
+            if order.PaymentMethod == models.PaymentMethodOnline && order.PaymentStatus == models.OrderPaymentStatusPaid && order.TotalAmount > 0 {
+                noPickRef := order.ID
+                if err := utils.CreditWallet(tx, order.UserID, order.TotalAmount, models.WalletReasonOrderRefund, "order", &noPickRef, "Refund for order with no available items"); err != nil {
+                    return err
+                }
+            }
+            return tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
+                "status":                         models.OrderStatusCancelled,
+                "delivery_partner_id":            nil,
+                "delivery_assignment_status":     nil,
+                "delivery_status":                nil,
+                "delivery_assignment_expires_at": nil,
+            }).Error
+        }
+
+        packTask = models.PackingTask{
 			OrderID:     task.OrderID,
 			WarehouseID: warehouseID,
 			Status:      "pending",
