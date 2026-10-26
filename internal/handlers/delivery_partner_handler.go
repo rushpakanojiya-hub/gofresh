@@ -751,7 +751,7 @@ func ConfirmDelivery(c *gin.Context) {
 		via := "cash"
 		if body.CollectedVia == "upi" {
 			via = "upi"
-			st := "verified"
+			st := "unverified" // BUG-06: rider-collected UPI stays unverified until an admin confirms it
 			order.UPIStatus = &st
 		}
 		order.CollectedVia = &via
