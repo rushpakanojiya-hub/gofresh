@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
@@ -131,43 +132,56 @@ func CreateRiderPayout(c *gin.Context) {
 		return
 	}
 	periodToExclusive := periodTo.AddDate(0, 0, 1)
+    adminID := c.MustGet("user_id").(uint)
+    adminPhone := ctxPhone(c)
 
-	// Block duplicate payouts: if any payout already exists for this rider
-	// whose period overlaps the requested range, refuse rather than create a
-	// second one that would double-count and double-accrue the same deliveries.
-	var overlapCount int64
-	database.DB.Model(&models.RiderPayout{}).
-		Where("delivery_partner_id = ? AND period_from < ? AND period_to >= ?",
-			req.DeliveryPartnerID, periodToExclusive, periodFrom).
-		Count(&overlapCount)
-	if overlapCount > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "A payout already exists for this rider covering an overlapping period"})
-		return
-	}
-
-	var deliveredCount int64
-	database.DB.Model(&models.Order{}).
-		Where("delivery_partner_id = ? AND status = ? AND COALESCE(delivered_at, updated_at) >= ? AND COALESCE(delivered_at, updated_at) < ?",
-			req.DeliveryPartnerID, "delivered", periodFrom, periodToExclusive).
-		Count(&deliveredCount)
-
-	adminID := c.MustGet("user_id").(uint)
-	payout := models.RiderPayout{
-		DeliveryPartnerID: req.DeliveryPartnerID,
-		PeriodFrom:        periodFrom,
-		PeriodTo:          periodTo,
-		DeliveredCount:    int(deliveredCount),
-		Amount:            float64(deliveredCount) * perDeliveryEarningRate,
-		Status:            "pending",
-		CreatedByID:       adminID,
-	}
-	if err := database.DB.Create(&payout).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create rider payout"})
-		return
-	}
-	adminPhone := ctxPhone(c)
-	utils.LogAudit(adminID, adminPhone, "create_rider_payout", "rider_payout", "", "pending")
-	c.JSON(http.StatusCreated, payout)
+    // BUG-12: overlap check, delivered count and insert run in one transaction under a per-rider
+    // advisory lock, so two concurrent requests cannot both create an overlapping payout.
+    var payout models.RiderPayout
+    overlap := false
+    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", int64(req.DeliveryPartnerID)).Error; err != nil {
+            return err
+        }
+        var overlapCount int64
+        if err := tx.Model(&models.RiderPayout{}).
+            Where("delivery_partner_id = ? AND period_from < ? AND period_to >= ?",
+                req.DeliveryPartnerID, periodToExclusive, periodFrom).
+            Count(&overlapCount).Error; err != nil {
+            return err
+        }
+        if overlapCount > 0 {
+            overlap = true
+            return nil
+        }
+        var deliveredCount int64
+        if err := tx.Model(&models.Order{}).
+            Where("delivery_partner_id = ? AND status = ? AND COALESCE(delivered_at, updated_at) >= ? AND COALESCE(delivered_at, updated_at) < ?",
+                req.DeliveryPartnerID, "delivered", periodFrom, periodToExclusive).
+            Count(&deliveredCount).Error; err != nil {
+            return err
+        }
+        payout = models.RiderPayout{
+            DeliveryPartnerID: req.DeliveryPartnerID,
+            PeriodFrom:        periodFrom,
+            PeriodTo:          periodTo,
+            DeliveredCount:    int(deliveredCount),
+            Amount:            float64(deliveredCount) * perDeliveryEarningRate,
+            Status:            "pending",
+            CreatedByID:       adminID,
+        }
+        return tx.Create(&payout).Error
+    })
+    if txErr != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create rider payout"})
+        return
+    }
+    if overlap {
+        c.JSON(http.StatusConflict, gin.H{"error": "A payout already exists for this rider covering an overlapping period"})
+        return
+    }
+    utils.LogAudit(adminID, adminPhone, "create_rider_payout", "rider_payout", "", "pending")
+    c.JSON(http.StatusCreated, payout)
 }
 
 // ListRiderPayouts godoc
