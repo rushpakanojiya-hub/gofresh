@@ -323,6 +323,7 @@ func TryAssignNextPartner(orderID uint) {
 				"delivery_assignment_expires_at": newExpiry,
 				"delivery_attempted_partner_ids": newAttempted,
 				"delivery_status":                models.DeliveryStatusAssigned,
+				"assigned_at":                    time.Now(), // BUG-51
 			})
 		if result.Error != nil {
 			return fmt.Errorf("failed to reassign order %d: %w", order.ID, result.Error)
@@ -351,6 +352,8 @@ func TryAssignNextPartner(orderID uint) {
 	log.Printf("[reassign] order %d reassigned to delivery partner %d (%s)", orderID, newPartnerID, newPartnerName)
 
 	go SendPushToPartnerWithData(newPartnerID, "New Order Assigned", "You have a new delivery order. Tap to view and accept it.", map[string]string{"type": "new_assignment", "order_id": fmt.Sprint(orderID)})
+	// BUG-51: reassignment also creates the in-app notification.
+	CreateDeliveryNotification(newPartnerID, "New delivery assigned", fmt.Sprintf("Order #%d has been assigned to you", orderID), "new_assignment", &orderID)
 }
 
 // ExpireStaleAssignments finds every order whose current acceptance window
