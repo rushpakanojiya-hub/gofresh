@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"fmt"
@@ -6,14 +6,14 @@ import (
 	"strconv"
 	"time"
 
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
-"errors"
-"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
-"gorm.io/gorm"
-"gorm.io/gorm/clause"
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // CreateSubstitutionRequest godoc
@@ -136,195 +136,219 @@ func RejectSubstitutionRequest(c *gin.Context) {
 }
 
 func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
-warehouseID := c.MustGet("warehouse_id").(uint)
-staffID := c.MustGet("staff_id").(uint)
-id := c.Param("id")
+	warehouseID := c.MustGet("warehouse_id").(uint)
+	staffID := c.MustGet("staff_id").(uint)
+	id := c.Param("id")
 
-var req models.DecideSubstitutionRequest
-// Note field is optional, so ignore a bind error on an empty body.
-_ = c.ShouldBindJSON(&req)
+	var req models.DecideSubstitutionRequest
+	// Note field is optional, so ignore a bind error on an empty body.
+	_ = c.ShouldBindJSON(&req)
 
-var sub models.SubstitutionRequest
-var previousStatus string
-var refundAmount float64
-statusCode := http.StatusInternalServerError
+	var sub models.SubstitutionRequest
+	var previousStatus string
+	var refundAmount float64
+	statusCode := http.StatusInternalServerError
 
-txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-Where("id = ? AND warehouse_id = ?", id, warehouseID).First(&sub).Error; err != nil {
-statusCode = http.StatusNotFound
-return errors.New("Substitution request not found for your warehouse")
-}
-if sub.Status != models.SubstitutionStatusPending {
-statusCode = http.StatusConflict
-return errors.New("Substitution request has already been decided")
-}
-previousStatus = sub.Status
+	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND warehouse_id = ?", id, warehouseID).First(&sub).Error; err != nil {
+			statusCode = http.StatusNotFound
+			return errors.New("Substitution request not found for your warehouse")
+		}
+		if sub.Status != models.SubstitutionStatusPending {
+			statusCode = http.StatusConflict
+			return errors.New("Substitution request has already been decided")
+		}
+		previousStatus = sub.Status
 
-if newStatus == models.SubstitutionStatusApproved {
-var order models.Order
-if err := tx.First(&order, sub.OrderID).Error; err != nil {
-return err
-}
+		if newStatus == models.SubstitutionStatusApproved {
+			var order models.Order
+			if err := tx.First(&order, sub.OrderID).Error; err != nil {
+				return err
+			}
 
-var orderItem models.OrderItem
-if err := tx.Where("order_id = ? AND product_id = ?", sub.OrderID, sub.OriginalProductID).First(&orderItem).Error; err != nil {
-statusCode = http.StatusBadRequest
-return errors.New("Original product not found on this order")
-}
+			var orderItem models.OrderItem
+			if err := tx.Where("order_id = ? AND product_id = ?", sub.OrderID, sub.OriginalProductID).First(&orderItem).Error; err != nil {
+				statusCode = http.StatusBadRequest
+				return errors.New("Original product not found on this order")
+			}
 
-var substituteProduct models.Product
-if err := tx.First(&substituteProduct, sub.SubstituteProductID).Error; err != nil {
-return err
-}
+			var substituteProduct models.Product
+			if err := tx.First(&substituteProduct, sub.SubstituteProductID).Error; err != nil {
+				return err
+			}
 
-// Deduct the substitute product's stock at this warehouse.
-var subInventory models.Inventory
-if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-Where("product_id = ? AND warehouse_id = ?", sub.SubstituteProductID, warehouseID).First(&subInventory).Error; err != nil {
-statusCode = http.StatusBadRequest
-return errors.New("Substitute product has no inventory record at this warehouse")
-}
-if subInventory.Stock < sub.Quantity {
-statusCode = http.StatusBadRequest
-return errors.New("Insufficient stock of substitute product to approve this request")
-}
-subPreviousQty := subInventory.Stock
-subInventory.Stock -= sub.Quantity
-if subInventory.Stock <= 0 {
-subInventory.InStock = false
-}
-if err := tx.Save(&subInventory).Error; err != nil {
-return err
-}
-subMovement := models.StockMovement{
-ProductID:    sub.SubstituteProductID,
-WarehouseID:  warehouseID,
-PreviousQty:  subPreviousQty,
-Change:       -sub.Quantity,
-NewQty:       subInventory.Stock,
-MovementType: models.MovementSale,
-Reason:       "Substitution approved",
-ReferenceID:  &sub.OrderID,
-}
-if err := tx.Create(&subMovement).Error; err != nil {
-return err
-}
+			// Deduct the substitute product's stock at this warehouse.
+			var subInventory models.Inventory
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("product_id = ? AND warehouse_id = ?", sub.SubstituteProductID, warehouseID).First(&subInventory).Error; err != nil {
+				statusCode = http.StatusBadRequest
+				return errors.New("Substitute product has no inventory record at this warehouse")
+			}
+			if subInventory.Stock < sub.Quantity {
+				statusCode = http.StatusBadRequest
+				return errors.New("Insufficient stock of substitute product to approve this request")
+			}
+			subPreviousQty := subInventory.Stock
+			subInventory.Stock -= sub.Quantity
+			if subInventory.Stock <= 0 {
+				subInventory.InStock = false
+			}
+			if err := tx.Save(&subInventory).Error; err != nil {
+				return err
+			}
+			subMovement := models.StockMovement{
+				ProductID:    sub.SubstituteProductID,
+				WarehouseID:  warehouseID,
+				PreviousQty:  subPreviousQty,
+				Change:       -sub.Quantity,
+				NewQty:       subInventory.Stock,
+				MovementType: models.MovementSale,
+				Reason:       "Substitution approved",
+				ReferenceID:  &sub.OrderID,
+			}
+			if err := tx.Create(&subMovement).Error; err != nil {
+				return err
+			}
 
-// Restore the original product's stock at this warehouse (it was
-// deducted at checkout but never actually picked/shipped).
-var origInventory models.Inventory
-q := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("product_id = ? AND warehouse_id = ?", sub.OriginalProductID, warehouseID)
-if err := q.First(&origInventory).Error; err == nil {
-origPreviousQty := origInventory.Stock
-origInventory.Stock += sub.Quantity
-origInventory.InStock = true
-if err := tx.Save(&origInventory).Error; err != nil {
-return err
-}
-origMovement := models.StockMovement{
-ProductID:    sub.OriginalProductID,
-WarehouseID:  warehouseID,
-PreviousQty:  origPreviousQty,
-Change:       sub.Quantity,
-NewQty:       origInventory.Stock,
-MovementType: models.MovementReturn,
-Reason:       "Substitution approved - original item not picked",
-ReferenceID:  &sub.OrderID,
-}
-if err := tx.Create(&origMovement).Error; err != nil {
-return err
-}
-}
+			// Restore the original product's stock at this warehouse (it was
+			// deducted at checkout but never actually picked/shipped).
+			var origInventory models.Inventory
+			q := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("product_id = ? AND warehouse_id = ?", sub.OriginalProductID, warehouseID)
+			if err := q.First(&origInventory).Error; err == nil {
+				origPreviousQty := origInventory.Stock
+				origInventory.Stock += sub.Quantity
+				origInventory.InStock = true
+				if err := tx.Save(&origInventory).Error; err != nil {
+					return err
+				}
+				origMovement := models.StockMovement{
+					ProductID:    sub.OriginalProductID,
+					WarehouseID:  warehouseID,
+					PreviousQty:  origPreviousQty,
+					Change:       sub.Quantity,
+					NewQty:       origInventory.Stock,
+					MovementType: models.MovementReturn,
+					Reason:       "Substitution approved - original item not picked",
+					ReferenceID:  &sub.OrderID,
+				}
+				if err := tx.Create(&origMovement).Error; err != nil {
+					return err
+				}
+			}
 
-// Swap the order item onto the substitute product. If the substitute
-// is cheaper, refund the difference to the customer's wallet; if it's
-// pricier, absorb the difference rather than charging the customer
-// more than they agreed to pay.
-priceDiff := (orderItem.Price - substituteProduct.Price) * float64(sub.Quantity)
-originalPrice := orderItem.Price
-if sub.Quantity >= orderItem.Quantity {
-// Full-line substitution: every unit on this order line is being
-// substituted, so it's safe to swap the existing row in place.
-orderItem.ProductID = sub.SubstituteProductID
-if substituteProduct.Price < originalPrice {
-orderItem.Price = substituteProduct.Price
-}
-if err := tx.Save(&orderItem).Error; err != nil {
-return err
-}
-} else {
-// Partial substitution: only sub.Quantity of the line's units are
-// being substituted. Shrink the original line and add a separate
-// order item for the substituted units, instead of converting the
-// whole line (which would corrupt quantity/inventory accounting).
-orderItem.Quantity -= sub.Quantity
-if err := tx.Save(&orderItem).Error; err != nil {
-return err
-}
-substitutePrice := originalPrice
-if substituteProduct.Price < originalPrice {
-substitutePrice = substituteProduct.Price
-}
-newItem := models.OrderItem{
-OrderID:   order.ID,
-ProductID: sub.SubstituteProductID,
-Quantity:  sub.Quantity,
-Price:     substitutePrice,
-}
-if err := tx.Create(&newItem).Error; err != nil {
-return err
-}
-}
+			// Swap the order item onto the substitute product. If the substitute
+			// is cheaper, refund the difference to the customer's wallet; if it's
+			// pricier, absorb the difference rather than charging the customer
+			// more than they agreed to pay.
+			priceDiff := (orderItem.Price - substituteProduct.Price) * float64(sub.Quantity)
+			originalPrice := orderItem.Price
+			if sub.Quantity >= orderItem.Quantity {
+				// Full-line substitution: every unit on this order line is being
+				// substituted, so it's safe to swap the existing row in place.
+				orderItem.ProductID = sub.SubstituteProductID
+				if substituteProduct.Price < originalPrice {
+					orderItem.Price = substituteProduct.Price
+				}
+				if err := tx.Save(&orderItem).Error; err != nil {
+					return err
+				}
+			} else {
+				// Partial substitution: only sub.Quantity of the line's units are
+				// being substituted. Shrink the original line and add a separate
+				// order item for the substituted units, instead of converting the
+				// whole line (which would corrupt quantity/inventory accounting).
+				orderItem.Quantity -= sub.Quantity
+				if err := tx.Save(&orderItem).Error; err != nil {
+					return err
+				}
+				substitutePrice := originalPrice
+				if substituteProduct.Price < originalPrice {
+					substitutePrice = substituteProduct.Price
+				}
+				newItem := models.OrderItem{
+					OrderID:   order.ID,
+					ProductID: sub.SubstituteProductID,
+					Quantity:  sub.Quantity,
+					Price:     substitutePrice,
+				}
+				if err := tx.Create(&newItem).Error; err != nil {
+					return err
+				}
+			}
 
-if priceDiff > 0 {
-refundAmount = priceDiff
-newItemsAmount := order.ItemsAmount - refundAmount
-newTotalAmount := order.TotalAmount - refundAmount
-if newItemsAmount < 0 {
-newItemsAmount = 0
-}
-if newTotalAmount < 0 {
-newTotalAmount = 0
-}
-if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).
-Updates(map[string]interface{}{"items_amount": newItemsAmount, "total_amount": newTotalAmount}).Error; err != nil {
-return err
-}
-refID := order.ID
-if err := utils.CreditWallet(tx, order.UserID, refundAmount, models.WalletReasonOrderRefund, "order", &refID, "Refund for cheaper substitute item"); err != nil {
-return err
-}
-}
+			if priceDiff > 0 {
+				// BUG-55: coupon-adjusted refund; unpaid COD cash is never credited to the wallet.
+				subRatio := 1.0
+				if order.ItemsAmount > 0 {
+					var subCoupon models.OrderCoupon
+					if cerr := tx.Where("order_id = ?", order.ID).First(&subCoupon).Error; cerr == nil {
+						eff := order.ItemsAmount - subCoupon.DiscountAmount
+						if eff < 0 {
+							eff = 0
+						}
+						subRatio = eff / order.ItemsAmount
+					}
+				}
+				refundAmount = priceDiff * subRatio
+				walletCredit := refundAmount
+				if order.PaymentMethod == models.PaymentMethodCOD {
+					walletCredit = refundAmount - order.TotalAmount
+					if walletCredit < 0 {
+						walletCredit = 0
+					}
+					if walletCredit > order.WalletAmountUsed {
+						walletCredit = order.WalletAmountUsed
+					}
+				}
+				newItemsAmount := order.ItemsAmount - priceDiff
+				newTotalAmount := order.TotalAmount - refundAmount
+				if newItemsAmount < 0 {
+					newItemsAmount = 0
+				}
+				if newTotalAmount < 0 {
+					newTotalAmount = 0
+				}
+				if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).
+					Updates(map[string]interface{}{"items_amount": newItemsAmount, "total_amount": newTotalAmount}).Error; err != nil {
+					return err
+				}
+				refID := order.ID
+				if walletCredit > 0 {
+					if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for cheaper substitute item"); err != nil {
+						return err
+					}
+				}
+			}
 
-// Reflect the swap on the picking task item, if this substitution was
-// raised against one.
-if sub.PickingTaskItemID != nil {
-if err := tx.Model(&models.PickingTaskItem{}).Where("id = ?", *sub.PickingTaskItemID).
-Updates(map[string]interface{}{"product_id": sub.SubstituteProductID, "status": models.PickItemPicked, "quantity_picked": sub.Quantity}).Error; err != nil {
-return err
-}
-}
-}
+			// Reflect the swap on the picking task item, if this substitution was
+			// raised against one.
+			if sub.PickingTaskItemID != nil {
+				if err := tx.Model(&models.PickingTaskItem{}).Where("id = ?", *sub.PickingTaskItemID).
+					Updates(map[string]interface{}{"product_id": sub.SubstituteProductID, "status": models.PickItemPicked, "quantity_picked": sub.Quantity}).Error; err != nil {
+					return err
+				}
+			}
+		}
 
-sub.Status = newStatus
-sub.DecisionNote = req.Note
-staffIDCopy := staffID
-sub.DecidedByID = &staffIDCopy
-now := time.Now()
-sub.DecidedAt = &now
-return tx.Save(&sub).Error
-})
+		sub.Status = newStatus
+		sub.DecisionNote = req.Note
+		staffIDCopy := staffID
+		sub.DecidedByID = &staffIDCopy
+		now := time.Now()
+		sub.DecidedAt = &now
+		return tx.Save(&sub).Error
+	})
 
-if txErr != nil {
-c.JSON(statusCode, gin.H{"error": txErr.Error()})
-return
-}
+	if txErr != nil {
+		c.JSON(statusCode, gin.H{"error": txErr.Error()})
+		return
+	}
 
-staffName, _ := c.Get("staff_name")
-services.LogWarehouseAction(warehouseID, staffID, fmt.Sprint(staffName), auditAction, "substitution_request",
-strconv.Itoa(int(sub.ID)), "status="+previousStatus, "status="+sub.Status)
+	staffName, _ := c.Get("staff_name")
+	services.LogWarehouseAction(warehouseID, staffID, fmt.Sprint(staffName), auditAction, "substitution_request",
+		strconv.Itoa(int(sub.ID)), "status="+previousStatus, "status="+sub.Status)
 
-database.DB.Preload("Order").Preload("OriginalProduct").Preload("SubstituteProduct").First(&sub, sub.ID)
-c.JSON(http.StatusOK, gin.H{"substitution_request": sub, "refund_amount": refundAmount})
+	database.DB.Preload("Order").Preload("OriginalProduct").Preload("SubstituteProduct").First(&sub, sub.ID)
+	c.JSON(http.StatusOK, gin.H{"substitution_request": sub, "refund_amount": refundAmount})
 }
