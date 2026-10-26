@@ -120,6 +120,12 @@ func main() {
 	fmt.Println("APPLY MODE - posting ledger entries now...")
 	var posted, skipped, failed int
 	for _, o := range candidates {
+		// BUG-19 apply: returned orders are never auto-posted; a human decides.
+		if o.Status == "returned" {
+			fmt.Printf("  order #%-5d  SKIPPED (returned, manual review)\n", o.ID)
+			skipped++
+			continue
+		}
 		if err := services.PostSalesLedgerEntry(o.ID); err != nil {
 			fmt.Printf("  order #%-5d  FAILED: %v\n", o.ID, err)
 			failed++
