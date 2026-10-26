@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"gorm.io/gorm/clause"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -334,17 +335,42 @@ func UpdateInventory(c *gin.Context) {
 	}
 
 	var inventory models.Inventory
-	if err := database.DB.Where("product_id = ? AND warehouse_id = ?", product.ID, req.WarehouseID).First(&inventory).Error; err != nil {
-		inventory = models.Inventory{ProductID: product.ID, WarehouseID: req.WarehouseID}
-	}
-
-	inventory.Stock = req.Stock
-	inventory.InStock = req.Stock > 0
-
-	if err := database.DB.Save(&inventory).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update inventory"})
-		return
-	}
+    // BUG-63: lock the row and write a StockMovement audit record in one transaction.
+    adminIDv, _ := c.Get("user_id")
+    adminIDu, _ := adminIDv.(uint)
+    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+        previousQty := 0
+        err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("product_id = ? AND warehouse_id = ?", product.ID, req.WarehouseID).First(&inventory).Error
+        if err == nil {
+            previousQty = inventory.Stock
+        } else if err == gorm.ErrRecordNotFound {
+            inventory = models.Inventory{ProductID: product.ID, WarehouseID: req.WarehouseID}
+        } else {
+            return err
+        }
+        inventory.Stock = req.Stock
+        inventory.InStock = req.Stock > 0
+        if err := tx.Save(&inventory).Error; err != nil {
+            return err
+        }
+        if inventory.Stock == previousQty {
+            return nil
+        }
+        return tx.Create(&models.StockMovement{
+            ProductID:    product.ID,
+            WarehouseID:  req.WarehouseID,
+            PreviousQty:  previousQty,
+            Change:       inventory.Stock - previousQty,
+            NewQty:       inventory.Stock,
+            MovementType: models.MovementAdjustment,
+            Reason:       models.AdjustReasonManualCorrection,
+            Notes:        fmt.Sprintf("Admin #%d set stock from admin panel", adminIDu),
+        }).Error
+    })
+    if txErr != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update inventory"})
+        return
+    }
 	if err := cache.DeleteByPrefix(c.Request.Context(), "products:list:"); err != nil {
 	}
 	_ = cache.Delete(c.Request.Context(), "products:id:"+id)
