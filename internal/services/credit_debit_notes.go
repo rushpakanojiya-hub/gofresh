@@ -50,6 +50,12 @@ func GenerateCreditNoteForReturn(tx *gorm.DB, returnReq models.ReturnRequest) (*
 	items := make([]models.CreditNoteItem, 0, len(returnReq.Items))
 
 	for _, ri := range returnReq.Items {
+        // BUG-04: never build a credit note from an unloaded (zero-value) OrderItem.
+        if ri.OrderItem.ID == 0 {
+            if err := tx.First(&ri.OrderItem, ri.OrderItemID).Error; err != nil {
+                return nil, fmt.Errorf("order item %d not found for return request %d: %w", ri.OrderItemID, returnReq.ID, err)
+            }
+        }
 		var invoiceItem models.InvoiceItem
 		if err := tx.Where("invoice_id = ? AND product_id = ?", invoice.ID, ri.OrderItem.ProductID).First(&invoiceItem).Error; err != nil {
 			// Product on the invoice snapshot not found (shouldn't normally
