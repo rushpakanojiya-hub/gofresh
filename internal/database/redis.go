@@ -1,4 +1,4 @@
-﻿package database
+package database
 
 import (
 "context"
@@ -36,6 +36,7 @@ ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 
 if err := RDB.Ping(ctx).Err(); err != nil {
+_ = RDB.Close() // BUG-91: do not leak the client pool when Ping fails
 log.Printf("Failed to connect to Redis: %v - caching disabled", err)
 RedisEnabled = false
 return

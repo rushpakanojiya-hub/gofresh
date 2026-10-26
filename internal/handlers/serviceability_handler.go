@@ -79,6 +79,11 @@ func CheckServiceability(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lng"})
 		return
 	}
+	// BUG-87: NaN/Inf and out-of-range coordinates would break the distance maths and the PostGIS query.
+	if math.IsNaN(lat) || math.IsInf(lat, 0) || math.IsNaN(lng) || math.IsInf(lng, 0) || lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "lat/lng out of range"})
+		return
+	}
 
 	nearest, distance, err := FindNearestWarehouse(lat, lng)
 	if err != nil {
