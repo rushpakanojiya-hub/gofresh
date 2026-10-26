@@ -120,7 +120,7 @@ func seedAssignOrder(t *testing.T, status string) models.Order {
 
 func adminAssignToken(t *testing.T) string {
 	t.Helper()
-	token, err := utils.GenerateJWT(1, "9000000001", "admin")
+	token, err := utils.GenerateJWT(seedTestAdmin(t).ID, "9000000001", "admin")
 	if err != nil {
 		t.Fatalf("failed to generate admin token: %v", err)
 	}
@@ -451,7 +451,7 @@ func TestAssignDeliveryPartner_NonAdminRoleRejected(t *testing.T) {
 
 func TestGetMyDeliveries_NonDeliveryRoleRejected(t *testing.T) {
 	r := newAssignmentTestRouter()
-	token, err := utils.GenerateJWT(1, "9000000002", "admin")
+	token, err := utils.GenerateJWT(seedTestAdmin(t).ID, "9000000002", "admin")
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}

@@ -310,7 +310,7 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 				refundAmount = priceDiff * subRatio
 				walletCredit := refundAmount
 				if order.PaymentMethod == models.PaymentMethodCOD {
-					walletCredit = refundAmount - order.TotalAmount
+					walletCredit = order.WalletAmountUsed - (order.TotalAmount - refundAmount) // BUG-55c
 					if walletCredit < 0 {
 						walletCredit = 0
 					}
@@ -334,6 +334,11 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 				if walletCredit > 0 {
 					if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for cheaper substitute item"); err != nil {
 						return err
+					}
+					if order.PaymentMethod == models.PaymentMethodCOD {
+						if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", walletCredit)).Error; err != nil {
+							return err
+						}
 					}
 				}
 			}

@@ -320,8 +320,7 @@ func CompletePicking(c *gin.Context) {
 		walletCredit := refundAmount
 		if order.PaymentMethod == models.PaymentMethodCOD {
 			// COD cash was never paid: only the wallet-paid part can be credited back.
-			priorTotal := order.TotalAmount + refundAmount
-			walletCredit = refundAmount - priorTotal
+			walletCredit = order.WalletAmountUsed - order.TotalAmount // BUG-55c
 			if walletCredit < 0 {
 				walletCredit = 0
 			}
@@ -344,6 +343,11 @@ func CompletePicking(c *gin.Context) {
 			if walletCredit > 0 {
 				if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for short/unavailable items during picking"); err != nil {
 					return err
+				}
+				if order.PaymentMethod == models.PaymentMethodCOD {
+					if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", walletCredit)).Error; err != nil {
+						return err
+					}
 				}
 			}
 		}
