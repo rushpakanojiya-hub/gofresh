@@ -90,7 +90,8 @@ func VerifyRiderCODDeposit(c *gin.Context) {
 		return
 	}
 	if err := services.PostRiderCODDepositLedgerEntry(deposit.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Deposit verified but ledger posting failed: " + err.Error()})
+		database.DB.Model(&models.RiderCODDeposit{}).Where("id = ? AND status = ?", deposit.ID, "verified").Updates(map[string]interface{}{"status": "pending", "verified_by_id": nil, "verified_at": nil}) // BUG-11: undo so verification can be retried
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ledger posting failed, verification was rolled back. Please retry: " + err.Error()})
 		return
 	}
 	services.CreateDeliveryNotification(
@@ -209,7 +210,8 @@ func ApproveRiderPayout(c *gin.Context) {
 		return
 	}
 	if err := services.PostRiderPayoutAccrualLedgerEntry(payout.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payout approved but ledger posting failed: " + err.Error()})
+		database.DB.Model(&models.RiderPayout{}).Where("id = ? AND status = ?", payout.ID, "approved").Updates(map[string]interface{}{"status": "pending", "approved_by_id": nil, "approved_at": nil}) // BUG-11: undo so approval can be retried
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ledger posting failed, approval was rolled back. Please retry: " + err.Error()})
 		return
 	}
 	adminPhone := ctxPhone(c)

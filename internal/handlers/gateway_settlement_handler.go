@@ -50,7 +50,8 @@ func SettleGatewayPayment(c *gin.Context) {
 	}
 
 	if err := services.PostGatewaySettlementLedgerEntry(payment.ID, fee); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment settled but ledger posting failed: " + err.Error()})
+		database.DB.Model(&models.Payment{}).Where("id = ? AND is_settled = ?", payment.ID, true).Updates(map[string]interface{}{"is_settled": false, "settled_at": nil, "gateway_fee": 0}) // BUG-10: undo so settlement can be retried
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ledger posting failed, settlement was rolled back. Please retry: " + err.Error()})
 		return
 	}
 
