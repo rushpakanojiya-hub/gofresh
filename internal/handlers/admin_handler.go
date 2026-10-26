@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/cache"
@@ -492,7 +493,11 @@ func UpdateOrderStatus(c *gin.Context) {
             adminGatewayRefund = amt
             return err
         }
-        return tx.Model(&order).Update("status", req.Status).Error
+        // BUG-26: record delivery time when an admin marks an order delivered.
+		if req.Status == models.OrderStatusDelivered {
+			return tx.Model(&order).Updates(map[string]interface{}{"status": req.Status, "delivered_at": time.Now()}).Error
+		}
+		return tx.Model(&order).Update("status", req.Status).Error
     })
     if txErr == nil && req.Status == models.OrderStatusCancelled {
         adminPostCancelRefund(order.ID, adminGatewayRefund+order.WalletAmountUsed)

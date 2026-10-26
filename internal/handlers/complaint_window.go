@@ -81,10 +81,12 @@ func computeOrderComplaintWindow(order *models.Order) (complaintWindowInfo, erro
 		return info, nil
 	}
 
-	deliveredAt := order.UpdatedAt
-	if order.DeliveredAt != nil {
-		deliveredAt = *order.DeliveredAt
+	// BUG-26: no delivery time recorded means no reliable deadline; do not restart the window from UpdatedAt.
+	if order.DeliveredAt == nil {
+		info.Open = false
+		return info, nil
 	}
+	deliveredAt := *order.DeliveredAt
 
 	var items []models.OrderItem
 	if err := database.DB.Preload("Product.Category").Where("order_id = ?", order.ID).Find(&items).Error; err != nil {
