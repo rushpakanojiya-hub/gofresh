@@ -142,6 +142,7 @@ func Checkout(c *gin.Context) {
 				ProductID: ci.ProductID,
 				Quantity:  ci.Quantity,
 				Price:     ci.Product.Price,
+				CostPrice: ci.Product.CostPrice,
 			})
 		}
 

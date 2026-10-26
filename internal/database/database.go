@@ -135,6 +135,10 @@ func AutoMigrate() {
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
+    // BUG-18 snapshot: per-item cost price captured at order time.
+    if err := DB.Exec(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price NUMERIC NOT NULL DEFAULT 0`).Error; err != nil {
+        log.Printf("Failed to add order_items.cost_price: %v", err)
+    }
     // BUG-85: Post*LedgerEntry check-then-insert can race; this index makes the second concurrent post fail and roll back instead of double-posting.
     if err := DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_ref_account_type ON ledger_entries (transaction_ref, account_id, "type")`).Error; err != nil {
         log.Printf("Failed to create ledger_entries unique index: %v", err)

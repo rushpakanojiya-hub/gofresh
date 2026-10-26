@@ -289,6 +289,7 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 					ProductID: sub.SubstituteProductID,
 					Quantity:  sub.Quantity,
 					Price:     substitutePrice,
+					CostPrice: substituteProduct.CostPrice,
 				}
 				if err := tx.Create(&newItem).Error; err != nil {
 					return err

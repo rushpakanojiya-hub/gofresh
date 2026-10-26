@@ -180,6 +180,8 @@ type OrderItem struct {
 	Product   Product   `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 	Quantity  int       `gorm:"not null" json:"quantity"`
 	Price     float64   `gorm:"not null" json:"price"` // price at time of order
+	// BUG-18 snapshot: product cost at order time, so later cost edits do not rewrite old COGS.
+	CostPrice float64 `gorm:"not null;default:0" json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
