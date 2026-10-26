@@ -284,7 +284,7 @@ func GenerateDebitNote(billID uint, amount, gstAmount float64, reason string, ad
 			return fmt.Errorf("failed to ensure debit note sequence exists: %w", err)
 		}
 		var seqVal int64
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Raw("SELECT nextval('debit_note_number_seq')").Scan(&seqVal).Error; err != nil {
+		if err := tx.Raw("SELECT nextval('debit_note_number_seq')").Scan(&seqVal).Error; err != nil {
 			return fmt.Errorf("failed to allocate debit note number: %w", err)
 		}
 		debitNoteNumber := fmt.Sprintf("DN-%d-%06d", time.Now().Year(), seqVal)

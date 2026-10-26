@@ -315,7 +315,12 @@ func PayVendorBill(c *gin.Context) {
 			return gorm.ErrInvalidField
 		}
 
-		remaining := bill.Amount - bill.AmountPaid
+		// BUG-09: debit notes reduce what is still payable on the bill.
+                var debited float64
+                if err := tx.Model(&models.DebitNote{}).Where("vendor_bill_id = ?", bill.ID).Select("COALESCE(SUM(amount), 0)").Scan(&debited).Error; err != nil {
+                        return err
+                }
+                remaining := bill.Amount - debited - bill.AmountPaid
 		if req.Amount > remaining {
 			return gorm.ErrInvalidData
 		}
