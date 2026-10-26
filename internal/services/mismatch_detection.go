@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 "fmt"
@@ -221,11 +221,12 @@ func detectDuplicatePaymentRef() ([]models.MismatchItem, error) {
 type row struct {
 RazorpayPaymentID string
 PaymentIDs        string // comma-joined, since GORM Scan can't give us []uint directly from string_agg
+	MinPaymentID      uint // BUG-90: stable per-group key for dismissals
 Cnt               int
 }
 var rows []row
 err := database.DB.Table("payments").
-Select("razorpay_payment_id, string_agg(id::text, ',') as payment_ids, count(*) as cnt").
+Select("razorpay_payment_id, string_agg(id::text, ',' ORDER BY id) as payment_ids, min(id) as min_payment_id, count(*) as cnt").
 Where("razorpay_payment_id IS NOT NULL AND razorpay_payment_id != ''").
 Group("razorpay_payment_id").
 Having("count(*) > 1").
@@ -241,7 +242,7 @@ items = append(items, models.MismatchItem{
 CheckType:      "duplicate_payment_ref",
 Severity:       "high",
 EntityType:     "payment",
-EntityID:       0,
+EntityID:       r.MinPaymentID, // BUG-90: was 0, so one dismissal hid every duplicate
 Description:    fmt.Sprintf("Razorpay payment ID %s appears on %d payment rows (ids: %s)", r.RazorpayPaymentID, r.Cnt, r.PaymentIDs),
 DetectedAmount: 0,
 DetectedAt:     now,
