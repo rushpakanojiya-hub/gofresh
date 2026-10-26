@@ -46,7 +46,7 @@ func ListBankTransactions(c *gin.Context) {
 	db.Count(&total)
 
 	var unmatchedCount int64
-	database.DB.Model(&models.BankTransaction{}).Where("status = ?", "unmatched").Count(&unmatchedCount)
+	database.DB.Model(&models.BankTransaction{}).Where("status = ? AND voided_at IS NULL", "unmatched").Count(&unmatchedCount) // BUG-15
 
 	var transactions []models.BankTransaction
 	offset := (page - 1) * limit
@@ -117,6 +117,12 @@ func MatchBankTransaction(c *gin.Context) {
 		return
 	}
 
+	// BUG-15: voided lines are out of reconciliation.
+	if txn.VoidedAt != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Voided bank transactions cannot be matched"})
+		return
+	}
+
 	var req models.BankTransactionMatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -154,6 +160,12 @@ func IgnoreBankTransaction(c *gin.Context) {
 	var txn models.BankTransaction
 	if err := database.DB.First(&txn, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Bank transaction not found"})
+		return
+	}
+
+	// BUG-15: voided lines are out of reconciliation.
+	if txn.VoidedAt != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Voided bank transactions cannot be ignored"})
 		return
 	}
 

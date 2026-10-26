@@ -193,7 +193,7 @@ return items, nil
 // but pulled into the Mismatch Center too for a single unified view.
 func detectBankUnmatched() ([]models.MismatchItem, error) {
 var transactions []models.BankTransaction
-if err := database.DB.Where("status = ?", "unmatched").Find(&transactions).Error; err != nil {
+if err := database.DB.Where("status = ? AND voided_at IS NULL", "unmatched").Find(&transactions).Error; err != nil {
 return nil, fmt.Errorf("bank-unmatched check failed: %w", err)
 }
 
