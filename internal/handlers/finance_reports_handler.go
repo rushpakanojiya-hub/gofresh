@@ -126,7 +126,8 @@ func GetGatewaySettlementReport(c *gin.Context) {
 	var rows []row
 	database.DB.Table("payments").
 		Select("gateway, COUNT(*) as transaction_count, COALESCE(SUM(amount),0) as gross_amount, COALESCE(SUM(refunded_amount),0) as refunded_amount").
-		Where("status = ? AND created_at >= ? AND created_at < ?", "paid", start, end).
+		// BUG-16: refunded and partially refunded payments still belong in gross and refunded totals.
+		Where("status IN ? AND created_at >= ? AND created_at < ?", []string{"paid", "refunded", "partially_refunded"}, start, end).
 		Group("gateway").
 		Scan(&rows)
 
