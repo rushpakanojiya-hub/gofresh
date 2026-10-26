@@ -97,6 +97,10 @@ func CheckInPartner(partnerID uint, token string, lat, lng *float64) (*models.Wa
 	if wh.Lat != 0 || wh.Lng != 0 {
 		pl, pg := lat, lng
 		if pl == nil || pg == nil {
+			// BUG-54: stored GPS fallback must be fresh, not days old.
+			if p.LastLocationUpdate == nil || time.Since(*p.LastLocationUpdate) > 2*time.Minute {
+				return nil, ErrCheckinNoLocation
+			}
 			pl, pg = p.CurrentLat, p.CurrentLng
 		}
 		if pl == nil || pg == nil {
