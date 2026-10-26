@@ -57,7 +57,7 @@ func Checkout(c *gin.Context) {
 			return
 		}
 	} else {
-		if err := database.DB.Where("user_id = ? AND is_default = ?", userID, true).First(&address).Error; err != nil {
+		if err := database.DB.Where("user_id = ? AND is_default = ? AND is_deleted = false", userID, true).First(&address).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No address_id given and no default address saved. Add a delivery address first."})
 			return
 		}
@@ -323,7 +323,7 @@ func GetCheckoutEstimate(c *gin.Context) {
 			return
 		}
 	} else {
-		if err := database.DB.Where("user_id = ? AND is_default = ?", userID, true).First(&address).Error; err != nil {
+		if err := database.DB.Where("user_id = ? AND is_default = ? AND is_deleted = false", userID, true).First(&address).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No address_id given and no default address saved."})
 			return
 		}

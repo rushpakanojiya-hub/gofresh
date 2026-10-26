@@ -36,7 +36,7 @@ func getOrCreateCart(userID uint) (*models.Cart, error) {
 // knowing which one the user would actually be served from.
 func resolveWarehouseForUser(userID uint) (*models.Warehouse, error) {
 	var address models.Address
-	err := database.DB.Where("user_id = ? AND is_default = ?", userID, true).First(&address).Error
+	err := database.DB.Where("user_id = ? AND is_default = ? AND is_deleted = false", userID, true).First(&address).Error
 	if err != nil || address.Lat == nil || address.Lng == nil {
 		return nil, nil
 	}

@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 "net/http"
@@ -28,6 +28,7 @@ c.JSON(http.StatusOK, gin.H{"addresses": addresses})
 // CreateAddress godoc
 // POST /api/v1/addresses (protected)
 // The first address a user adds is automatically made the default one.
+// BUG-69: deleted addresses are ignored by the count, update, delete and set-default paths.
 func CreateAddress(c *gin.Context) {
 userID := c.MustGet("user_id").(uint)
 
@@ -38,7 +39,7 @@ return
 }
 
 var existingCount int64
-database.DB.Model(&models.Address{}).Where("user_id = ?", userID).Count(&existingCount)
+database.DB.Model(&models.Address{}).Where("user_id = ? AND is_deleted = false", userID).Count(&existingCount)
 makeDefault := req.IsDefault || existingCount == 0
 
 if makeDefault {
@@ -76,7 +77,7 @@ userID := c.MustGet("user_id").(uint)
 addressID := c.Param("id")
 
 var address models.Address
-if err := database.DB.First(&address, addressID).Error; err != nil {
+if err := database.DB.Where("is_deleted = false").First(&address, addressID).Error; err != nil {
 c.JSON(http.StatusNotFound, gin.H{"error": "Address not found"})
 return
 }
@@ -130,7 +131,7 @@ userID := c.MustGet("user_id").(uint)
 addressID := c.Param("id")
 
 var address models.Address
-if err := database.DB.First(&address, addressID).Error; err != nil {
+if err := database.DB.Where("is_deleted = false").First(&address, addressID).Error; err != nil {
 c.JSON(http.StatusNotFound, gin.H{"error": "Address not found"})
 return
 }
@@ -139,12 +140,14 @@ c.JSON(http.StatusForbidden, gin.H{"error": "You do not have access to this addr
 return
 }
 
-if err := database.DB.Model(&address).Update("is_deleted", true).Error; err != nil {
+// BUG-69: remember the default flag, then clear it on the deleted row.
+	wasDefault := address.IsDefault
+	if err := database.DB.Model(&address).Updates(map[string]interface{}{"is_deleted": true, "is_default": false}).Error; err != nil {
 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete address"})
 return
 }
 
-if address.IsDefault {
+if wasDefault {
 var nextAddress models.Address
 if err := database.DB.
 Where("user_id = ? AND is_deleted = false", userID).
@@ -164,7 +167,7 @@ userID := c.MustGet("user_id").(uint)
 addressID := c.Param("id")
 
 var address models.Address
-if err := database.DB.First(&address, addressID).Error; err != nil {
+if err := database.DB.Where("is_deleted = false").First(&address, addressID).Error; err != nil {
 c.JSON(http.StatusNotFound, gin.H{"error": "Address not found"})
 return
 }
