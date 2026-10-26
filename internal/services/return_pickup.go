@@ -83,6 +83,8 @@ func RejectReturnPickup(returnReqID, partnerID uint) error {
 		returnReq.DeliveryPartnerID = nil
 		returnReq.PickupStatus = nil
 		returnReq.PickupAssignmentExpiresAt = nil
+		// BUG-27: remember who rejected so auto-assign skips them.
+		returnReq.RejectedPartnerIDs = appendRejectedPartner(returnReq.RejectedPartnerIDs, partnerID)
 		return tx.Save(&returnReq).Error
 	})
 }

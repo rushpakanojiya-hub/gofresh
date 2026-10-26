@@ -117,6 +117,9 @@ func RejectReturnPickup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// BUG-27: offer the pickup to the next eligible rider right away.
+	go services.AutoAssignReturnPickup(returnReqID)
+	c.JSON(http.StatusOK, gin.H{"message": "pickup rejected"})
 	c.JSON(http.StatusOK, gin.H{"message": "pickup rejected, open for reassignment"})
 }
 

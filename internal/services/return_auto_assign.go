@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
@@ -75,6 +76,10 @@ func AutoAssignReturnPickup(returnReqID uint) {
 		var chosen *models.DeliveryPartner
 		for i := range partners {
 			p := &partners[i]
+		// BUG-27: do not hand the pickup back to a rider who already rejected it.
+		if partnerRejected(rr.RejectedPartnerIDs, p.ID) {
+			continue
+		}
 			maxActive := p.MaxActiveOrders
 			if maxActive <= 0 {
 				maxActive = 5
@@ -130,4 +135,13 @@ func TryAssignPendingReturnsToPartner(partnerID uint) {
 	for _, id := range ids {
 		AutoAssignReturnPickup(id)
 	}
+}
+
+// BUG-27: rejected rider IDs are stored as a comma-separated list like "5,7,".
+func appendRejectedPartner(list string, id uint) string {
+	return list + fmt.Sprintf("%d,", id)
+}
+
+func partnerRejected(list string, id uint) bool {
+	return strings.Contains(","+list, fmt.Sprintf(",%d,", id))
 }

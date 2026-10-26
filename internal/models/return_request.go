@@ -35,6 +35,8 @@ type ReturnRequest struct {
 	DeliveryPartner           *DeliveryPartner    `gorm:"foreignKey:DeliveryPartnerID" json:"delivery_partner,omitempty"`
 	PickupStatus              *string             `json:"pickup_status,omitempty"`
 	PickupAssignmentExpiresAt *time.Time          `json:"pickup_assignment_expires_at,omitempty"`
+	// BUG-27: comma-separated IDs (e.g. "5,7,") of riders who rejected this pickup; auto-assign skips them.
+	RejectedPartnerIDs string `gorm:"type:text;not null;default:''" json:"-"`
 	PickedUpAt                *time.Time          `json:"picked_up_at,omitempty"`
 	HandedOverAt              *time.Time          `json:"handed_over_at,omitempty"`
 	ConditionNotes            *string             `json:"condition_notes,omitempty"`

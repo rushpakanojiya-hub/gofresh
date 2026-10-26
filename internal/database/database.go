@@ -135,6 +135,10 @@ func AutoMigrate() {
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
+	// BUG-27: riders who rejected a return pickup are skipped when it is offered again.
+	if err := DB.Exec("ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS rejected_partner_ids TEXT NOT NULL DEFAULT ''").Error; err != nil {
+		log.Printf("Failed to add return_requests.rejected_partner_ids: %v", err)
+	}
     // BUG-18 snapshot: per-item cost price captured at order time.
     if err := DB.Exec(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price NUMERIC NOT NULL DEFAULT 0`).Error; err != nil {
         log.Printf("Failed to add order_items.cost_price: %v", err)
