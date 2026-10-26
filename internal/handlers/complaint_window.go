@@ -72,7 +72,12 @@ func complaintLoadOwnedOrder(userID uint, orderID uint) (*models.Order, error) {
 
 func computeOrderComplaintWindow(order *models.Order) (complaintWindowInfo, error) {
 	info := complaintWindowInfo{OrderID: order.ID, Open: true}
-	if order.Status != "delivered" {
+	// BUG-25: cancelled orders take no order-linked complaints (payment/refund issues are exempt and still allowed); returned orders were delivered, so their window runs from delivery.
+    if order.Status == "cancelled" {
+        info.Open = false
+        return info, nil
+    }
+    if order.Status != "delivered" && order.Status != "returned" {
 		return info, nil
 	}
 
