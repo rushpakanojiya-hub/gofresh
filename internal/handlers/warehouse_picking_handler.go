@@ -373,6 +373,10 @@ func CompletePicking(c *gin.Context) {
                 if err := utils.CreditWallet(tx, order.UserID, order.TotalAmount, models.WalletReasonOrderRefund, "order", &noPickRef, "Refund for order with no available items"); err != nil {
                     return err
                 }
+			// BUG-56b: mark the payment as refunded once the wallet credit is made.
+			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("payment_status", models.OrderPaymentStatusRefunded).Error; err != nil {
+				return err
+			}
             }
             return tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
                 "status":                         models.OrderStatusCancelled,
