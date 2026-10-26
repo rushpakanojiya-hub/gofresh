@@ -38,7 +38,7 @@ func InjectWarehouseScope() gin.HandlerFunc {
 		effectiveWarehouseID := staff.WarehouseID
 		database.EnsurePickerTables()
 		var presence models.PickerPresence
-		if err := database.DB.Where("staff_id = ? AND is_online = ?", staff.ID, true).First(&presence).Error; err == nil && presence.WarehouseID != 0 {
+		if err := database.DB.Where("staff_id = ? AND is_online = ?", staff.ID, true).First(&presence).Error; err == nil && presence.WarehouseID != 0 && staff.Role == "picker" { // BUG-79: only pickers may work at another store
 			effectiveWarehouseID = presence.WarehouseID
 		}
 		c.Set("warehouse_id", effectiveWarehouseID)
