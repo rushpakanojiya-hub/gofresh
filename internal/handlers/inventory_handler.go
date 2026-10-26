@@ -97,22 +97,35 @@ func GetInventoryOverview(c *gin.Context) {
 	}
 
 	// Summary stats computed across ALL inventory (not just this page)
-	summaryDB := database.DB.Model(&models.Inventory{})
+	sumWH := int64(query.WarehouseID)
+    sumCat := int64(query.CategoryID)
+    // BUG-64: summary cards follow the same warehouse/category filters as the table,
+    // and "available" is stock minus active cart reservations (never below 0 per row).
 	var totalSKUs int64
-	summaryDB.Count(&totalSKUs)
+    inventorySummaryBase(sumWH, sumCat).Count(&totalSKUs)
 
 	var totalAvailable int64
-	database.DB.Model(&models.Inventory{}).Select("COALESCE(SUM(stock), 0)").Scan(&totalAvailable)
+    inventorySummaryBase(sumWH, sumCat).
+        Joins("LEFT JOIN (SELECT product_id, warehouse_id, SUM(quantity) AS qty FROM cart_reservations WHERE expires_at > ? GROUP BY product_id, warehouse_id) r ON r.product_id = inventories.product_id AND r.warehouse_id = inventories.warehouse_id", time.Now()).
+        Select("COALESCE(SUM(GREATEST(inventories.stock - COALESCE(r.qty, 0), 0)), 0)").Scan(&totalAvailable)
 
 	var totalReserved int64
-	database.DB.Model(&models.CartReservation{}).Where("expires_at > ?", time.Now()).
-		Select("COALESCE(SUM(quantity), 0)").Scan(&totalReserved)
+    resQ := database.DB.Model(&models.CartReservation{}).
+        Joins("JOIN products ON products.id = cart_reservations.product_id").
+        Where("cart_reservations.expires_at > ?", time.Now())
+    if sumWH > 0 {
+        resQ = resQ.Where("cart_reservations.warehouse_id = ?", sumWH)
+    }
+    if sumCat > 0 {
+        resQ = resQ.Where("products.category_id = ?", sumCat)
+    }
+    resQ.Select("COALESCE(SUM(cart_reservations.quantity), 0)").Scan(&totalReserved)
 
 	var lowStockCount int64
-	database.DB.Model(&models.Inventory{}).Where("stock > 0 AND stock < ?", lowStockThreshold).Count(&lowStockCount)
+    inventorySummaryBase(sumWH, sumCat).Where("inventories.stock > 0 AND inventories.stock < ?", lowStockThreshold).Count(&lowStockCount)
 
 	var outOfStockCount int64
-	database.DB.Model(&models.Inventory{}).Where("stock <= 0").Count(&outOfStockCount)
+    inventorySummaryBase(sumWH, sumCat).Where("inventories.stock <= 0").Count(&outOfStockCount)
 
 	damagedCutoff := time.Now().AddDate(0, 0, -30)
 	var damagedCount int64
