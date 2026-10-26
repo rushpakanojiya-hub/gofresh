@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -44,7 +45,7 @@ func GetGSTSummary(c *gin.Context) {
 	database.DB.Table("invoice_items").
 		Joins("JOIN invoices ON invoices.id = invoice_items.invoice_id").
 		Where("invoices.generated_at >= ? AND invoices.generated_at < ?", from, to).
-		Select("COALESCE(NULLIF(invoice_items.hsn_code, ''), 'Not set') as hsn_code, COALESCE(SUM(invoice_items.price * invoice_items.quantity - invoice_items.gst_amount),0) as taxable_amount, COALESCE(SUM(invoice_items.gst_amount),0) as gst_amount, COALESCE(SUM(invoice_items.quantity),0) as quantity").
+		Select("COALESCE(NULLIF(invoice_items.hsn_code, ''), 'Not set') as hsn_code, COALESCE(SUM(invoice_items.price * invoice_items.quantity * (CASE WHEN invoices.items_amount > 0 THEN GREATEST(invoices.items_amount - invoices.discount_amount, 0) / invoices.items_amount ELSE 1 END) - invoice_items.gst_amount),0) as taxable_amount, COALESCE(SUM(invoice_items.gst_amount),0) as gst_amount, COALESCE(SUM(invoice_items.quantity),0) as quantity").
 		Group("COALESCE(NULLIF(invoice_items.hsn_code, ''), 'Not set')").
 		Order("gst_amount DESC").
 		Scan(&byHSN)
@@ -58,10 +59,21 @@ func GetGSTSummary(c *gin.Context) {
 	database.DB.Table("invoice_items").
 		Joins("JOIN invoices ON invoices.id = invoice_items.invoice_id").
 		Where("invoices.generated_at >= ? AND invoices.generated_at < ?", from, to).
-		Select("invoice_items.gst_percent, COALESCE(SUM(invoice_items.price * invoice_items.quantity - invoice_items.gst_amount),0) as taxable_amount, COALESCE(SUM(invoice_items.gst_amount),0) as gst_amount").
+		Select("invoice_items.gst_percent, COALESCE(SUM(invoice_items.price * invoice_items.quantity * (CASE WHEN invoices.items_amount > 0 THEN GREATEST(invoices.items_amount - invoices.discount_amount, 0) / invoices.items_amount ELSE 1 END) - invoice_items.gst_amount),0) as taxable_amount, COALESCE(SUM(invoice_items.gst_amount),0) as gst_amount").
 		Group("invoice_items.gst_percent").
 		Order("invoice_items.gst_percent ASC").
 		Scan(&byRate)
+
+	// BUG-05: delivery charge and platform fee GST sit in the invoice header but in no item row; report them as the reconciling remainder.
+    var itemsTaxable, itemsGST float64
+    for _, r := range byRate {
+        itemsTaxable += r.TaxableAmount
+        itemsGST += r.GSTAmount
+    }
+    otherCharges := gin.H{
+        "taxable_amount": math.Round((t.TaxableAmount-itemsTaxable)*100) / 100,
+        "gst_amount":     math.Round((totalGST-itemsGST)*100) / 100,
+    }
 
 	c.JSON(http.StatusOK, gin.H{
 		"from":           from.Format("2006-01-02"),
@@ -74,5 +86,6 @@ func GetGSTSummary(c *gin.Context) {
 		"invoice_count":  t.InvoiceCount,
 		"by_hsn":         byHSN,
 		"by_rate":        byRate,
+		"other_charges":  otherCharges,
 	})
 }
