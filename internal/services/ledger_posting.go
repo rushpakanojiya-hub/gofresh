@@ -68,7 +68,7 @@ func PostSalesLedgerEntry(orderID uint) error {
 		lines = append(lines, line{"2002", "credit", totalGST, fmt.Sprintf("GST on order #%d", orderID)})
 	}
 	var orderItems []models.OrderItem
-	database.DB.Preload("Product").Where("order_id = ?", orderID).Find(&orderItems)
+	database.DB.Preload("Product", func(db *gorm.DB) *gorm.DB { return db.Unscoped() }).Where("order_id = ?", orderID).Find(&orderItems) // BUG-18: soft-deleted products still carry their cost price
 	var totalCOGS float64
 	for _, it := range orderItems {
 		if it.Product.CostPrice > 0 {
