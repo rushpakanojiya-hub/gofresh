@@ -148,6 +148,18 @@ func PostCreditNoteLedgerEntry(creditNoteID uint) error {
 
 	totalGST := note.CGSTAmount + note.SGSTAmount + note.IGSTAmount
 	transactionRef := fmt.Sprintf("CREDITNOTE-%d", creditNoteID)
+    // BUG-03: cost of the returned units (same CostPrice basis as PostSalesLedgerEntry).
+    var cnItems []models.CreditNoteItem
+    if err := database.DB.Where("credit_note_id = ?", creditNoteID).Find(&cnItems).Error; err != nil {
+        return fmt.Errorf("failed to load credit note items: %w", err)
+    }
+    var totalCOGS float64
+    for _, it := range cnItems {
+        var prod models.Product
+        if err := database.DB.Select("id", "cost_price").First(&prod, it.ProductID).Error; err == nil && prod.CostPrice > 0 {
+            totalCOGS += prod.CostPrice * float64(it.Quantity)
+        }
+    }
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		debitSales := models.LedgerEntry{
@@ -196,8 +208,37 @@ func PostCreditNoteLedgerEntry(creditNoteID uint) error {
 		}
 		if err := tx.Create(&credit).Error; err != nil {
 			return fmt.Errorf("failed to create wallet-liability ledger entry: %w", err)
-		}
-		return nil
+        }
+
+        // BUG-03: returned goods go back to stock, so reverse the COGS booked at sale time.
+        if totalCOGS > 0 {
+            var inventoryAcc, cogsAcc models.Account
+            if err := tx.Where("code = ?", "1004").First(&inventoryAcc).Error; err != nil {
+                return fmt.Errorf("chart of accounts missing code 1004 (Inventory): %w", err)
+            }
+            if err := tx.Where("code = ?", "5001").First(&cogsAcc).Error; err != nil {
+                return fmt.Errorf("chart of accounts missing code 5001 (COGS): %w", err)
+            }
+            for _, l := range []struct {
+                acc uint
+                typ string
+            }{{inventoryAcc.ID, "debit"}, {cogsAcc.ID, "credit"}} {
+                e := models.LedgerEntry{
+                    TransactionRef: transactionRef,
+                    AccountID:      l.acc,
+                    Type:           l.typ,
+                    Amount:         totalCOGS,
+                    Description:    fmt.Sprintf("COGS reversal for credit note %s", note.CreditNoteNumber),
+                    ReferenceType:  "credit_note",
+                    ReferenceID:    &creditNoteID,
+                    EntryDate:      note.IssuedAt,
+                }
+                if err := tx.Create(&e).Error; err != nil {
+                    return fmt.Errorf("failed to create COGS-reversal ledger entry: %w", err)
+                }
+            }
+        }
+        return nil
 	})
 }
 
