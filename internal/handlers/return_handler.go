@@ -476,7 +476,12 @@ func ConfirmReturnReceived(c *gin.Context) {
 			return errors.New("return request already processed or not approved")
 		}
 
-		// Restore stock for each returned line item.
+		// BUG-28: the rider must have collected the item before the warehouse confirms receipt.
+                if ps := lockedReq.PickupStatus; ps != nil && (*ps == models.PickupStatusAssigned || *ps == models.PickupStatusAccepted || *ps == models.PickupStatusEnRoute || *ps == models.PickupStatusArrived) {
+                        return errors.New("rider has not picked up this return yet")
+                }
+
+                // Restore stock for each returned line item.
 		for _, ri := range returnReq.Items {
 			orderItem, ok := orderItemsByID[ri.OrderItemID]
 			if !ok {
@@ -487,7 +492,10 @@ func ConfirmReturnReceived(c *gin.Context) {
 			if order.WarehouseID != nil {
 				q = q.Where("warehouse_id = ?", *order.WarehouseID)
 			}
-			if err := q.Order("id").First(&inventory).Error; err == nil {
+			if err := q.Order("id").First(&inventory).Error; err != nil {
+                                // BUG-28: a missing inventory row must fail the return, not silently skip restocking.
+                                return errors.New("inventory row not found for a returned item")
+                        } else {
 				previousQty := inventory.Stock
 				inventory.Stock += ri.Quantity
 				inventory.InStock = true
