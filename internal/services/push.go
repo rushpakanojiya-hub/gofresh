@@ -27,6 +27,30 @@ func SendPushToAll(title string, body string) {
 		log.Println("No device tokens registered, skipping push notification")
 		return
 	}
+	filtered := make([]models.DeviceToken, 0, len(tokens))
+	// BUG-73: customer promos must not reach delivery-partner or staff devices; look up preferences once per user.
+	offersAllowed := make(map[uint]bool)
+	for _, tk := range tokens {
+		if tk.DeliveryPartnerID != nil || tk.StaffID != nil {
+			continue
+		}
+		if tk.UserID == nil {
+			filtered = append(filtered, tk)
+			continue
+		}
+		allowed, seen := offersAllowed[*tk.UserID]
+		if !seen {
+			allowed = PushAllowed(*tk.UserID, "offers")
+			offersAllowed[*tk.UserID] = allowed
+		}
+		if allowed {
+			filtered = append(filtered, tk)
+		}
+	}
+	tokens = filtered
+	if len(tokens) == 0 {
+		return
+	}
 	ctx := context.Background()
 	for _, t := range tokens {
 		msg := &messaging.Message{
@@ -39,7 +63,7 @@ func SendPushToAll(title string, body string) {
 		_, err := fb.Client.Send(ctx, msg)
 		if err != nil {
 			log.Printf("Push failed for token %s: %v", t.Token, err)
-			if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
+			if messaging.IsRegistrationTokenNotRegistered(err) /* BUG-74: INVALID_ARGUMENT can be a payload error, never delete the token for it */ {
 				database.DB.Delete(&t)
 			}
 			continue
@@ -55,33 +79,39 @@ func SendPushToAll(title string, body string) {
 // {"type": "order_status", "order_id": "20"}) so the app can open the right
 // screen when the notification is tapped.
 func SendPushToUserWithData(userID uint, title string, body string, data map[string]string) {
-    if fb.Client == nil {
-        log.Println("Firebase not initialized, skipping push notification")
-        return
-    }
-    var tokens []models.DeviceToken
-    if err := database.DB.Where("user_id = ?", userID).Find(&tokens).Error; err != nil {
-        log.Printf("Failed to load device tokens for user %d: %v", userID, err)
-        return
-    }
-    ctx := context.Background()
-    for _, t := range tokens {
-        msg := &messaging.Message{
-            Notification: &messaging.Notification{Title: title, Body: body},
-            Data:         data,
-            Token:        t.Token,
-        }
-        if _, err := fb.Client.Send(ctx, msg); err != nil {
-            log.Printf("Push failed for token %s: %v", t.Token, err)
-            if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
-                database.DB.Delete(&t)
-            }
-            continue
-        }
-    }
+	if data["type"] == "order_status" && !PushAllowed(userID, "orders") {
+		return
+	}
+	if fb.Client == nil {
+		log.Println("Firebase not initialized, skipping push notification")
+		return
+	}
+	var tokens []models.DeviceToken
+	if err := database.DB.Where("user_id = ?", userID).Find(&tokens).Error; err != nil {
+		log.Printf("Failed to load device tokens for user %d: %v", userID, err)
+		return
+	}
+	ctx := context.Background()
+	for _, t := range tokens {
+		msg := &messaging.Message{
+			Notification: &messaging.Notification{Title: title, Body: body},
+			Data:         data,
+			Token:        t.Token,
+		}
+		if _, err := fb.Client.Send(ctx, msg); err != nil {
+			log.Printf("Push failed for token %s: %v", t.Token, err)
+			if messaging.IsRegistrationTokenNotRegistered(err) /* BUG-74: INVALID_ARGUMENT can be a payload error, never delete the token for it */ {
+				database.DB.Delete(&t)
+			}
+			continue
+		}
+	}
 }
 
 func SendPushToUser(userID uint, title string, body string) {
+	if !PushAllowed(userID, "updates") {
+		return
+	}
 	if fb.Client == nil {
 		log.Println("Firebase not initialized, skipping push notification")
 		return
@@ -106,7 +136,7 @@ func SendPushToUser(userID uint, title string, body string) {
 		_, err := fb.Client.Send(ctx, msg)
 		if err != nil {
 			log.Printf("Push failed for token %s: %v", t.Token, err)
-			if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
+			if messaging.IsRegistrationTokenNotRegistered(err) /* BUG-74: INVALID_ARGUMENT can be a payload error, never delete the token for it */ {
 				database.DB.Delete(&t)
 			}
 			continue
@@ -143,7 +173,7 @@ func SendPushToPartner(partnerID uint, title string, body string) {
 		_, err := fb.Client.Send(ctx, msg)
 		if err != nil {
 			log.Printf("Push failed for token %s: %v", t.Token, err)
-			if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
+			if messaging.IsRegistrationTokenNotRegistered(err) /* BUG-74: INVALID_ARGUMENT can be a payload error, never delete the token for it */ {
 				database.DB.Delete(&t)
 			}
 			continue
@@ -181,7 +211,7 @@ func SendPushToPartnerWithData(partnerID uint, title string, body string, data m
 		}
 		if _, err := fb.Client.Send(ctx, msg); err != nil {
 			log.Printf("Push failed for token %s: %v", t.Token, err)
-			if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
+			if messaging.IsRegistrationTokenNotRegistered(err) /* BUG-74: INVALID_ARGUMENT can be a payload error, never delete the token for it */ {
 				database.DB.Delete(&t)
 			}
 			continue

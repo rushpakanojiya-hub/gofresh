@@ -35,7 +35,7 @@ func SendPushToPutter(staffID uint, title string, body string, data map[string]s
 		}
 		if _, err := fb.Client.Send(ctx, msg); err != nil {
 			log.Printf("Putter push failed for token %s: %v", t.Token, err)
-			if messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsInvalidArgument(err) {
+			if messaging.IsRegistrationTokenNotRegistered(err) /* BUG-74: INVALID_ARGUMENT can be a payload error, never delete the token for it */ {
 				database.DB.Delete(&t)
 			}
 			continue
