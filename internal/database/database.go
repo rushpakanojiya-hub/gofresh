@@ -135,6 +135,10 @@ func AutoMigrate() {
 // migrate CLI by hand first - safe because ADD COLUMN IF NOT EXISTS is a
 // no-op once the versioned migration has actually been applied.
 func EnsureProductionSchemaPatches() {
+    // BUG-85: Post*LedgerEntry check-then-insert can race; this index makes the second concurrent post fail and roll back instead of double-posting.
+    if err := DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_ref_account_type ON ledger_entries (transaction_ref, account_id, "type")`).Error; err != nil {
+        log.Printf("Failed to create ledger_entries unique index: %v", err)
+    }
     // BUG-83: ReserveStock upserts ON CONFLICT (user_id, product_id, warehouse_id); that needs this unique index even when AutoMigrate is skipped.
     if err := DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_reservation_user_product_wh ON cart_reservations (user_id, product_id, warehouse_id)`).Error; err != nil {
         log.Printf("Failed to create cart_reservations unique index: %v", err)
