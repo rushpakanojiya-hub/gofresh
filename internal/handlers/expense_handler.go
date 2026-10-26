@@ -135,7 +135,13 @@ func UpdateExpense(c *gin.Context) {
 		return
 	}
 
-	previousAmount := expense.Amount
+	// BUG-14: approved/paid expenses are final; editing them would bypass maker-checker approval.
+    if expense.ApprovalStatus == "approved" || expense.ApprovalStatus == "paid" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Approved or paid expenses cannot be edited"})
+        return
+    }
+
+    previousAmount := expense.Amount
 	previousStatus := expense.ApprovalStatus
 
 	expense.Amount = req.Amount
