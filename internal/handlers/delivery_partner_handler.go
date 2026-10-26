@@ -659,6 +659,11 @@ func UploadDeliveryProof(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type. Allowed: jpg, jpeg, png, webp"})
 		return
 	}
+	// BUG-71: check real file content, not just the extension.
+	if verr := validateImageContent(file); verr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
+		return
+	}
 
 	var proofURL string
 	cfg := config.AppConfig
@@ -670,7 +675,7 @@ func UploadDeliveryProof(c *gin.Context) {
 		}
 		proofURL = url
 	} else {
-		filename := fmt.Sprintf("delivery-proof-%d%s", time.Now().UnixNano(), ext)
+		filename := fmt.Sprintf("delivery-proof-%d-%s%s", time.Now().UnixNano(), randSuffix(), ext)
 		savePath := filepath.Join("uploads", filename)
 		if err := c.SaveUploadedFile(file, savePath); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})

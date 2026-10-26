@@ -52,6 +52,11 @@ func UploadImage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type. Allowed: jpg, jpeg, png, webp"})
 		return
 	}
+	// BUG-71: check real file content, not just the extension.
+	if verr := validateImageContent(file); verr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
+		return
+	}
 
 	cfg := config.AppConfig
 	if cfg != nil && cfg.CloudinaryCloudName != "" && cfg.CloudinaryAPIKey != "" && cfg.CloudinaryAPISecret != "" {
@@ -64,7 +69,7 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixNano(), randSuffix(), ext)
 	savePath := filepath.Join("uploads", filename)
 
 	if err := c.SaveUploadedFile(file, savePath); err != nil {

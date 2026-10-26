@@ -53,9 +53,14 @@ func RegisterDeviceToken(c *gin.Context) {
 		UserID:            userID,
 		DeliveryPartnerID: deliveryPartnerID,
 	}
+	// BUG-72: an expired/invalid JWT must not wipe the existing user/partner binding.
+	updateCols := []string{"platform", "updated_at"}
+	if userID != nil || deliveryPartnerID != nil {
+		updateCols = []string{"platform", "user_id", "delivery_partner_id", "updated_at"}
+	}
 	err := database.DB.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "token"}},
-		DoUpdates: clause.AssignmentColumns([]string{"platform", "user_id", "delivery_partner_id", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns(updateCols),
 	}).Create(&token).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save device token"})
