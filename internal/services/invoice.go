@@ -153,22 +153,32 @@ if g.percent > maxGSTPercent {
 maxGSTPercent = g.percent
 }
 }
-deliveryTaxable := order.DeliveryCharge
+// BUG-17: a discount larger than the items value also reduces delivery and platform fee, so GST is not charged on money the customer never paid.
+	feeRatio := 1.0
+	if fees := order.DeliveryCharge + order.PlatformFee; fees > 0 && discountAmount > order.ItemsAmount {
+		feeRatio = (fees - (discountAmount - order.ItemsAmount)) / fees
+		if feeRatio < 0 {
+			feeRatio = 0
+		}
+	}
+	deliveryNet := order.DeliveryCharge * feeRatio
+	platformNet := order.PlatformFee * feeRatio
+	deliveryTaxable := deliveryNet
 deliveryGST := 0.0
 if maxGSTPercent > 0 && order.DeliveryCharge > 0 {
-deliveryTaxable = order.DeliveryCharge / (1 + maxGSTPercent/100)
-deliveryGST = order.DeliveryCharge - deliveryTaxable
+deliveryTaxable = deliveryNet / (1 + maxGSTPercent/100)
+deliveryGST = deliveryNet - deliveryTaxable
 }
 totalTaxable += deliveryTaxable
 totalGST += deliveryGST
 
 // Platform fee gets the same composite-supply tax treatment as delivery
 // charge - taxed at the order's highest item GST rate.
-platformFeeTaxable := order.PlatformFee
+platformFeeTaxable := platformNet
 platformFeeGST := 0.0
 if maxGSTPercent > 0 && order.PlatformFee > 0 {
-platformFeeTaxable = order.PlatformFee / (1 + maxGSTPercent/100)
-platformFeeGST = order.PlatformFee - platformFeeTaxable
+platformFeeTaxable = platformNet / (1 + maxGSTPercent/100)
+platformFeeGST = platformNet - platformFeeTaxable
 }
 totalTaxable += platformFeeTaxable
 totalGST += platformFeeGST
