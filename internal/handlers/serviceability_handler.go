@@ -85,53 +85,49 @@ func CheckServiceability(c *gin.Context) {
 		return
 	}
 
-	nearest, distance, err := FindNearestWarehouse(lat, lng)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load warehouses"})
-		return
-	}
-	if nearest == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"serviceable": false,
-			"message":     "No active warehouses available",
-		})
-		return
-	}
-
-	var hasPolygon bool
-	var containsPoint bool
-	row := database.DB.Raw(
-		`SELECT service_area IS NOT NULL, CASE WHEN service_area IS NOT NULL THEN ST_Contains(service_area, ST_SetSRID(ST_MakePoint(?, ?), 4326)) ELSE false END FROM warehouses WHERE id = ?`,
-		lng, lat, nearest.ID,
-	).Row()
-	if err := row.Scan(&hasPolygon, &containsPoint); err != nil {
-		log.Printf("serviceability check failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check serviceability"})
-		return
-	}
-
-	var serviceable bool
-	method := "radius"
-	if hasPolygon {
-		serviceable = containsPoint
-		method = "polygon"
-	} else {
-		serviceable = distance <= nearest.ServiceRadiusKm
-	}
-	response := gin.H{
-		"serviceable": serviceable,
-		"distance_km": math.Round(distance*100) / 100,
-		"nearest_warehouse": gin.H{
-			"id":                nearest.ID,
-			"name":              nearest.Name,
-			"city":              nearest.City,
-			"service_radius_km": nearest.ServiceRadiusKm,
-		},
-		"method": method,
-	}
-	if !serviceable {
-		response["message"] = "Sorry, we don't deliver to this location yet"
-	}
-
-	c.JSON(http.StatusOK, response)
+	// BUG-68: test every warehouse (closest first), not just the single nearest one.
+    serving, servingDist, method, err := FindServingWarehouse(lat, lng)
+    if err != nil {
+        log.Printf("serviceability check failed: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check serviceability"})
+        return
+    }
+    if serving == nil {
+        nearest, distance, nerr := FindNearestWarehouse(lat, lng)
+        if nerr != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load warehouses"})
+            return
+        }
+        if nearest == nil {
+            c.JSON(http.StatusOK, gin.H{
+                "serviceable": false,
+                "message":     "No active warehouses available",
+            })
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{
+            "serviceable": false,
+            "distance_km": math.Round(distance*100) / 100,
+            "nearest_warehouse": gin.H{
+                "id":                nearest.ID,
+                "name":              nearest.Name,
+                "city":              nearest.City,
+                "service_radius_km": nearest.ServiceRadiusKm,
+            },
+            "method":  "none",
+            "message": "Sorry, we don't deliver to this location yet",
+        })
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{
+        "serviceable": true,
+        "distance_km": math.Round(servingDist*100) / 100,
+        "nearest_warehouse": gin.H{
+            "id":                serving.ID,
+            "name":              serving.Name,
+            "city":              serving.City,
+            "service_radius_km": serving.ServiceRadiusKm,
+        },
+        "method": method,
+    })
 }

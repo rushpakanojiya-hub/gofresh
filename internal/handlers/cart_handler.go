@@ -40,7 +40,7 @@ func resolveWarehouseForUser(userID uint) (*models.Warehouse, error) {
 	if err != nil || address.Lat == nil || address.Lng == nil {
 		return nil, nil
 	}
-	warehouse, _, err := FindNearestWarehouse(*address.Lat, *address.Lng)
+	warehouse, _, _, err := FindServingWarehouse(*address.Lat, *address.Lng) // BUG-68: nil when no warehouse really serves this address
 	if err != nil {
 		return nil, err
 	}

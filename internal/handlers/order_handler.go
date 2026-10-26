@@ -70,19 +70,16 @@ func Checkout(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This address is missing location coordinates. Please re-save it with location enabled."})
 		return
 	}
-	nearestWarehouse, distance, err := FindNearestWarehouse(*address.Lat, *address.Lng)
+	nearestWarehouse, distance, _, err := FindServingWarehouse(*address.Lat, *address.Lng) // BUG-68
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check delivery serviceability"})
 		return
 	}
 	if nearestWarehouse == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Sorry, no active warehouses are available right now"})
-		return
-	}
-	if distance > nearestWarehouse.ServiceRadiusKm {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Sorry, we don't deliver to this location yet"})
-		return
-	}
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Sorry, we don't deliver to this location yet"})
+        return
+    }
+    _ = distance
 
 	cart, err := getOrCreateCart(userID)
 	if err != nil {

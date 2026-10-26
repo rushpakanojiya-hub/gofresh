@@ -78,7 +78,7 @@ func GetProducts(c *gin.Context) {
 	// BUG-67: resolve the serving warehouse first, so in_stock looks at it and not at every warehouse nationwide.
     var nearestWarehouse *models.Warehouse
     if query.Lat != nil && query.Lng != nil {
-        if nw, _, nerr := FindNearestWarehouse(*query.Lat, *query.Lng); nerr == nil {
+        if nw, _, _, nerr := FindServingWarehouse(*query.Lat, *query.Lng); nerr == nil { // BUG-68
             nearestWarehouse = nw
         }
     }
