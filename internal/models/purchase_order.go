@@ -58,6 +58,7 @@ Items        []PurchaseOrderItemRequest `json:"items" binding:"required,min=1"`
 // PurchaseOrderStatusRequest is the body for PUT .../status
 type PurchaseOrderStatusRequest struct {
 Status string `json:"status" binding:"required"`
+	Reason string `json:"reason"` // BUG-58: read from the same single bind
 }
 
 // ReceivePurchaseOrderItemsRequest records partial/full receipt of PO items.
