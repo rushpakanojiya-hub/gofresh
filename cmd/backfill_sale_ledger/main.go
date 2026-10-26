@@ -97,6 +97,13 @@ func main() {
 
 	fmt.Printf("Found %d order(s) missing a sale ledger entry (cancelled orders excluded).\n\n", len(candidates))
 
+	// BUG-19: returned orders need a human look; backfilling a sale is only right if its credit note is already in the ledger.
+	for _, o := range candidates {
+		if o.Status == "returned" {
+			fmt.Printf("WARNING: order #%d is returned and has no sale entry - review before applying\n", o.ID)
+		}
+	}
+
 	if !*apply {
 		fmt.Println("DRY RUN - no ledger entries will be posted. Re-run with -apply to actually post them.")
 		fmt.Println()
