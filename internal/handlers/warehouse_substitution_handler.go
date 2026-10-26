@@ -173,6 +173,23 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 				return errors.New("Original product not found on this order")
 			}
 
+            // BUG-57: cannot substitute more than ordered, and not after picking is completed
+            // (CompletePicking already restocked and refunded the unpicked original item).
+            if sub.Quantity > orderItem.Quantity {
+                statusCode = http.StatusBadRequest
+                return errors.New("Substitution quantity exceeds the quantity ordered for this item")
+            }
+            if sub.PickingTaskItemID != nil {
+                var subPickItem models.PickingTaskItem
+                if perr := tx.First(&subPickItem, *sub.PickingTaskItemID).Error; perr == nil {
+                    var subPickTask models.PickingTask
+                    if terr := tx.First(&subPickTask, subPickItem.PickingTaskID).Error; terr == nil && subPickTask.Status == "completed" {
+                        statusCode = http.StatusConflict
+                        return errors.New("Picking is already completed for this order; the original item was already restocked and refunded")
+                    }
+                }
+            }
+
 			var substituteProduct models.Product
 			if err := tx.First(&substituteProduct, sub.SubstituteProductID).Error; err != nil {
 				return err
