@@ -53,7 +53,7 @@ func UpdateSettings(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "update_settings", "settings", "-", "updated keys")
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "updated": updated})

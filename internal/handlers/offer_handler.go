@@ -54,7 +54,7 @@ func CreateOffer(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "create_offer", "offer", strconv.Itoa(int(offer.ID)), "title: "+offer.Title)
 
 	c.JSON(http.StatusCreated, offer)
@@ -138,7 +138,7 @@ func DeleteOffer(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "delete_offer", "offer", strconv.Itoa(id), "-")
 
 	c.JSON(http.StatusOK, gin.H{"success": true})

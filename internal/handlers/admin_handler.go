@@ -34,7 +34,7 @@ func CreateCategory(c *gin.Context) {
 	}
 	_ = cache.Delete(c.Request.Context(), "categories:all")
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "create_category", "category", fmt.Sprint(category.ID), "name: "+category.Name)
 
 	c.JSON(http.StatusCreated, category)
@@ -66,7 +66,7 @@ func UpdateCategory(c *gin.Context) {
 	_ = cache.Delete(c.Request.Context(), "categories:all")
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "update_category", "category", id, "name: "+category.Name)
 
 	c.JSON(http.StatusOK, category)
@@ -99,7 +99,7 @@ func DeleteCategory(c *gin.Context) {
 	_ = cache.Delete(c.Request.Context(), "categories:all")
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "delete_category", "category", id, "name: "+category.Name)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Category deleted"})
@@ -188,7 +188,7 @@ func CreateProduct(c *gin.Context) {
 	database.DB.Preload("Category").Preload("Inventories").First(&product, product.ID)
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "create_product", "product", fmt.Sprint(product.ID), "name: "+product.Name)
 	c.JSON(http.StatusCreated, product)
 }
@@ -241,7 +241,7 @@ func UpdateProduct(c *gin.Context) {
 	database.DB.Preload("Category").Preload("Inventories").First(&product, product.ID)
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "update_product", "product", id, "name: "+product.Name)
 	c.JSON(http.StatusOK, product)
 }
@@ -270,7 +270,7 @@ func GenerateProductBarcode(c *gin.Context) {
 		}
 
 		adminID := c.MustGet("user_id").(uint)
-		adminPhone := c.MustGet("phone").(string)
+		adminPhone := ctxPhone(c)
 		utils.LogAudit(adminID, adminPhone, "generate_barcode", "product", id, "barcode: "+product.Barcode)
 	}
 
@@ -303,7 +303,7 @@ func DeleteProduct(c *gin.Context) {
 	_ = cache.Delete(c.Request.Context(), "products:id:"+id)
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "delete_product", "product", id, "name: "+product.Name)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Product deleted"})
@@ -350,7 +350,7 @@ func UpdateInventory(c *gin.Context) {
 	_ = cache.Delete(c.Request.Context(), "products:id:"+id)
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "update_inventory", "product", id, fmt.Sprintf("stock: %d", inventory.Stock))
 
 	c.JSON(http.StatusOK, inventory)
@@ -491,7 +491,7 @@ func UpdateOrderStatus(c *gin.Context) {
 	services.SendPushToUserWithData(order.UserID, "Order Update", message, services.OrderPushData(order.ID))
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "update_order_status", "order", orderID, "new status: "+req.Status)
 
 	c.JSON(http.StatusOK, order)

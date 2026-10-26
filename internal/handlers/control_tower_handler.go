@@ -145,7 +145,7 @@ func UpdateCODEnabled(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	details := fmt.Sprintf("reason: %s | previous_state: %s | new_state: %s", body.Reason, previousValue, newValue)
 	utils.LogAudit(adminID, adminPhone, action, "settings", "cod_enabled", details)
 
@@ -191,7 +191,7 @@ func UpdatePlatformPause(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	details := fmt.Sprintf("reason: %s | previous_state: %s | new_state: %s", body.Reason, previousValue, newValue)
 	utils.LogAudit(adminID, adminPhone, action, "platform", "platform_orders_paused", details)
 
@@ -248,7 +248,7 @@ func UpdateCityStoreStatus(c *gin.Context) {
 	}
 
 	adminID := c.MustGet("user_id").(uint)
-	adminPhone := c.MustGet("phone").(string)
+	adminPhone := ctxPhone(c)
 	newSummary := fmt.Sprintf("%s:%d", body.Status, result.RowsAffected)
 	details := fmt.Sprintf("reason: %s | previous_state: %s | new_state: %s", body.Reason, previousSummary, newSummary)
 	utils.LogAudit(adminID, adminPhone, action, "city", body.City, details)

@@ -25,12 +25,12 @@ func SendPartnerOTP(c *gin.Context) {
 
 	var partner models.DeliveryPartner
 	err := database.DB.Where("phone = ?", req.Phone).First(&partner).Error
-    if err != nil && err != gorm.ErrRecordNotFound {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to look up partner"})
-        return
-    }
-    // Unknown numbers may self-signup (partner row is created after OTP verify).
-    if err == nil && partnerLoginBlocked(partner) {
+	if err != nil && err != gorm.ErrRecordNotFound {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to look up partner"})
+		return
+	}
+	// Unknown numbers may self-signup (partner row is created after OTP verify).
+	if err == nil && partnerLoginBlocked(partner) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This delivery partner account is inactive"})
 		return
 	}
@@ -92,20 +92,20 @@ func VerifyPartnerOTP(c *gin.Context) {
 
 	var partner models.DeliveryPartner
 	if err := database.DB.Where("phone = ?", req.Phone).First(&partner).Error; err != nil {
-        if err != gorm.ErrRecordNotFound {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to look up partner"})
-            return
-        }
-        partner = models.DeliveryPartner{Name: "New Partner", Phone: req.Phone, IsActive: false, ApprovalStatus: approvalOnboarding}
-        if err := database.DB.Create(&partner).Error; err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create partner"})
-            return
-        }
-        // gorm applies the column default (5) to a zero value on Create.
-        database.DB.Model(&partner).Update("onboarding_step", 0)
-        partner.OnboardingStep = 0
-    }
-    if partnerLoginBlocked(partner) {
+		if err != gorm.ErrRecordNotFound {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to look up partner"})
+			return
+		}
+		partner = models.DeliveryPartner{Name: "New Partner", Phone: req.Phone, IsActive: false, ApprovalStatus: approvalOnboarding}
+		if err := database.DB.Create(&partner).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create partner"})
+			return
+		}
+		// gorm applies the column default (5) to a zero value on Create.
+		database.DB.Model(&partner).Update("onboarding_step", 0)
+		partner.OnboardingStep = 0
+	}
+	if partnerLoginBlocked(partner) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This delivery partner account is inactive"})
 		return
 	}
@@ -165,20 +165,20 @@ func UpdateLocation(c *gin.Context) {
 // preloaded order+partner. Shared by GetOrderTracking (customer) and
 // GetOrderTrackingAdmin (admin) so both surfaces stay consistent.
 func trackingPayload(order models.Order) gin.H {
-partner := order.DeliveryPartner
-payload := gin.H{
-"delivery_partner_name": partner.Name,
-"vehicle_number":        partner.VehicleNumber,
-"phone":                 partner.Phone,
-"current_lat":           partner.CurrentLat,
-"current_lng":           partner.CurrentLng,
-"last_updated":          partner.LastLocationUpdate,
-"order_status":          order.Status,
-"delivery_status":       order.DeliveryStatus,
-"address_lat":           order.Address.Lat,
-"address_lng":           order.Address.Lng,
-}
-return payload
+	partner := order.DeliveryPartner
+	payload := gin.H{
+		"delivery_partner_name": partner.Name,
+		"vehicle_number":        partner.VehicleNumber,
+		"phone":                 partner.Phone,
+		"current_lat":           partner.CurrentLat,
+		"current_lng":           partner.CurrentLng,
+		"last_updated":          partner.LastLocationUpdate,
+		"order_status":          order.Status,
+		"delivery_status":       order.DeliveryStatus,
+		"address_lat":           order.Address.Lat,
+		"address_lng":           order.Address.Lng,
+	}
+	return payload
 }
 
 // GetOrderTracking godoc
@@ -194,7 +194,7 @@ func GetOrderTracking(c *gin.Context) {
 	var order models.Order
 	if err := database.DB.
 		Preload("DeliveryPartner").
-                Preload("Address").
+		Preload("Address").
 		Where("id = ? AND user_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
@@ -207,19 +207,19 @@ func GetOrderTracking(c *gin.Context) {
 	}
 
 	trackDS := ""
-    if order.DeliveryStatus != nil {
-        trackDS = *order.DeliveryStatus
-    }
-    // Rider ki live location sirf tab share hoti hai jab delivery leg chal rahi ho.
-    // Warna delivered/rejected/expired ke baad bhi customer us partner ko track karta rehta.
-    if trackDS != models.DeliveryStatusOutForDelivery && trackDS != models.DeliveryStatusArrivedAtCustomer {
-        payload := trackingPayload(order)
-        payload["current_lat"] = nil
-        payload["current_lng"] = nil
-        payload["last_updated"] = nil
-        c.JSON(http.StatusOK, gin.H{"message": "Live location is shared once your order is out for delivery", "tracking": payload})
-        return
-    }
+	if order.DeliveryStatus != nil {
+		trackDS = *order.DeliveryStatus
+	}
+	// Rider ki live location sirf tab share hoti hai jab delivery leg chal rahi ho.
+	// Warna delivered/rejected/expired ke baad bhi customer us partner ko track karta rehta.
+	if trackDS != models.DeliveryStatusOutForDelivery && trackDS != models.DeliveryStatusArrivedAtCustomer {
+		payload := trackingPayload(order)
+		payload["current_lat"] = nil
+		payload["current_lng"] = nil
+		payload["last_updated"] = nil
+		c.JSON(http.StatusOK, gin.H{"message": "Live location is shared once your order is out for delivery", "tracking": payload})
+		return
+	}
 	if order.DeliveryPartner.CurrentLat == nil || order.DeliveryPartner.CurrentLng == nil {
 		c.JSON(http.StatusOK, gin.H{"message": "Delivery partner assigned, live location not available yet", "tracking": trackingPayload(order)})
 		return
@@ -238,7 +238,7 @@ func GetOrderTrackingAdmin(c *gin.Context) {
 	var order models.Order
 	if err := database.DB.
 		Preload("DeliveryPartner").
-                Preload("Address").
+		Preload("Address").
 		Where("id = ?", orderID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
