@@ -71,6 +71,7 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			services.ExpireStaleAssignments()
+			services.ExpireStaleReturnPickups()
 		}
 	}()
 	// BUG-15: refund wallet + cancel online orders whose gateway payment never completed.
