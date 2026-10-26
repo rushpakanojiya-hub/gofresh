@@ -16,7 +16,6 @@ func GetProductReviews(c *gin.Context) {
 
 	var reviews []models.Review
 	if err := database.DB.
-		Preload("User").
 		Where("product_id = ?", productID).
 		Order("created_at DESC").
 		Find(&reviews).Error; err != nil {
@@ -68,7 +67,10 @@ func UpsertReview(c *gin.Context) {
 	if result.Error == nil {
 		existing.Rating = req.Rating
 		existing.Comment = req.Comment
-		database.DB.Save(&existing)
+		if err := database.DB.Save(&existing).Error; err != nil { // BUG-70: do not ignore the save error
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update review"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"message": "Review updated", "review": existing})
 		return
 	}
