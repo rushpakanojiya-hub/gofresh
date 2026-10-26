@@ -147,7 +147,7 @@ func AddToCart(c *gin.Context) {
 				return err
 			}
 		} else {
-			totalStock, err := database.GetTotalStock(req.ProductID)
+			totalStock, err := database.GetTotalStockForUser(req.ProductID, userID)
 			if err != nil {
 				return err
 			}
@@ -224,7 +224,7 @@ func UpdateCartItem(c *gin.Context) {
 				return err
 			}
 		} else {
-			totalStock, err := database.GetTotalStock(item.ProductID)
+			totalStock, err := database.GetTotalStockForUser(item.ProductID, userID)
 			if err != nil {
 				return err
 			}
