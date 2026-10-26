@@ -432,9 +432,9 @@ func ApproveStockTransfer(c *gin.Context) {
 			Change:       -transfer.Quantity,
 			NewQty:       inventory.Stock,
 			MovementType: models.MovementTransfer,
-			StaffID:      &adminID,
+			StaffID:      nil, // BUG-62: adminID is users.id, not WarehouseStaff.ID
 			ReferenceID:  &transfer.ID,
-			Notes:        fmt.Sprintf("Stock transfer #%d approved by admin, dispatched to warehouse #%d", transfer.ID, transfer.ToWarehouseID),
+			Notes:        fmt.Sprintf("Stock transfer #%d approved by admin #%d, dispatched to warehouse #%d", transfer.ID, adminID, transfer.ToWarehouseID),
 		}
 		if err := tx.Create(&movement).Error; err != nil {
 			return err

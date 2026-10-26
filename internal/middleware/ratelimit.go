@@ -17,6 +17,7 @@ type rateLimiter struct {
 	requests map[string][]time.Time
 	limit    int
 	window   time.Duration
+	lastSweep time.Time
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
@@ -33,6 +34,16 @@ func (rl *rateLimiter) allow(key string) bool {
 
 	now := time.Now()
 	cutoff := now.Add(-rl.window)
+
+	// BUG-81: periodically drop idle keys so the map cannot grow forever.
+	if now.Sub(rl.lastSweep) > rl.window {
+		for k, ts := range rl.requests {
+			if len(ts) == 0 || !ts[len(ts)-1].After(cutoff) {
+				delete(rl.requests, k)
+			}
+		}
+		rl.lastSweep = now
+	}
 
 	kept := rl.requests[key][:0]
 	for _, t := range rl.requests[key] {

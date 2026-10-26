@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 "net/http"
@@ -54,9 +54,11 @@ out = append(out, o)
 return out
 }
 
+// BUG-80: a literal "*" entry is deliberately NOT honoured - reflecting any origin
+// together with Allow-Credentials: true lets any site make credentialed requests.
 func isAllowedOrigin(origin string, allowed []string) bool {
 for _, a := range allowed {
-if a == "*" || a == origin {
+if a == origin {
 return true
 }
 }

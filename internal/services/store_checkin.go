@@ -1,6 +1,8 @@
 package services
 
 import (
+	crand "crypto/rand"
+	"sync"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -32,10 +34,7 @@ var (
 )
 
 func storeCheckinKey() []byte {
-	s := os.Getenv("JWT_SECRET")
-	if s == "" {
-		s = "default_secret_change_me"
-	}
+	s := storeCheckinSecret() // BUG-82
 	m := hmac.New(sha256.New, []byte(s))
 	m.Write([]byte("store-checkin-v1"))
 	return m.Sum(nil)
@@ -139,4 +138,25 @@ func storeCheckinRadiusM() float64 {
 		return v
 	}
 	return 300.0
+}
+
+// storeCheckinSecret returns JWT_SECRET, or a random per-process secret if unset
+// (BUG-82: no hardcoded fallback that anyone could guess).
+var (
+	storeCheckinFallbackOnce   sync.Once
+	storeCheckinFallbackSecret string
+)
+
+func storeCheckinSecret() string {
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		return v
+	}
+	storeCheckinFallbackOnce.Do(func() {
+		b := make([]byte, 32)
+		if _, err := crand.Read(b); err != nil {
+			panic(err)
+		}
+		storeCheckinFallbackSecret = base64.RawURLEncoding.EncodeToString(b)
+	})
+	return storeCheckinFallbackSecret
 }
