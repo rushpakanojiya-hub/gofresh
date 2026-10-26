@@ -19,7 +19,7 @@ const (
 	pickerPerItemSeconds = 12
 	pickerMaxSeconds     = 900
 	pickerStaleAfter     = 30 * time.Second
-	pickerOrderMaxAge    = 30 * time.Minute
+	pickerOrderMaxAge    = 24 * time.Hour // BUG-60: was 30m, which stranded orders when pickers were busy or overnight
 	pickerTaskMaxAge     = 2 * time.Hour
 )
 
