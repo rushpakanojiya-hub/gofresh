@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm"
+	"errors"
 	"math"
 	"net/http"
 	"sort"
@@ -162,38 +165,48 @@ func BookPickerSlot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid slot id"})
 		return
 	}
-	var slot models.PickerSlot
-	if err := database.DB.Where("id = ? AND is_active = ?", slotID, true).First(&slot).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Slot not found"})
-		return
-	}
-	var existing int64
-	database.DB.Model(&models.PickerSlotBooking{}).
-		Where("staff_id = ? AND booking_date = ? AND slot_id = ? AND status = ?", staffID, req.Date, slot.ID, "booked").Count(&existing)
-	if existing > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "You have already booked this slot"})
-		return
-	}
-	var n int64
-	database.DB.Model(&models.PickerSlotBooking{}).
-		Where("slot_id = ? AND booking_date = ? AND status = ?", slot.ID, req.Date, "booked").Count(&n)
-	var otherWh int64
-	database.DB.Model(&models.PickerSlotBooking{}).
-		Where("staff_id = ? AND booking_date = ? AND status = ? AND warehouse_id <> ?", staffID, req.Date, "booked", slot.WarehouseID).Count(&otherWh)
-	if otherWh > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "You can book slots of only one store per day"})
-		return
-	}
-	if slot.Capacity > 0 && int(n) >= slot.Capacity {
-		c.JSON(http.StatusConflict, gin.H{"error": "Slot is full"})
-		return
-	}
-	b := models.PickerSlotBooking{StaffID: staffID, SlotID: slot.ID, BookingDate: req.Date, WarehouseID: slot.WarehouseID, Status: "booked"}
-	if err := database.DB.Create(&b).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Already booked"})
-		return
-	}
-	c.JSON(http.StatusCreated, b)
+	// BUG-59: slot row is locked inside a transaction so concurrent bookings cannot exceed capacity.
+    var slot models.PickerSlot
+    var b models.PickerSlotBooking
+    code := http.StatusInternalServerError
+    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+        if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND is_active = ?", slotID, true).First(&slot).Error; e != nil {
+            code = http.StatusNotFound
+            return errors.New("Slot not found")
+        }
+        var existing int64
+        tx.Model(&models.PickerSlotBooking{}).
+            Where("staff_id = ? AND booking_date = ? AND slot_id = ? AND status = ?", staffID, req.Date, slot.ID, "booked").Count(&existing)
+        if existing > 0 {
+            code = http.StatusConflict
+            return errors.New("You have already booked this slot")
+        }
+        var otherWh int64
+        tx.Model(&models.PickerSlotBooking{}).
+            Where("staff_id = ? AND booking_date = ? AND status = ? AND warehouse_id <> ?", staffID, req.Date, "booked", slot.WarehouseID).Count(&otherWh)
+        if otherWh > 0 {
+            code = http.StatusConflict
+            return errors.New("You can book slots of only one store per day")
+        }
+        var n int64
+        tx.Model(&models.PickerSlotBooking{}).
+            Where("slot_id = ? AND booking_date = ? AND status = ?", slot.ID, req.Date, "booked").Count(&n)
+        if slot.Capacity > 0 && int(n) >= slot.Capacity {
+            code = http.StatusConflict
+            return errors.New("Slot is full")
+        }
+        b = models.PickerSlotBooking{StaffID: staffID, SlotID: slot.ID, BookingDate: req.Date, WarehouseID: slot.WarehouseID, Status: "booked"}
+        if e := tx.Create(&b).Error; e != nil {
+            code = http.StatusConflict
+            return errors.New("Already booked")
+        }
+        return nil
+    })
+    if txErr != nil {
+        c.JSON(code, gin.H{"error": txErr.Error()})
+        return
+    }
+    c.JSON(http.StatusCreated, b)
 }
 
 type pickerBookingOut struct {
