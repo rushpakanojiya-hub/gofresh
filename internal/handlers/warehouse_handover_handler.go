@@ -71,6 +71,17 @@ func HandoverOrder(c *gin.Context) {
 			statusCode = http.StatusBadRequest
 			return errors.New("delivery partner has not accepted this assignment yet")
 		}
+        // BUG-66b: partner must be checked in at THIS store (distance was verified at check-in).
+        var hoPartner models.DeliveryPartner
+        if err := tx.Select("id", "checked_in_warehouse_id", "checked_in_at").First(&hoPartner, *order.DeliveryPartnerID).Error; err != nil {
+            statusCode = http.StatusNotFound
+            return errors.New("delivery partner not found")
+        }
+        if hoPartner.CheckedInWarehouseID == nil || *hoPartner.CheckedInWarehouseID != warehouseID ||
+            hoPartner.CheckedInAt == nil || time.Since(*hoPartner.CheckedInAt) > services.StoreCheckinMaxAge {
+            statusCode = http.StatusBadRequest
+            return errors.New("delivery partner is not checked in at this store")
+        }
 		var existing models.OrderHandover
 		if err := tx.Where("order_id = ?", order.ID).First(&existing).Error; err == nil {
 			statusCode = http.StatusConflict
