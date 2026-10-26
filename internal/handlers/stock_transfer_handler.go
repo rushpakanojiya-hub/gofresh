@@ -214,7 +214,7 @@ func receiveStockTransferLegacy(c *gin.Context) {
 
 // ApproveStockTransferByWarehouseStaff godoc
 // PUT /api/v1/warehouse/stock-transfers/:id/approve (warehouse staff only)
-// Only staff at the DESTINATION warehouse may approve an incoming transfer.
+// Only staff at the SUPPLYING (source) warehouse may approve a transfer.
 // Same effect as the admin ApproveStockTransfer: deducts stock from the
 // source warehouse immediately and marks the transfer in_transit.
 func ApproveStockTransferByWarehouseStaff(c *gin.Context) {
@@ -257,7 +257,7 @@ func ApproveStockTransferByWarehouseStaff(c *gin.Context) {
 			return errors.New("source warehouse has no inventory record for this product")
 		}
 
-		if inventory.Stock < transfer.Quantity {
+		if inventory.Stock-transferReservedQty(tx, transfer.ProductID, transfer.FromWarehouseID) < transfer.Quantity { // BUG-61
 			statusCode = http.StatusBadRequest
 			return errors.New("insufficient stock at source warehouse to approve this transfer")
 		}
@@ -298,7 +298,7 @@ func ApproveStockTransferByWarehouseStaff(c *gin.Context) {
 
 	services.LogWarehouseAction(staff.WarehouseID, staffID, staff.Name, "approve_stock_transfer", "stock_transfer",
 		fmt.Sprint(transfer.ID), "status=pending", "status=in_transit")
-	services.NotifyWarehouse(transfer.FromWarehouseID, models.WhNotifyStockTransfer,
+	services.NotifyWarehouse(transfer.ToWarehouseID, models.WhNotifyStockTransfer, // BUG-61: notify the requesting warehouse
 		"Stock transfer approved",
 		fmt.Sprintf("Your transfer #%d to warehouse #%d was approved and is now in transit.", transfer.ID, transfer.ToWarehouseID),
 		nil, &transfer.ProductID)
@@ -411,7 +411,7 @@ func ApproveStockTransfer(c *gin.Context) {
 			return errors.New("source warehouse has no inventory record for this product")
 		}
 
-		if inventory.Stock < transfer.Quantity {
+		if inventory.Stock-transferReservedQty(tx, transfer.ProductID, transfer.FromWarehouseID) < transfer.Quantity { // BUG-61
 			statusCode = http.StatusBadRequest
 			return errors.New("insufficient stock at source warehouse to approve this transfer")
 		}
