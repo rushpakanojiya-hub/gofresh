@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -248,6 +249,9 @@ func PostCreditNoteLedgerEntry(creditNoteID uint) error {
 	})
 }
 
+// ErrDebitNoteInvalid means the debit note is refused by a business rule
+// (voided bill, or total debit notes would exceed the bill value).
+var ErrDebitNoteInvalid = errors.New("debit note exceeds the bill value or the bill is voided")
 // GenerateDebitNote issues a Debit Note against a vendor bill for a
 // purchase return, short supply, rate difference, or quality issue (SRS
 // 12.18). Always an explicit admin action - there is no automatic trigger
@@ -260,7 +264,21 @@ func GenerateDebitNote(billID uint, amount, gstAmount float64, reason string, ad
 
 	var note models.DebitNote
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("CREATE SEQUENCE IF NOT EXISTS debit_note_number_seq START 1").Error; err != nil {
+        // BUG-09: lock the bill and never let debit notes exceed the bill value.
+        var lockedBill models.VendorBill
+        if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedBill, bill.ID).Error; err != nil {
+            return fmt.Errorf("vendor bill not found: %w", err)
+        }
+        if lockedBill.VoidedAt != nil {
+            return ErrDebitNoteInvalid
+        }
+        var alreadyDebited float64
+        if err := tx.Model(&models.DebitNote{}).Where("vendor_bill_id = ?", bill.ID).Select("COALESCE(SUM(total_amount), 0)").Scan(&alreadyDebited).Error; err != nil {
+            return err
+        }
+        if alreadyDebited+amount+gstAmount > lockedBill.Amount+lockedBill.GSTAmount+0.005 {
+            return ErrDebitNoteInvalid
+        }		if err := tx.Exec("CREATE SEQUENCE IF NOT EXISTS debit_note_number_seq START 1").Error; err != nil {
 			return fmt.Errorf("failed to ensure debit note sequence exists: %w", err)
 		}
 		var seqVal int64

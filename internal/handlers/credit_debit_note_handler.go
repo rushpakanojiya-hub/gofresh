@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -95,7 +96,11 @@ func CreateDebitNote(c *gin.Context) {
 	adminID := c.MustGet("user_id").(uint)
 	note, err := services.GenerateDebitNote(bill.ID, req.Amount, req.GSTAmount, req.Reason, adminID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create debit note: " + err.Error()})
+		if errors.Is(err, services.ErrDebitNoteInvalid) { // BUG-09
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Debit notes cannot exceed the bill value, and voided bills cannot be debited"})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create debit note: " + err.Error()})
 		return
 	}
 
