@@ -265,6 +265,7 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 				// Full-line substitution: every unit on this order line is being
 				// substituted, so it's safe to swap the existing row in place.
 				orderItem.ProductID = sub.SubstituteProductID
+					orderItem.CostPrice = substituteProduct.CostPrice // BUG-18 full-line: snapshot follows the substituted product
 				if substituteProduct.Price < originalPrice {
 					orderItem.Price = substituteProduct.Price
 				}
