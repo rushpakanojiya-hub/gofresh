@@ -20,7 +20,7 @@ func FinanceDashboard(c *gin.Context) {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
 	var totalRevenue, cogs, totalExpenses float64
-	revenueFilter := "(payment_method = 'online' AND payment_status = 'paid') OR (payment_method = 'cod' AND status = 'delivered')"
+	revenueFilter := "(payment_method = 'online' AND payment_status = 'paid' AND status NOT IN ('cancelled','returned')) OR (payment_method = 'cod' AND status = 'delivered')"
 	database.DB.Table("orders").
 		Where("created_at >= ?", monthStart).
 		Where(revenueFilter).
