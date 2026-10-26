@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/database"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/utils"
 )
 
@@ -131,6 +132,15 @@ func CreatePayroll(c *gin.Context) {
 		return
 	}
 
+    // BUG-13: a payroll created as paid must hit the ledger; roll back to pending if posting fails so it can be retried.
+    if status == "paid" {
+        if lerr := services.PostPayrollLedgerEntry(payroll.ID); lerr != nil {
+            database.DB.Model(&models.Payroll{}).Where("id = ?", payroll.ID).Updates(map[string]interface{}{"status": "pending", "paid_by_id": nil, "paid_at": nil})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Ledger posting failed, payroll was rolled back to pending. Please retry: " + lerr.Error()})
+            return
+        }
+    }
+
 	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "create_payroll", "payroll", strconv.Itoa(int(payroll.ID)), "created")
 
@@ -193,6 +203,15 @@ func UpdatePayroll(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update payroll record"})
 		return
 	}
+
+    // BUG-13: pending -> paid must hit the ledger; roll back to pending if posting fails so it can be retried.
+    if status == "paid" && wasPending {
+        if lerr := services.PostPayrollLedgerEntry(payroll.ID); lerr != nil {
+            database.DB.Model(&models.Payroll{}).Where("id = ?", payroll.ID).Updates(map[string]interface{}{"status": "pending", "paid_by_id": nil, "paid_at": nil})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Ledger posting failed, payroll was rolled back to pending. Please retry: " + lerr.Error()})
+            return
+        }
+    }
 
 	adminPhone := ctxPhone(c)
 	utils.LogAudit(adminID, adminPhone, "update_payroll", "payroll", id, "updated")
