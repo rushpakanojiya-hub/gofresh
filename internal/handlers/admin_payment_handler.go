@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"gorm.io/gorm"
 	"log"
 	"net/http"
 	"strconv"
@@ -256,7 +257,19 @@ func UpdateAdminPaymentStatus(c *gin.Context) {
 		payment.RefundedAmount = *req.RefundedAmount
 	}
 
-	if err := database.DB.Save(&payment).Error; err != nil {
+	// BUG-34: save the payment and credit the customer's wallet atomically (same pattern as admin cancel).
+    refundDelta := payment.RefundedAmount - previousRefundedAmount
+    walletRefund := refundDelta > 0 && (req.Status == models.PaymentStatusRefunded || req.Status == models.PaymentStatusPartiallyRefunded)
+    if err := database.DB.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Save(&payment).Error; err != nil {
+            return err
+        }
+        if walletRefund {
+            refID := order.ID
+            return utils.CreditWallet(tx, order.UserID, refundDelta, models.WalletReasonOrderRefund, "order", &refID, "Refund recorded by admin")
+        }
+        return nil
+    }); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update payment status"})
 		return
 	}
@@ -264,9 +277,9 @@ func UpdateAdminPaymentStatus(c *gin.Context) {
 	// Post the incremental refund (not the cumulative total) to the ledger:
 	// Debit Customer Refund Payable, Credit Bank/Cash. Only fires when this
 	// call actually increased the refunded amount.
-	refundDelta := payment.RefundedAmount - previousRefundedAmount
-	if refundDelta > 0 {
-		if err := services.PostRefundLedgerEntry(order.ID, refundDelta, order.PaymentMethod); err != nil {
+	// BUG-34: refundDelta is computed before the transaction above.
+	if walletRefund {
+		if err := services.PostWalletRefundLedgerEntry(order.ID, refundDelta); err != nil {
 			log.Printf("failed to post refund ledger entry for order %d: %v", order.ID, err)
 		}
 	}
