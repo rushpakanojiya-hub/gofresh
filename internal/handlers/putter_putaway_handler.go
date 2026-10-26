@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,12 +12,10 @@ import (
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 )
 
-var putterReportOnce sync.Once
+var putterReportOnce database.MigrateOnce
 
 func ensurePutterReportTable() {
-	putterReportOnce.Do(func() {
-		_ = database.DB.AutoMigrate(&models.PutterPutawayReport{})
-	})
+	putterReportOnce.Migrate(&models.PutterPutawayReport{})
 }
 
 func putterBinLabel(b models.WarehouseBin) string {

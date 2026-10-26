@@ -20,14 +20,12 @@ import (
 const putterEarlyStart = 15 * time.Minute
 
 var (
-	putterTablesOnce sync.Once
+	putterTablesOnce database.MigrateOnce
 	putterSeedMu     sync.Mutex
 )
 
 func ensurePutterTables() {
-	putterTablesOnce.Do(func() {
-		_ = database.DB.AutoMigrate(&models.PutterShift{}, &models.PutterSlot{}, &models.PutterSlotBooking{})
-	})
+	putterTablesOnce.Migrate(&models.PutterShift{}, &models.PutterSlot{}, &models.PutterSlotBooking{})
 }
 
 // PutterRoleOnly lets only active warehouse staff with role "putter" use the

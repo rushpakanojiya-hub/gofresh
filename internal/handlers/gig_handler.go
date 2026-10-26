@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +13,7 @@ import (
 )
 
 var gigIST = time.FixedZone("IST", 5*3600+30*60)
-var gigMigrateOnce sync.Once
+var gigMigrateOnce database.MigrateOnce
 
 // TODO: placeholder hourly rates for the estimate shown in the app.
 const (
@@ -40,7 +39,7 @@ var gigGroups = []gigGroupDef{
 }
 
 func gigEnsureTables() {
-	gigMigrateOnce.Do(func() { _ = database.DB.AutoMigrate(&models.GigBooking{}) })
+	gigMigrateOnce.Migrate(&models.GigBooking{})
 }
 
 func gigKey(s gigSlotDef) string { return fmt.Sprintf("%02d-%02d", s.Start, s.End) }

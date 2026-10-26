@@ -2,22 +2,22 @@ package database
 
 import (
 	"log"
-	"sync"
 
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/models"
 )
 
-var pickerOnce sync.Once
+var pickerOnce MigrateOnce
 
 // EnsurePickerTables creates the picker tables once per process and seeds
 // default slots (09:00-13:00 and 17:00-21:00) for active warehouses if no slots exist yet.
 func EnsurePickerTables() {
-	pickerOnce.Do(func() {
+	pickerOnce.Run(func() error {
 		if err := DB.AutoMigrate(&models.PickerSlot{}, &models.PickerSlotBooking{}, &models.PickerPresence{}, &models.PickerStats{}); err != nil {
-			log.Printf("picker: automigrate failed: %v", err)
-			return
+			log.Printf("picker: automigrate failed, will retry on next call: %v", err)
+			return err
 		}
 		seedMissingPickerSlots() // BUG-89: per warehouse, not one global count
+		return nil
 	})
 }
 
