@@ -30,6 +30,7 @@ type ReturnRequest struct {
 	Status                    string              `gorm:"default:pending" json:"status"`
 	RefundAmount              float64             `gorm:"not null;default:0" json:"refund_amount"`
 	ImageURL                  *string             `json:"image_url,omitempty"`
+	ImageURLs                 []string            `gorm:"type:text;serializer:json" json:"image_urls,omitempty"`
 	DeliveryPartnerID         *uint               `json:"delivery_partner_id,omitempty"`
 	DeliveryPartner           *DeliveryPartner    `gorm:"foreignKey:DeliveryPartnerID" json:"delivery_partner,omitempty"`
 	PickupStatus              *string             `json:"pickup_status,omitempty"`
@@ -59,9 +60,10 @@ type ReturnRequestItem struct {
 
 // ReturnRequestBody is the body for POST /orders/:id/return
 type ReturnRequestBody struct {
-	Reason   string                  `json:"reason" binding:"required"`
-	ImageURL string                  `json:"image_url"`
-	Items    []ReturnRequestItemBody `json:"items" binding:"required,min=1,dive"`
+	Reason    string                  `json:"reason" binding:"required"`
+	ImageURL  string                  `json:"image_url"`
+	ImageURLs []string                `json:"image_urls"`
+	Items     []ReturnRequestItemBody `json:"items" binding:"required,min=1,dive"`
 }
 
 type ReturnRequestItemBody struct {
