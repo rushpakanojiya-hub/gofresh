@@ -134,7 +134,13 @@ c.JSON(http.StatusForbidden, gin.H{"error": "Customer access required"})
 c.Abort()
 return
 }
-c.Next()
+// BUG-78: blocked or deleted accounts must not keep working with an old token.
+		if isUserBlocked(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Account is blocked"})
+			c.Abort()
+			return
+		}
+		c.Next()
 }
 }
 
@@ -151,6 +157,22 @@ c.JSON(http.StatusForbidden, gin.H{"error": "Access required"})
 c.Abort()
 return
 }
-c.Next()
+// BUG-78: blocked or deleted accounts must not keep working with an old token.
+		if isUserBlocked(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Account is blocked"})
+			c.Abort()
+			return
+		}
+		c.Next()
 }
+}
+
+// isUserBlocked re-checks the users table (BUG-78). Missing user counts as blocked.
+func isUserBlocked(c *gin.Context) bool {
+	uid, _ := c.Get("user_id")
+	var u models.User
+	if err := database.DB.Select("id", "is_blocked").First(&u, uid).Error; err != nil {
+		return true
+	}
+	return u.IsBlocked
 }

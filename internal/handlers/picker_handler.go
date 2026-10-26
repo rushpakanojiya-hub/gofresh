@@ -170,6 +170,10 @@ func BookPickerSlot(c *gin.Context) {
     var b models.PickerSlotBooking
     code := http.StatusInternalServerError
     txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		// BUG-59b: serialize one picker's same-day bookings so two stores cannot both pass the check.
+		if e := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", "picker_book:"+strconv.FormatUint(uint64(staffID), 10)+":"+req.Date).Error; e != nil {
+			return e
+		}
         if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND is_active = ?", slotID, true).First(&slot).Error; e != nil {
             code = http.StatusNotFound
             return errors.New("Slot not found")
