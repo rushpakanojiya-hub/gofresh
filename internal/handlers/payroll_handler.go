@@ -51,10 +51,24 @@ func ListPayroll(c *gin.Context) {
 		return
 	}
 
-	var totalPending float64
-	database.DB.Model(&models.Payroll{}).Where("status = ?", "pending").Select("COALESCE(SUM(amount),0)").Scan(&totalPending)
-	var totalPaid float64
-	database.DB.Model(&models.Payroll{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount),0)").Scan(&totalPaid)
+	// BUG-13: totals honour the same staff/month/year filters as the list.
+    sumFor := func(st string) float64 {
+        q := database.DB.Model(&models.Payroll{}).Where("status = ?", st)
+        if v := c.Query("staff_id"); v != "" {
+            q = q.Where("staff_id = ?", v)
+        }
+        if v := c.Query("month"); v != "" {
+            q = q.Where("month = ?", v)
+        }
+        if v := c.Query("year"); v != "" {
+            q = q.Where("year = ?", v)
+        }
+        var s float64
+        q.Select("COALESCE(SUM(amount),0)").Scan(&s)
+        return s
+    }
+    totalPending := sumFor("pending")
+    totalPaid := sumFor("paid")
 
 	c.JSON(http.StatusOK, gin.H{
 		"payroll":       payrolls,

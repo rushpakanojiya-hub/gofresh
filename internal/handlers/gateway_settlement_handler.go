@@ -39,7 +39,12 @@ func SettleGatewayPayment(c *gin.Context) {
 		return
 	}
 
-	fee := payment.Amount * gatewayFeeRate
+	// BUG-10: settle only what was not refunded.
+	settleBase := payment.Amount - payment.RefundedAmount
+	if settleBase < 0 {
+		settleBase = 0
+	}
+	fee := settleBase * gatewayFeeRate
 	payment.GatewayFee = fee
 	payment.IsSettled = true
 	now := time.Now()
@@ -63,6 +68,6 @@ func SettleGatewayPayment(c *gin.Context) {
 		"payment":        payment,
 		"gross_amount":   payment.Amount,
 		"gateway_fee":    fee,
-		"net_settlement": payment.Amount - fee,
+		"net_settlement": settleBase - fee,
 	})
 }
