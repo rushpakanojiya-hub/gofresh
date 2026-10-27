@@ -224,8 +224,9 @@ func UpdatePayroll(c *gin.Context) {
 // DELETE /api/v1/admin/finance/payroll/:id
 func DeletePayroll(c *gin.Context) {
 	id := c.Param("id")
-	if err := database.DB.Delete(&models.Payroll{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete payroll record"})
+	// BUG-12: paid payroll (or payroll with ledger entries) must not be hard-deleted
+	if code, msg := deletePayrollGuarded(id); code != http.StatusOK {
+		c.JSON(code, gin.H{"error": msg})
 		return
 	}
 
