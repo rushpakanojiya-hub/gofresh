@@ -42,13 +42,23 @@ func TestDeletePayrollBlocksPaidAndLedgered(t *testing.T) {
         t.Fatalf("account 1002 missing: %v", err)
     }
 
-    // payrolls.staff_id has an FK (fk_payrolls_staff): reuse an existing staff row.
-    var staffIDs []uint
-    database.DB.Model(&models.WarehouseStaff{}).Order("id").Limit(1).Pluck("id", &staffIDs)
-    if len(staffIDs) == 0 {
-        t.Skip("no warehouse staff row in test DB to satisfy fk_payrolls_staff")
+    // payrolls.staff_id has an FK (fk_payrolls_staff): create our own staff row.
+    wh := models.Warehouse{Name: "payroll-test-warehouse", City: "TestCity", IsActive: true}
+    if err := database.DB.Create(&wh).Error; err != nil {
+        t.Fatalf("seed warehouse: %v", err)
     }
-    staffID := staffIDs[0]
+    staff := models.WarehouseStaff{
+        Name: "payroll-test-staff", Phone: fmt.Sprintf("9%09d", time.Now().UnixNano()%1000000000),
+        WarehouseID: wh.ID, Role: "picker", IsActive: true,
+    }
+    if err := database.DB.Create(&staff).Error; err != nil {
+        t.Fatalf("seed staff: %v", err)
+    }
+    t.Cleanup(func() {
+        database.DB.Unscoped().Delete(&models.WarehouseStaff{}, staff.ID)
+        database.DB.Unscoped().Delete(&models.Warehouse{}, wh.ID)
+    })
+    staffID := staff.ID
 
     var ids []uint
     t.Cleanup(func() {
