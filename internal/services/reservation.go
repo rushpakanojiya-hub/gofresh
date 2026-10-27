@@ -107,3 +107,14 @@ func ReleaseAllUserReservations(tx *gorm.DB, userID uint) error {
 func CleanupExpiredReservations() {
 	database.DB.Where("expires_at < ?", time.Now()).Delete(&models.CartReservation{})
 }
+
+// ReservedByOthers returns active reserved quantity for a product,
+// excluding the given user's own reservations.
+func ReservedByOthers(tx *gorm.DB, productID, warehouseID, userID uint) (int, error) {
+	var total int64
+	err := tx.Model(&models.CartReservation{}).
+		Where("product_id = ? AND warehouse_id = ? AND user_id <> ? AND expires_at > ?", productID, warehouseID, userID, time.Now()).
+		Select("COALESCE(SUM(quantity), 0)").
+		Scan(&total).Error
+	return int(total), err
+}

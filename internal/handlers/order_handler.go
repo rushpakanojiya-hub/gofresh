@@ -76,10 +76,10 @@ func Checkout(c *gin.Context) {
 		return
 	}
 	if nearestWarehouse == nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Sorry, we don't deliver to this location yet"})
-        return
-    }
-    _ = distance
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Sorry, we don't deliver to this location yet"})
+		return
+	}
+	_ = distance
 
 	cart, err := getOrCreateCart(userID)
 	if err != nil {
@@ -116,7 +116,11 @@ func Checkout(c *gin.Context) {
 			if err != nil {
 				return errors.New("this product is not available for purchase at your nearest warehouse: " + ci.Product.Name)
 			}
-			if !inventory.InStock || inventory.Stock < ci.Quantity {
+			reservedByOthers, rerr := services.ReservedByOthers(tx, ci.ProductID, nearestWarehouse.ID, userID)
+			if rerr != nil {
+				return rerr
+			}
+			if !inventory.InStock || inventory.Stock-reservedByOthers < ci.Quantity {
 				return errors.New("insufficient stock for " + ci.Product.Name)
 			}
 			previousQty := inventory.Stock
@@ -245,6 +249,9 @@ func Checkout(c *gin.Context) {
 			}
 		}
 
+		if err := tx.Where("user_id = ? AND warehouse_id = ?", userID, nearestWarehouse.ID).Delete(&models.CartReservation{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("cart_id = ?", cart.ID).Delete(&models.CartItem{}).Error; err != nil {
 			return err
 		}
