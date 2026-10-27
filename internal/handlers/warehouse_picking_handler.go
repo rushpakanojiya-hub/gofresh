@@ -227,7 +227,9 @@ func CompletePicking(c *gin.Context) {
 	var packTask models.PackingTask
 	var order models.Order
 	var refundAmount float64
-	var ledgerWalletRefund float64 // BUG-55 ledger: wallet credit made inside the tx, posted to the ledger after commit
+	var pickCreditNote *models.CreditNote // BUG-08: credit note issued for this picking, if any
+var pickCNLines []services.PickAdjustmentLine
+var ledgerWalletRefund float64 // BUG-55 ledger: wallet credit made inside the tx, posted to the ledger after commit
 	statusCode := http.StatusInternalServerError
 
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -317,6 +319,7 @@ func CompletePicking(c *gin.Context) {
 			order.ItemsAmount -= lineShortfall
 			order.TotalAmount -= netShortfall
 			refundAmount += netShortfall
+pickCNLines = append(pickCNLines, services.PickAdjustmentLine{ProductID: orderItem.ProductID, Quantity: shortQty, UnitCredit: orderItem.Price}) // BUG-08
 		}
 
 		walletCredit := refundAmount
@@ -342,11 +345,28 @@ func CompletePicking(c *gin.Context) {
 				return err
 			}
 			refID := order.ID
-			if walletCredit > 0 {
+			// BUG-08: a partial pick changes what the customer owes, so document it with a credit note against the original invoice.
+partialPick := false
+for _, pit := range task.Items {
+    if pit.QuantityPicked > 0 {
+        partialPick = true
+        break
+    }
+}
+if partialPick && len(pickCNLines) > 0 {
+    cn, cnErr := services.GenerateCreditNoteForPickAdjustment(tx, order.ID, pickCNLines, refundAmount, services.CreditNoteReasonShortPick)
+    if cnErr != nil {
+        return cnErr
+    }
+    pickCreditNote = cn
+}
+if walletCredit > 0 {
 				if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for short/unavailable items during picking"); err != nil {
 					return err
 				}
-					ledgerWalletRefund += walletCredit
+					if pickCreditNote == nil { // BUG-08: otherwise the credit note ledger entry covers this refund
+    ledgerWalletRefund += walletCredit
+}
 				if order.PaymentMethod == models.PaymentMethodCOD {
 					if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", walletCredit)).Error; err != nil {
 						return err
@@ -432,7 +452,12 @@ func CompletePicking(c *gin.Context) {
 	}
 
 	// BUG-55 ledger: PostWalletRefundLedgerEntry uses its own DB handle, so it runs only after the tx has committed.
-    if ledgerWalletRefund > 0 {
+    if pickCreditNote != nil {
+    if lerr := services.PostPickAdjustmentCreditNoteLedgerEntry(pickCreditNote.ID); lerr != nil {
+        fmt.Printf("ledger: credit note entry failed for credit note %d: %v\n", pickCreditNote.ID, lerr)
+    }
+}
+if ledgerWalletRefund > 0 {
         if lerr := services.PostWalletRefundLedgerEntry(order.ID, ledgerWalletRefund); lerr != nil {
             fmt.Printf("ledger: wallet refund entry failed for order %d: %v\n", order.ID, lerr)
         }

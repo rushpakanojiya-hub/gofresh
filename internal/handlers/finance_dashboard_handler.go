@@ -26,12 +26,16 @@ func FinanceDashboard(c *gin.Context) {
 		Where(revenueFilter).
 		Select("COALESCE(SUM(items_amount),0)").Scan(&totalRevenue)
 
-	database.DB.Table("order_items").
+	if err := database.DB.Table("order_items").
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Joins("LEFT JOIN products ON products.id = order_items.product_id").
 		Where("orders.created_at >= ?", monthStart).
 		Where(revenueFilter).
-		Select("COALESCE(SUM(order_items.quantity * products.cost_price),0)").Scan(&cogs)
+		Select("COALESCE(SUM(order_items.quantity * COALESCE(NULLIF(order_items.cost_price,0), products.cost_price, 0)),0)").Scan(&cogs).Error; err != nil {
+_ = c.Error(err)
+c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute COGS"})
+return
+}
 
 	database.DB.Model(&models.Expense{}).
 		Where("expense_date >= ? AND approval_status = ?", monthStart, "paid").

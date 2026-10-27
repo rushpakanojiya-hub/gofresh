@@ -26,6 +26,15 @@ import (
 // These are equal because TaxableAmount + GST = ItemsAmount + DeliveryCharge
 // + PlatformFee - discount = TotalAmount + WalletUsed (taxable is net of discount).
 func PostSalesLedgerEntry(orderID uint) error {
+    if err := postSalesLedgerEntryCore(orderID); err != nil {
+        return err
+    }
+    // BUG-08: credit notes issued before the sale reached the ledger (COD) post now.
+    postPendingPickAdjustmentCreditNotes(orderID)
+    return nil
+}
+
+func postSalesLedgerEntryCore(orderID uint) error {
 	var invoice models.Invoice
 	if err := database.DB.Where("order_id = ?", orderID).First(&invoice).Error; err != nil {
 		return fmt.Errorf("no invoice found for order %d: %w", orderID, err)
@@ -71,8 +80,12 @@ func PostSalesLedgerEntry(orderID uint) error {
 	database.DB.Preload("Product", func(db *gorm.DB) *gorm.DB { return db.Unscoped() }).Where("order_id = ?", orderID).Find(&orderItems) // BUG-18: soft-deleted products still carry their cost price
 	var totalCOGS float64
 	for _, it := range orderItems {
-		if it.Product.CostPrice > 0 {
-			totalCOGS += it.Product.CostPrice * float64(it.Quantity)
+		unitCost := it.CostPrice // BUG-09: snapshot from checkout/substitution; pre-snapshot rows (0) fall back to the product's current cost
+if unitCost <= 0 {
+    unitCost = it.Product.CostPrice
+}
+if unitCost > 0 {
+			totalCOGS += unitCost * float64(it.Quantity)
 		}
 	}
 	if totalCOGS > 0 {

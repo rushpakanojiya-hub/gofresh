@@ -19,10 +19,11 @@ const profitLossOrdersFilter = "(orders.payment_method = 'online' AND orders.pay
 // Operating Expenses = EBITDA (used here as a proxy for Net Profit, since
 // this business has no depreciation/interest/tax line items tracked yet).
 //
-// COGS is computed from each order item's product cost_price at query time
-// (not a stored snapshot), so it reflects the product's current cost even
-// for old orders - acceptable for a small business dashboard, but flagged
-// via cost_price_coverage so finance staff know if the number is trustworthy.
+// COGS uses each order item's cost_price snapshot (taken at checkout or
+// substitution), so later product cost edits do not rewrite history. Order
+// items created before the snapshot existed (cost_price = 0) fall back to the
+// product's current cost. cost_price_coverage flags how much of the sold
+// quantity had any cost at all, so finance staff know if the number is trustworthy.
 func GetProfitLoss(c *gin.Context) {
 	from, to := revenueDateRange(c)
 
@@ -33,31 +34,40 @@ func GetProfitLoss(c *gin.Context) {
 		Select("COALESCE(SUM(items_amount),0)").
 		Scan(&grossRevenue)
 
-	// COGS: sum of (order_item.quantity * product.cost_price) for items on
-	// revenue-qualifying orders in range. Only counts items whose product
-	// currently has cost_price > 0, so a partially-costed catalog doesn't
-	// silently understate COGS to zero.
+	// COGS: sum of (order_item.quantity * unit cost) for items on
+// revenue-qualifying orders in range, where unit cost is the order item's
+// snapshot (falling back to the product's cost for pre-snapshot rows). Items
+// with no cost at all are skipped, so a partially-costed catalog doesn't
+// silently understate COGS to zero.
 	var cogs float64
-	database.DB.Table("order_items").
+if err := database.DB.Table("order_items").
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Joins("JOIN products ON products.id = order_items.product_id").
 		Where("orders.created_at >= ? AND orders.created_at < ?", from, to).
 		Where(profitLossOrdersFilter).
-		Where("products.cost_price > 0").
-		Select("COALESCE(SUM(order_items.quantity * products.cost_price),0)").
-		Scan(&cogs)
+		Where("COALESCE(NULLIF(order_items.cost_price,0), products.cost_price, 0) > 0").
+		Select("COALESCE(SUM(order_items.quantity * COALESCE(NULLIF(order_items.cost_price,0), products.cost_price, 0)),0)").
+		Scan(&cogs).Error; err != nil {
+_ = c.Error(err)
+c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute COGS"})
+return
+}
 
 	// Coverage: what fraction of sold *items* (by quantity) had a cost_price
 	// set, so the UI can warn "COGS is incomplete" rather than imply it's exact.
 	var itemsWithCost, itemsTotal int64
-	database.DB.Table("order_items").
+if err := database.DB.Table("order_items").
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Joins("JOIN products ON products.id = order_items.product_id").
 		Where("orders.created_at >= ? AND orders.created_at < ?", from, to).
 		Where(profitLossOrdersFilter).
-		Where("products.cost_price > 0").
+		Where("COALESCE(NULLIF(order_items.cost_price,0), products.cost_price, 0) > 0").
 		Select("COALESCE(SUM(order_items.quantity),0)").
-		Scan(&itemsWithCost)
+		Scan(&itemsWithCost).Error; err != nil {
+_ = c.Error(err)
+c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to compute COGS coverage"})
+return
+}
 
 	database.DB.Table("order_items").
 		Joins("JOIN orders ON orders.id = order_items.order_id").

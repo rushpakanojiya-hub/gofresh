@@ -162,9 +162,8 @@ func PostCreditNoteLedgerEntry(creditNoteID uint) error {
     }
     var totalCOGS float64
     for _, it := range cnItems {
-        var prod models.Product
-        if err := database.DB.Select("id", "cost_price").First(&prod, it.ProductID).Error; err == nil && prod.CostPrice > 0 {
-            totalCOGS += prod.CostPrice * float64(it.Quantity)
+        if unit := orderLineUnitCost(database.DB, note.OrderID, it.ProductID); unit > 0 { // BUG-09: snapshot cost from the order line, not live product cost
+    totalCOGS += unit * float64(it.Quantity)
         }
     }
 

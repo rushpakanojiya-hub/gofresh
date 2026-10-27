@@ -147,7 +147,8 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 	var sub models.SubstitutionRequest
 	var previousStatus string
 	var refundAmount float64
-	var ledgerWalletRefund float64 // BUG-55 ledger: wallet credit made inside the tx, posted to the ledger after commit
+	var subCreditNote *models.CreditNote // BUG-08: credit note issued for this substitution, if any
+var ledgerWalletRefund float64 // BUG-55 ledger: wallet credit made inside the tx, posted to the ledger after commit
 	statusCode := http.StatusInternalServerError
 
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -261,6 +262,7 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 			// more than they agreed to pay.
 			priceDiff := (orderItem.Price - substituteProduct.Price) * float64(sub.Quantity)
 			originalPrice := orderItem.Price
+originalProductID := orderItem.ProductID // BUG-08: captured before a full-line swap changes it
 			if sub.Quantity >= orderItem.Quantity {
 				// Full-line substitution: every unit on this order line is being
 				// substituted, so it's safe to swap the existing row in place.
@@ -334,11 +336,21 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 					return err
 				}
 				refID := order.ID
-				if walletCredit > 0 {
+				// BUG-08: the cheaper substitute lowers the invoiced value, so document it with a credit note against the original invoice.
+cn, cnErr := services.GenerateCreditNoteForPickAdjustment(tx, order.ID,
+    []services.PickAdjustmentLine{{ProductID: originalProductID, Quantity: sub.Quantity, UnitCredit: originalPrice - substituteProduct.Price}},
+    refundAmount, services.CreditNoteReasonSubstitution)
+if cnErr != nil {
+    return cnErr
+}
+subCreditNote = cn
+if walletCredit > 0 {
 					if err := utils.CreditWallet(tx, order.UserID, walletCredit, models.WalletReasonOrderRefund, "order", &refID, "Refund for cheaper substitute item"); err != nil {
 						return err
 					}
-					ledgerWalletRefund += walletCredit
+					if subCreditNote == nil { // BUG-08: otherwise the credit note ledger entry covers this refund
+    ledgerWalletRefund += walletCredit
+}
 					if order.PaymentMethod == models.PaymentMethodCOD {
 						if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", walletCredit)).Error; err != nil {
 							return err
@@ -372,7 +384,12 @@ func decideSubstitution(c *gin.Context, newStatus string, auditAction string) {
 	}
 
 	// BUG-55 ledger: PostWalletRefundLedgerEntry uses its own DB handle, so it runs only after the tx has committed.
-    if ledgerWalletRefund > 0 {
+    if subCreditNote != nil {
+    if lerr := services.PostPickAdjustmentCreditNoteLedgerEntry(subCreditNote.ID); lerr != nil {
+        fmt.Printf("ledger: credit note entry failed for credit note %d: %v\n", subCreditNote.ID, lerr)
+    }
+}
+if ledgerWalletRefund > 0 {
         if lerr := services.PostWalletRefundLedgerEntry(sub.OrderID, ledgerWalletRefund); lerr != nil {
             fmt.Printf("ledger: wallet refund entry failed for order %d: %v\n", sub.OrderID, lerr)
         }
