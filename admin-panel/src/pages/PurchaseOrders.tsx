@@ -25,7 +25,7 @@ const NEXT_STATUS: Record<string, string[]> = {
   draft: ['sent', 'cancelled'],
   sent: ['confirmed', 'cancelled'],
   confirmed: ['cancelled'],
-  partially_received: ['cancelled'],
+  partially_received: [], // BUG-11: stock already received; cancel is blocked by the API. Remaining qty is received via the Receive button.
   received: [],
   cancelled: [],
 }

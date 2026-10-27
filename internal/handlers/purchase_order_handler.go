@@ -114,49 +114,72 @@ func CreatePurchaseOrder(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"purchase_order": po})
 }
 
+// BUG-11: allowed manual status transitions. received / partially_received are
+// deliberately absent as targets: they are only set by ReceivePurchaseOrderItems,
+// which also adds stock. Received, partially received and cancelled orders are
+// terminal here, so stock that was already received is never left behind a
+// cancelled or draft PO.
+var allowedPOTransitions = map[string]map[string]bool{
+    "draft":     {"sent": true, "confirmed": true, "cancelled": true},
+    "sent":      {"confirmed": true, "cancelled": true},
+    "confirmed": {"cancelled": true},
+}
+
+func poTransitionAllowed(from, to string) bool {
+    return allowedPOTransitions[from][to]
+}
+
 func UpdatePurchaseOrderStatus(c *gin.Context) {
-	id := c.Param("id")
+    id := c.Param("id")
 
-	var req models.PurchaseOrderStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if !validPOStatuses[req.Status] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
-		return
-	}
+    var req models.PurchaseOrderStatusRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    if !validPOStatuses[req.Status] {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+        return
+    }
+    if req.Status == "received" || req.Status == "partially_received" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "received and partially_received are set only by receiving items against the purchase order"})
+        return
+    }
 
-	var po models.PurchaseOrder
-	if err := database.DB.First(&po, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase order not found"})
-		return
-	}
+    adminID := c.MustGet("user_id").(uint)
+    statusCode := http.StatusInternalServerError
+    var po models.PurchaseOrder
+    txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&po, id).Error; err != nil {
+            statusCode = http.StatusNotFound
+            return errors.New("Purchase order not found")
+        }
+        if !poTransitionAllowed(po.Status, req.Status) {
+            statusCode = http.StatusConflict
+            return fmt.Errorf("cannot change purchase order status from %s to %s", po.Status, req.Status)
+        }
 
-	adminID := c.MustGet("user_id").(uint)
-	wasDraft := po.Status == "draft"
+        wasDraft := po.Status == "draft"
+        po.Status = req.Status
+        if wasDraft && req.Status != "cancelled" {
+            now := time.Now()
+            po.ApprovedByID = &adminID
+            po.ApprovedAt = &now
+        }
+        if req.Status == "cancelled" && req.Reason != "" {
+            po.CancelledReason = req.Reason
+        }
+        return tx.Save(&po).Error
+    })
+    if txErr != nil {
+        c.JSON(statusCode, gin.H{"error": txErr.Error()})
+        return
+    }
 
-	po.Status = req.Status
-	if wasDraft && req.Status != "draft" && req.Status != "cancelled" {
-		now := time.Now()
-		po.ApprovedByID = &adminID
-		po.ApprovedAt = &now
-	}
-	if req.Status == "cancelled" {
-		if req.Reason != "" { // BUG-58: body was already consumed by the first bind
-		po.CancelledReason = req.Reason
-	}
-	}
+    adminPhone, _ := c.Get("phone")
+    utils.LogAudit(adminID, fmt.Sprint(adminPhone), "update_po_status", "purchase_order", id, "status: "+req.Status)
 
-	if err := database.DB.Save(&po).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update purchase order"})
-		return
-	}
-
-	adminPhone, _ := c.Get("phone")
-	utils.LogAudit(adminID, fmt.Sprint(adminPhone), "update_po_status", "purchase_order", id, "status: "+req.Status)
-
-	c.JSON(http.StatusOK, gin.H{"purchase_order": po})
+    c.JSON(http.StatusOK, gin.H{"purchase_order": po})
 }
 
 // BUG-58: whole receipt runs in one transaction with row locks, every DB error
