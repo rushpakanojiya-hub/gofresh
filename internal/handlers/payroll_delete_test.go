@@ -42,6 +42,14 @@ func TestDeletePayrollBlocksPaidAndLedgered(t *testing.T) {
         t.Fatalf("account 1002 missing: %v", err)
     }
 
+    // payrolls.staff_id has an FK (fk_payrolls_staff): reuse an existing staff row.
+    var staffIDs []uint
+    database.DB.Model(&models.WarehouseStaff{}).Order("id").Limit(1).Pluck("id", &staffIDs)
+    if len(staffIDs) == 0 {
+        t.Skip("no warehouse staff row in test DB to satisfy fk_payrolls_staff")
+    }
+    staffID := staffIDs[0]
+
     var ids []uint
     t.Cleanup(func() {
         if len(ids) > 0 {
@@ -52,7 +60,7 @@ func TestDeletePayrollBlocksPaidAndLedgered(t *testing.T) {
 
     newPayroll := func(status string) models.Payroll {
         now := time.Now()
-        p := models.Payroll{StaffID: 1, Amount: 500, Month: 10, Year: 2026, Status: status, PaymentMethod: "bank"}
+        p := models.Payroll{StaffID: staffID, Amount: 500, Month: 10, Year: 2026, Status: status, PaymentMethod: "bank"}
         if status == "paid" {
             p.PaidAt = &now
         }
