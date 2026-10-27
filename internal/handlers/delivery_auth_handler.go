@@ -212,7 +212,7 @@ func GetOrderTracking(c *gin.Context) {
 	}
 	// Rider ki live location sirf tab share hoti hai jab delivery leg chal rahi ho.
 	// Warna delivered/rejected/expired ke baad bhi customer us partner ko track karta rehta.
-	if trackDS != models.DeliveryStatusOutForDelivery && trackDS != models.DeliveryStatusArrivedAtCustomer {
+	if order.Status == models.OrderStatusDelivered || order.Status == models.OrderStatusCancelled || (trackDS != models.DeliveryStatusOutForDelivery && trackDS != models.DeliveryStatusArrivedAtCustomer) {
 		payload := trackingPayload(order)
 		payload["current_lat"] = nil
 		payload["current_lng"] = nil

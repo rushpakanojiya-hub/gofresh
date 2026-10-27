@@ -495,7 +495,12 @@ func UpdateOrderStatus(c *gin.Context) {
         }
         // BUG-26: record delivery time when an admin marks an order delivered.
 		if req.Status == models.OrderStatusDelivered {
-			return tx.Model(&order).Updates(map[string]interface{}{"status": req.Status, "delivered_at": time.Now()}).Error
+			// BUG-13: keep the courier delivery_status in sync so the order leaves live ops and live tracking.
+			updates := map[string]interface{}{"status": req.Status, "delivered_at": time.Now()}
+			if order.DeliveryStatus != nil && *order.DeliveryStatus != models.DeliveryStatusReturned {
+			    updates["delivery_status"] = models.DeliveryStatusDelivered
+			}
+			return tx.Model(&order).Updates(updates).Error
 		}
 		return tx.Model(&order).Update("status", req.Status).Error
     })
