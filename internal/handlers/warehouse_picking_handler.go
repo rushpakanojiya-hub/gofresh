@@ -274,6 +274,7 @@ func CompletePicking(c *gin.Context) {
 			}
 		}
 
+                originalTotal := order.TotalAmount
 		for _, item := range task.Items {
 			if item.Status != models.PickItemShort && item.Status != models.PickItemUnavailable {
 				continue
@@ -288,7 +289,7 @@ func CompletePicking(c *gin.Context) {
 			}
 
 			var inventory models.Inventory
-			q := tx.Where("product_id = ? AND warehouse_id = ?", item.ProductID, warehouseID)
+			q := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("product_id = ? AND warehouse_id = ?", item.ProductID, warehouseID)
 			if err := q.Order("id").First(&inventory).Error; err == nil {
 				previousQty := inventory.Stock
 				inventory.Stock += shortQty
@@ -374,16 +375,35 @@ func CompletePicking(c *gin.Context) {
                     return err
                 }
             }
-            if order.PaymentMethod == models.PaymentMethodOnline && order.PaymentStatus == models.OrderPaymentStatusPaid && order.TotalAmount > 0 {
+            creditedInLoop := 0.0
+            if refundAmount > 0 {
+                creditedInLoop = walletCredit
+            }
+            owed := order.WalletAmountUsed
+            isOnlinePaid := order.PaymentMethod == models.PaymentMethodOnline &&
+                order.PaymentStatus == models.OrderPaymentStatusPaid
+            if isOnlinePaid {
+                owed += originalTotal
+            }
+            remaining := owed - creditedInLoop
+            if remaining > 0 {
                 noPickRef := order.ID
-                if err := utils.CreditWallet(tx, order.UserID, order.TotalAmount, models.WalletReasonOrderRefund, "order", &noPickRef, "Refund for order with no available items"); err != nil {
+                if err := utils.CreditWallet(tx, order.UserID, remaining, models.WalletReasonOrderRefund, "order", &noPickRef, "Refund for order with no available items"); err != nil {
                     return err
                 }
-			ledgerWalletRefund += order.TotalAmount
-			// BUG-56b: mark the payment as refunded once the wallet credit is made.
-			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("payment_status", models.OrderPaymentStatusRefunded).Error; err != nil {
-				return err
-			}
+                ledgerWalletRefund += remaining
+                if order.PaymentMethod == models.PaymentMethodCOD {
+                    if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).
+                        UpdateColumn("wallet_amount_used", gorm.Expr("GREATEST(wallet_amount_used - ?, 0)", remaining)).Error; err != nil {
+                        return err
+                    }
+                }
+            }
+            if isOnlinePaid {
+                if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).
+                    Update("payment_status", models.OrderPaymentStatusRefunded).Error; err != nil {
+                    return err
+                }
             }
             return tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
                 "status":                         models.OrderStatusCancelled,
