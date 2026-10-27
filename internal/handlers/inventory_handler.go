@@ -101,15 +101,15 @@ func GetInventoryOverview(c *gin.Context) {
     sumCat := int64(query.CategoryID)
     // BUG-64: summary cards follow the same warehouse/category filters as the table,
     // and "available" is stock minus active cart reservations (never below 0 per row).
-	var totalSKUs int64
+    var totalSKUs int64
     inventorySummaryBase(sumWH, sumCat).Count(&totalSKUs)
 
-	var totalAvailable int64
+    var totalAvailable int64
     inventorySummaryBase(sumWH, sumCat).
         Joins("LEFT JOIN (SELECT product_id, warehouse_id, SUM(quantity) AS qty FROM cart_reservations WHERE expires_at > ? GROUP BY product_id, warehouse_id) r ON r.product_id = inventories.product_id AND r.warehouse_id = inventories.warehouse_id", time.Now()).
         Select("COALESCE(SUM(GREATEST(inventories.stock - COALESCE(r.qty, 0), 0)), 0)").Scan(&totalAvailable)
 
-	var totalReserved int64
+    var totalReserved int64
     resQ := database.DB.Model(&models.CartReservation{}).
         Joins("JOIN products ON products.id = cart_reservations.product_id").
         Where("cart_reservations.expires_at > ?", time.Now())
@@ -121,22 +121,35 @@ func GetInventoryOverview(c *gin.Context) {
     }
     resQ.Select("COALESCE(SUM(cart_reservations.quantity), 0)").Scan(&totalReserved)
 
-	var lowStockCount int64
+    var lowStockCount int64
     inventorySummaryBase(sumWH, sumCat).Where("inventories.stock > 0 AND inventories.stock < ?", lowStockThreshold).Count(&lowStockCount)
 
-	var outOfStockCount int64
+    var outOfStockCount int64
     inventorySummaryBase(sumWH, sumCat).Where("inventories.stock <= 0").Count(&outOfStockCount)
 
 	damagedCutoff := time.Now().AddDate(0, 0, -30)
+	// BUG-15: damaged/expired cards follow the same warehouse/category filters as the other summary cards.
 	var damagedCount int64
-	database.DB.Model(&models.StockMovement{}).
-		Where("reason = ? AND created_at >= ?", models.AdjustReasonDamaged, damagedCutoff).
-		Distinct("product_id").Count(&damagedCount)
-
+	damagedQ := database.DB.Model(&models.StockMovement{}).
+	    Where("stock_movements.reason = ? AND stock_movements.created_at >= ?", models.AdjustReasonDamaged, damagedCutoff)
+	if sumWH > 0 {
+	    damagedQ = damagedQ.Where("stock_movements.warehouse_id = ?", sumWH)
+	}
+	if sumCat > 0 {
+	    damagedQ = damagedQ.Joins("JOIN products ON products.id = stock_movements.product_id").Where("products.category_id = ?", sumCat)
+	}
+	damagedQ.Distinct("product_id").Count(&damagedCount)
+	
 	var expiredCount int64
-	database.DB.Model(&models.Batch{}).
-		Where("expiry_date < ? AND quantity > 0", time.Now()).
-		Distinct("product_id").Count(&expiredCount)
+	expiredQ := database.DB.Model(&models.Batch{}).
+	    Where("batches.expiry_date < ? AND batches.quantity > 0", time.Now())
+	if sumWH > 0 {
+	    expiredQ = expiredQ.Where("batches.warehouse_id = ?", sumWH)
+	}
+	if sumCat > 0 {
+	    expiredQ = expiredQ.Joins("JOIN products ON products.id = batches.product_id").Where("products.category_id = ?", sumCat)
+	}
+	expiredQ.Distinct("product_id").Count(&expiredCount)
 
 	c.JSON(http.StatusOK, models.InventoryOverviewResponse{
 		TotalSKUs:       totalSKUs,
