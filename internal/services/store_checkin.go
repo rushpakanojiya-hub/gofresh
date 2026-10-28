@@ -86,9 +86,6 @@ func CheckInPartner(partnerID uint, token string, lat, lng *float64) (*models.Wa
 	if !p.IsOnline {
 		return nil, ErrCheckinOffline
 	}
-	if p.WarehouseID != nil && *p.WarehouseID != wid {
-		return nil, ErrCheckinWrongStore
-	}
 	var wh models.Warehouse
 	if err := database.DB.Where("id = ? AND is_active = ?", wid, true).First(&wh).Error; err != nil {
 		return nil, ErrCheckinNotFound
@@ -113,6 +110,7 @@ func CheckInPartner(partnerID uint, token string, lat, lng *float64) (*models.Wa
 		Where("id = ?", partnerID).
 		Updates(map[string]interface{}{
 			"checked_in_warehouse_id": wid,
+                        "warehouse_id":            wid,
 			"checked_in_at":           time.Now(),
 		}).Error
 	if err != nil {
