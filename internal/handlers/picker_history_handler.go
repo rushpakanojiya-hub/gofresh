@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,12 +22,16 @@ func GetPickerHistory(c *gin.Context) {
 	}
 	loc := time.FixedZone("IST", 5*3600+1800)
 	now := time.Now().In(loc)
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -6)
+	days := 7
+	if v, err := strconv.Atoi(c.Query("days")); err == nil && v >= 1 && v <= 31 {
+		days = v
+	}
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -(days - 1))
 
 	var tasks []models.PickingTask
 	database.DB.Preload("Items.Product").
 		Where("picker_id = ? AND status = ? AND completed_at >= ?", staffID, "completed", start).
-		Order("completed_at DESC").Limit(100).Find(&tasks)
+		Order("completed_at DESC").Limit(500).Find(&tasks)
 
 	orders := make([]gin.H, 0, len(tasks))
 	totalItems := 0
@@ -63,5 +68,7 @@ func GetPickerHistory(c *gin.Context) {
 			"items":            items,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"orders": orders, "total_orders": len(orders), "total_items": totalItems})
+	var totalOrders int64
+	database.DB.Model(&models.PickingTask{}).Where("picker_id = ? AND status = ? AND completed_at >= ?", staffID, "completed", start).Count(&totalOrders)
+	c.JSON(http.StatusOK, gin.H{"orders": orders, "total_orders": totalOrders, "total_items": totalItems})
 }
