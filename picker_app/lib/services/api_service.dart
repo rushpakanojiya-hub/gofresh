@@ -141,7 +141,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getPickerSummary() => _get('/warehouse/picker/summary');
-  static Future<Map<String, dynamic>> getPickerHistory() => _get('/warehouse/picker/history');
+  static Future<Map<String, dynamic>> getPickerHistory({int days = 7}) => _get('/warehouse/picker/history?days=$days');
   static Future<Map<String, dynamic>> getPickerToday() => _get('/warehouse/picker/today');
 
   static Future<Map<String, dynamic>> getPickerPayout(String range, String date) => _get('/warehouse/picker/payout?range=$range&date=$date');

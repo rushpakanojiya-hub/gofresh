@@ -21,6 +21,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
   Map<String, dynamic>? _booking;
   int _active = 0;
   List<Map<String, dynamic>> _history = [];
+  List<Map<String, dynamic>> _history30 = [];
+  int _total30 = 0;
+  int _items30 = 0;
 
   @override
   void initState() {
@@ -40,6 +43,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
         if (ho is List) {
           hist = ho.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
         }
+      } catch (_) {}
+      List<Map<String, dynamic>> hist30 = [];
+      int total30 = 0;
+      int items30 = 0;
+      try {
+        final h30 = await ApiService.getPickerHistory(days: 30);
+        final ho30 = h30['orders'];
+        if (ho30 is List) {
+          hist30 = ho30.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+        total30 = (h30['total_orders'] as num?)?.toInt() ?? hist30.length;
+        items30 = (h30['total_items'] as num?)?.toInt() ?? 0;
       } catch (_) {}
       if (!mounted) return;
       if (r['error'] != null) {
@@ -63,6 +78,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
       setState(() {
         _s = r;
         _history = hist;
+        _history30 = hist30;
+        _total30 = total30;
+        _items30 = items30;
         _booking = today;
         _active = (p['active_seconds'] as num?)?.toInt() ?? 0;
         _error = null;
@@ -289,35 +307,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
   }
 
-  Widget _historyList() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFD0D5DD)),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text('Order history (last 7 days)',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-              ),
-              Text('${_history.length} orders', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_history.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              child: Center(
-                child: Text('No completed orders yet', style: TextStyle(color: Colors.grey.shade600)),
-              ),
-            ),
-          for (final o in _history)
-            InkWell(
+  Widget _historyRow(Map<String, dynamic> o) {
+    return InkWell(
               onTap: () => _showOrderDetail(o),
               child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -365,7 +356,70 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 ],
               ),
             ),
+            );
+  }
+
+  Widget _history30List() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD0D5DD)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Last 30 days',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              ),
+              Text('$_total30 orders  |  $_items30 items',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_history30.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: Text('No completed orders yet', style: TextStyle(color: Colors.grey.shade600)),
+              ),
             ),
+          for (final o in _history30) _historyRow(o),
+        ],
+      ),
+    );
+  }
+  Widget _historyList() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD0D5DD)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Order history (last 7 days)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              ),
+              Text('${_history.length} orders', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_history.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: Text('No completed orders yet', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+            ),
+          for (final o in _history) _historyRow(o),
         ],
       ),
     );
@@ -426,6 +480,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
           _bonusMeter(),
           const SizedBox(height: 16),
           _historyList(),
+          const SizedBox(height: 16),
+          _history30List(),
         ],
       ),
     );
