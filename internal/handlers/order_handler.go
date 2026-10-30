@@ -571,14 +571,18 @@ func CancelOrder(c *gin.Context) {
 			}
 		}
 
-		return tx.Model(&order).Updates(map[string]interface{}{
+		cancelUpdates := map[string]interface{}{
 			"status":                         models.OrderStatusCancelled,
-			"payment_status":                 models.OrderPaymentStatusRefunded,
 			"delivery_partner_id":            nil,
 			"delivery_assignment_status":     nil,
 			"delivery_status":                nil,
 			"delivery_assignment_expires_at": nil,
-		}).Error
+		}
+		// BUG-08: mark refunded only if money was actually returned (same rule as adminCancelOrderTx).
+		if gatewayRefundAmount > 0 || order.WalletAmountUsed > 0 {
+			cancelUpdates["payment_status"] = models.OrderPaymentStatusRefunded
+		}
+		return tx.Model(&order).Updates(cancelUpdates).Error
 	})
 	if txErr != nil {
 		if errors.Is(txErr, errOrderAlreadyCancelled) {
