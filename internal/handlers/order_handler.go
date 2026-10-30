@@ -202,6 +202,7 @@ func Checkout(c *gin.Context) {
 		if finalTotal <= 0 {
 			paymentStatus = models.OrderPaymentStatusPaid
 			orderStatus = models.OrderStatusConfirmed
+			paymentMethod = models.PaymentMethodOnline // BUG-06: zero-total order is prepaid, not COD
 		} else if paymentMethod == models.PaymentMethodCOD {
 			orderStatus = models.OrderStatusConfirmed
 		}
@@ -292,15 +293,15 @@ func Checkout(c *gin.Context) {
 		// COD orders are billable immediately - no separate payment-confirmation
 		// step is coming, so the invoice must be generated here rather than
 		// waiting for something that will never happen for COD.
+		if order.PaymentMethod == models.PaymentMethodCOD || order.PaymentStatus == models.OrderPaymentStatusPaid {
+			if _, err := services.GenerateInvoiceIfNotExists(order.ID); err != nil {
+				log.Printf("failed to generate invoice for COD order %d: %v", order.ID, err)
+			}
+		}
 		// BUG-38: zero-total online orders (fully paid by wallet/coupon) never go through VerifyPayment, so book the sale here.
 		if order.PaymentMethod == models.PaymentMethodOnline && order.PaymentStatus == models.OrderPaymentStatusPaid {
 			if err := services.PostSalesLedgerEntry(order.ID); err != nil {
 				log.Printf("failed to post sales ledger for zero-total order %d: %v", order.ID, err)
-			}
-		}
-		if order.PaymentMethod == models.PaymentMethodCOD || order.PaymentStatus == models.OrderPaymentStatusPaid {
-			if _, err := services.GenerateInvoiceIfNotExists(order.ID); err != nil {
-				log.Printf("failed to generate invoice for COD order %d: %v", order.ID, err)
 			}
 		}
 	}
