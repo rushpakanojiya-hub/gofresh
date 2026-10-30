@@ -13,25 +13,28 @@ import (
 // triggered at the exact moment revenue is recognized:
 //   - Online: right after payment verification (payment_handler.go)
 //   - COD:    right after delivery confirmation (ConfirmDelivery)
+//
 // It is idempotent per order (checked via reference_type="sale",
 // reference_id=orderID) so a retry or duplicate call never double-posts.
 //
 // Balanced entry:
-//   Debit  Bank/Cash (order total actually collected)
-//   Debit  Customer Wallet Liability (wallet amount redeemed)
-//   Credit Product Sales (taxable amount)
-//   Credit GST Payable (CGST+SGST+IGST)
+//
+//	Debit  Bank/Cash (order total actually collected)
+//	Debit  Customer Wallet Liability (wallet amount redeemed)
+//	Credit Product Sales (taxable amount)
+//	Credit GST Payable (CGST+SGST+IGST)
+//
 // Debit total = TotalAmount + WalletUsed
 // Credit total = TaxableAmount + totalGST
 // These are equal because TaxableAmount + GST = ItemsAmount + DeliveryCharge
 // + PlatformFee - discount = TotalAmount + WalletUsed (taxable is net of discount).
 func PostSalesLedgerEntry(orderID uint) error {
-    if err := postSalesLedgerEntryCore(orderID); err != nil {
-        return err
-    }
-    // BUG-08: credit notes issued before the sale reached the ledger (COD) post now.
-    postPendingPickAdjustmentCreditNotes(orderID)
-    return nil
+	if err := postSalesLedgerEntryCore(orderID); err != nil {
+		return err
+	}
+	// BUG-08: credit notes issued before the sale reached the ledger (COD) post now.
+	postPendingPickAdjustmentCreditNotes(orderID)
+	return nil
 }
 
 func postSalesLedgerEntryCore(orderID uint) error {
@@ -81,10 +84,10 @@ func postSalesLedgerEntryCore(orderID uint) error {
 	var totalCOGS float64
 	for _, it := range orderItems {
 		unitCost := it.CostPrice // BUG-09: snapshot from checkout/substitution; pre-snapshot rows (0) fall back to the product's current cost
-if unitCost <= 0 {
-    unitCost = it.Product.CostPrice
-}
-if unitCost > 0 {
+		if unitCost <= 0 {
+			unitCost = it.Product.CostPrice
+		}
+		if unitCost > 0 {
 			totalCOGS += unitCost * float64(it.Quantity)
 		}
 	}
@@ -827,4 +830,48 @@ func PostUPIRejectedLedgerEntry(orderID uint) error {
 		}
 		return nil
 	})
+}
+
+// PostWalletCreditLedgerTx books a wallet load inside the caller's transaction:
+// Debit debitCode (1002 Bank for top-ups, 5006 Promotional Expense for
+// gift cards/admin credits), Credit 2005 Customer Wallet Liability.
+// Idempotent per transactionRef.
+func PostWalletCreditLedgerTx(tx *gorm.DB, debitCode, refType string, refID *uint, transactionRef string, amount float64, desc string) error {
+	if amount <= 0 {
+		return nil
+	}
+	var n int64
+	if err := tx.Model(&models.LedgerEntry{}).Where("transaction_ref = ?", transactionRef).Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	var debitAcc, walletAcc models.Account
+	if err := tx.Where("code = ?", debitCode).First(&debitAcc).Error; err != nil {
+		return fmt.Errorf("chart of accounts missing code %s: %w", debitCode, err)
+	}
+	if err := tx.Where("code = ?", "2005").First(&walletAcc).Error; err != nil {
+		return fmt.Errorf("chart of accounts missing code 2005: %w", err)
+	}
+	now := time.Now()
+	for _, l := range []struct {
+		acc uint
+		typ string
+	}{{debitAcc.ID, "debit"}, {walletAcc.ID, "credit"}} {
+		e := models.LedgerEntry{
+			TransactionRef: transactionRef,
+			AccountID:      l.acc,
+			Type:           l.typ,
+			Amount:         amount,
+			Description:    desc,
+			ReferenceType:  refType,
+			ReferenceID:    refID,
+			EntryDate:      now,
+		}
+		if err := tx.Create(&e).Error; err != nil {
+			return fmt.Errorf("failed to create ledger entry: %w", err)
+		}
+	}
+	return nil
 }

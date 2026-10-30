@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"errors"
-	"math"
 	"fmt"
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
+	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/config"
@@ -143,7 +145,10 @@ func VerifyWalletTopup(c *gin.Context) {
 		if err := tx.Save(&topup).Error; err != nil {
 			return err
 		}
-		return utils.CreditWallet(tx, userID, topup.Amount, models.WalletReasonAddMoney, "wallet_topup", &topup.ID, "Added via app")
+		if err := utils.CreditWallet(tx, userID, topup.Amount, models.WalletReasonAddMoney, "wallet_topup", &topup.ID, "Added via app"); err != nil {
+			return err
+		}
+		return services.PostWalletCreditLedgerTx(tx, "1002", "wallet_topup", &topup.ID, fmt.Sprintf("WALLET-TOPUP-%d", topup.ID), topup.Amount, fmt.Sprintf("Wallet top-up #%d", topup.ID))
 	})
 	if txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment was verified but failed to credit wallet - contact support"})
@@ -186,7 +191,10 @@ func AdminCreditWallet(c *gin.Context) {
 
 	var wallet models.Wallet
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-		return utils.CreditWallet(tx, userID, req.Amount, models.WalletReasonAdminCredit, "admin", &adminID, req.Note)
+		if err := utils.CreditWallet(tx, userID, req.Amount, models.WalletReasonAdminCredit, "admin", &adminID, req.Note); err != nil {
+			return err
+		}
+		return services.PostWalletCreditLedgerTx(tx, "5006", "admin_wallet_credit", &userID, fmt.Sprintf("WALLET-ADMIN-%d-%d", userID, time.Now().UnixNano()), req.Amount, fmt.Sprintf("Admin wallet credit to user #%d", userID))
 	})
 	if txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})

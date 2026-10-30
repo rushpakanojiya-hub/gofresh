@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/gujaratharva021-lgtm/ecommerce-backend/internal/services"
 	"net/http"
 	"strings"
 	"time"
@@ -85,7 +86,10 @@ func RedeemGiftCard(c *gin.Context) {
 			return err
 		}
 		refID := card.ID
-		return utils.CreditWallet(tx, uid, card.Amount, walletReasonGiftCard, "gift_card", &refID, "Gift card "+card.Code)
+		if err := utils.CreditWallet(tx, uid, card.Amount, walletReasonGiftCard, "gift_card", &refID, "Gift card "+card.Code); err != nil {
+			return err
+		}
+		return services.PostWalletCreditLedgerTx(tx, "5006", "gift_card", &refID, fmt.Sprintf("WALLET-GIFTCARD-%d", card.ID), card.Amount, "Gift card redeemed: "+card.Code)
 	})
 	if err != nil {
 		if msg == "" {
@@ -97,7 +101,7 @@ func RedeemGiftCard(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"id":          fmt.Sprint(card.ID),
 		"card_number": card.Code,
-		"balance": 0, // BUG-42: redeemed card has no balance left,
+		"balance":     0, // BUG-42: redeemed card has no balance left,
 		"expiry_date": card.ExpiresAt.Format(time.RFC3339),
 		"status":      "redeemed",
 	})
