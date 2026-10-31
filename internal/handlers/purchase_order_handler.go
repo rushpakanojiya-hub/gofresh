@@ -338,7 +338,7 @@ func UpdateProductReorderLevel(c *gin.Context) {
 	id := c.Param("id")
 
 	var body struct {
-		ReorderLevel int `json:"reorder_level" binding:"required,min=0"`
+		ReorderLevel *int `json:"reorder_level" binding:"required,min=0"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -346,10 +346,10 @@ func UpdateProductReorderLevel(c *gin.Context) {
 	}
 
 	if err := database.DB.Model(&models.Product{}).Where("id = ?", id).
-		UpdateColumn("reorder_level", body.ReorderLevel).Error; err != nil {
+		UpdateColumn("reorder_level", *body.ReorderLevel).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update reorder level"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "product_id": id, "reorder_level": body.ReorderLevel})
+	c.JSON(http.StatusOK, gin.H{"success": true, "product_id": id, "reorder_level": *body.ReorderLevel})
 }
