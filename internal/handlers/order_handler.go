@@ -48,7 +48,7 @@ func Checkout(c *gin.Context) {
 	// Resolve the delivery address: explicit address_id, else the user's default.
 	var address models.Address
 	if req.AddressID != 0 {
-		if err := database.DB.First(&address, req.AddressID).Error; err != nil {
+		if err := database.DB.Where("is_deleted = false").First(&address, req.AddressID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Address not found"})
 			return
 		}
@@ -322,7 +322,7 @@ func GetCheckoutEstimate(c *gin.Context) {
 	addressIDStr := c.Query("address_id")
 	var address models.Address
 	if addressIDStr != "" {
-		if err := database.DB.First(&address, addressIDStr).Error; err != nil {
+		if err := database.DB.Where("is_deleted = false").First(&address, addressIDStr).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Address not found"})
 			return
 		}
