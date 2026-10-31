@@ -49,8 +49,8 @@ func GetSalesRegister(c *gin.Context) {
 		return
 	}
 	var invoices []models.Invoice
-	database.DB.Where("generated_at >= ? AND generated_at < ?", start, end).
-		Order("generated_at ASC").Find(&invoices)
+	database.DB.Joins("JOIN orders ON orders.id = invoices.order_id").Where("invoices.generated_at >= ? AND invoices.generated_at < ? AND orders.status NOT IN (?, ?)", start, end, "cancelled", "returned").
+		Order("invoices.generated_at ASC").Find(&invoices)
 	c.JSON(http.StatusOK, gin.H{"from": start.Format("2006-01-02"), "to": end.AddDate(0, 0, -1).Format("2006-01-02"), "sales_register": invoices})
 }
 
@@ -65,7 +65,7 @@ func GetPurchaseRegister(c *gin.Context) {
 		return
 	}
 	var bills []models.VendorBill
-	database.DB.Preload("Vendor").Where("bill_date >= ? AND bill_date < ?", start, end).
+	database.DB.Preload("Vendor").Where("bill_date >= ? AND bill_date < ? AND voided_at IS NULL", start, end).
 		Order("bill_date ASC").Find(&bills)
 	c.JSON(http.StatusOK, gin.H{"from": start.Format("2006-01-02"), "to": end.AddDate(0, 0, -1).Format("2006-01-02"), "purchase_register": bills})
 }
@@ -95,7 +95,7 @@ func GetRiderPayableReport(c *gin.Context) {
 	database.DB.Table("orders").
 		Select("orders.delivery_partner_id, delivery_partners.name, delivery_partners.phone, COUNT(*) as delivered_count").
 		Joins("JOIN delivery_partners ON delivery_partners.id = orders.delivery_partner_id").
-		Where("orders.status = ? AND COALESCE(orders.delivered_at, orders.updated_at) >= ? AND COALESCE(orders.delivered_at, orders.updated_at) < ?", "delivered", start, end).
+		Where("orders.status = ? AND COALESCE(orders.delivered_at, orders.updated_at) >= ? AND COALESCE(orders.delivered_at, orders.updated_at) < ? AND NOT EXISTS (SELECT 1 FROM rider_payouts rp WHERE rp.delivery_partner_id = orders.delivery_partner_id AND COALESCE(orders.delivered_at, orders.updated_at) >= rp.period_from AND COALESCE(orders.delivered_at, orders.updated_at) < rp.period_to + INTERVAL '1 day')", "delivered", start, end).
 		Group("orders.delivery_partner_id, delivery_partners.name, delivery_partners.phone").
 		Scan(&rows)
 	for i := range rows {
