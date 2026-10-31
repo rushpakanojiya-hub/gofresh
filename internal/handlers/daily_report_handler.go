@@ -77,7 +77,7 @@ func buildDailySalesSummary(start, end time.Time, label string) DailySalesSummar
 
 	database.DB.Model(&models.Order{}).
 		Where(f+" AND status NOT IN (?, ?)", start, end, "cancelled", "returned").
-		Select("COALESCE(SUM(wallet_amount_used), 0)").Scan(&s.TotalWalletUsed)
+		Select("COALESCE(SUM(CASE WHEN payment_method = 'online' AND payment_status <> 'paid' THEN 0 ELSE wallet_amount_used END), 0)").Scan(&s.TotalWalletUsed)
 
 	var nonCancelled int64
 	database.DB.Model(&models.Order{}).Where(f+" AND status NOT IN (?, ?) AND NOT (payment_method = 'online' AND payment_status <> 'paid')", start, end, "cancelled", "returned").Count(&nonCancelled)

@@ -101,6 +101,7 @@ func GetRiderPayableReport(c *gin.Context) {
 	for i := range rows {
 		rows[i].Payable = float64(rows[i].DeliveredCount) * perDelivery
 	}
+	if rows == nil { rows = []row{} }
 	c.JSON(http.StatusOK, gin.H{"from": start.Format("2006-01-02"), "to": end.AddDate(0, 0, -1).Format("2006-01-02"), "per_delivery_rate": perDelivery, "rider_payable": rows})
 }
 
