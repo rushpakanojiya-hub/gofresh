@@ -81,7 +81,21 @@ return
 		costPriceCoverage = float64(itemsWithCost) / float64(itemsTotal) * 100
 	}
 
-	grossProfit := grossRevenue - cogs
+	// BUG-13: revenue and COGS come from the general ledger so the P&L matches the GL.
+    var glRevenue, glCOGS float64
+    database.DB.Table("ledger_entries").
+        Joins("JOIN accounts ON accounts.id = ledger_entries.account_id").
+        Where("ledger_entries.entry_date >= ? AND ledger_entries.entry_date < ? AND accounts.code = ?", from, to, "4001").
+        Select("COALESCE(SUM(CASE WHEN ledger_entries.type = 'credit' THEN ledger_entries.amount ELSE -ledger_entries.amount END),0)").
+        Scan(&glRevenue)
+    database.DB.Table("ledger_entries").
+        Joins("JOIN accounts ON accounts.id = ledger_entries.account_id").
+        Where("ledger_entries.entry_date >= ? AND ledger_entries.entry_date < ? AND accounts.code = ?", from, to, "5001").
+        Select("COALESCE(SUM(CASE WHEN ledger_entries.type = 'debit' THEN ledger_entries.amount ELSE -ledger_entries.amount END),0)").
+        Scan(&glCOGS)
+    grossRevenue = glRevenue
+    cogs = glCOGS
+    grossProfit := grossRevenue - cogs
 
 	var operatingExpenses float64
 	database.DB.Table("expenses").
@@ -90,7 +104,13 @@ return
 		Select("COALESCE(SUM(amount),0)").
 		Scan(&operatingExpenses)
 
-	ebitda := grossProfit - operatingExpenses
+	// BUG-13: operating expenses = ledger accounts 5002-5006 (discounts, opex incl. payroll, rider payouts, gateway fees, promo).
+    database.DB.Table("ledger_entries").
+        Joins("JOIN accounts ON accounts.id = ledger_entries.account_id").
+        Where("ledger_entries.entry_date >= ? AND ledger_entries.entry_date < ? AND accounts.code IN ?", from, to, []string{"5002", "5003", "5004", "5005", "5006"}).
+        Select("COALESCE(SUM(CASE WHEN ledger_entries.type = 'debit' THEN ledger_entries.amount ELSE -ledger_entries.amount END),0)").
+        Scan(&operatingExpenses)
+    ebitda := grossProfit - operatingExpenses
 
 	c.JSON(http.StatusOK, gin.H{
 		"from":                from.Format("2006-01-02"),
