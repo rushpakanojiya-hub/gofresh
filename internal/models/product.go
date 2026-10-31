@@ -21,6 +21,7 @@ type Product struct {
 	// set - callers should treat 0 as "unknown cost", not "free product".
 	CostPrice      float64        `gorm:"not null;default:0" json:"cost_price"`
 	GSTPercent     float64        `gorm:"not null;default:0" json:"gst_percent"`
+	ReorderLevel int `gorm:"not null;default:0" json:"reorder_level"`
 	HSNCode        string         `json:"hsn_code,omitempty"`
 	ImageURL       string         `json:"image_url"`
 	Weight         string         `gorm:"size:40" json:"weight"`

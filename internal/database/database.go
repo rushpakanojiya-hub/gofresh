@@ -140,7 +140,11 @@ func EnsureProductionSchemaPatches() {
 		log.Printf("Failed to add return_requests.rejected_partner_ids: %v", err)
 	}
     // BUG-18 snapshot: per-item cost price captured at order time.
-    if err := DB.Exec(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price NUMERIC NOT NULL DEFAULT 0`).Error; err != nil {
+    // BUG-17: reorder_level is read by replenishment suggestions and UpdateProductReorderLevel.
+	if err := DB.Exec(`ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_level BIGINT NOT NULL DEFAULT 0`).Error; err != nil {
+		log.Printf("Failed to add products.reorder_level: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price NUMERIC NOT NULL DEFAULT 0`).Error; err != nil {
         log.Printf("Failed to add order_items.cost_price: %v", err)
     }
     // BUG-85: Post*LedgerEntry check-then-insert can race; this index makes the second concurrent post fail and roll back instead of double-posting.
