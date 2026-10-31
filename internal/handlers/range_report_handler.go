@@ -174,7 +174,7 @@ func ExportRangeSalesReport(c *gin.Context) {
 	var byHSN []hsnRow
 	database.DB.Table("invoice_items").
 		Joins("JOIN invoices ON invoices.id = invoice_items.invoice_id").
-		Where("invoices.generated_at >= ? AND invoices.generated_at < ?", start, end).
+		Where("invoices.generated_at >= ? AND invoices.generated_at < ? AND invoices.order_id IN (SELECT id FROM orders WHERE status NOT IN ('cancelled','returned'))", start, end).
 		Select("COALESCE(NULLIF(invoice_items.hsn_code, ''), 'Not set') as hsn_code, COALESCE(SUM(invoice_items.price * invoice_items.quantity - invoice_items.gst_amount),0) as taxable_amount, COALESCE(SUM(invoice_items.gst_amount),0) as gst_amount, COALESCE(SUM(invoice_items.quantity),0) as quantity").
 		Group("COALESCE(NULLIF(invoice_items.hsn_code, ''), 'Not set')").
 		Order("gst_amount DESC").
@@ -188,7 +188,7 @@ func ExportRangeSalesReport(c *gin.Context) {
 	var byRate []rateRow
 	database.DB.Table("invoice_items").
 		Joins("JOIN invoices ON invoices.id = invoice_items.invoice_id").
-		Where("invoices.generated_at >= ? AND invoices.generated_at < ?", start, end).
+		Where("invoices.generated_at >= ? AND invoices.generated_at < ? AND invoices.order_id IN (SELECT id FROM orders WHERE status NOT IN ('cancelled','returned'))", start, end).
 		Select("invoice_items.gst_percent, COALESCE(SUM(invoice_items.price * invoice_items.quantity - invoice_items.gst_amount),0) as taxable_amount, COALESCE(SUM(invoice_items.gst_amount),0) as gst_amount").
 		Group("invoice_items.gst_percent").
 		Order("invoice_items.gst_percent ASC").
