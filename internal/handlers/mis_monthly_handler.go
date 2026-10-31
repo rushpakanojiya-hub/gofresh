@@ -59,6 +59,7 @@ func mkRow(label string, cur, prev, ytd, budget float64) monthlyMisRow {
 type monthlyAgg struct {
 	orders, cancelledOrders, customers, newCustomers float64
 	gmv, productSales, delivery, discounts, refunds  float64
+	platformFee float64
 	cancellationsAmt, cogs, deliveryCost, wastage    float64
 }
 
@@ -71,6 +72,7 @@ func calcMonthlyAgg(s, e time.Time) monthlyAgg {
 	database.DB.Raw(`SELECT COALESCE(SUM(items_amount),0) FROM orders WHERE created_at BETWEEN ? AND ?`, s, e).Row().Scan(&a.gmv)
 	database.DB.Raw(`SELECT COALESCE(SUM(items_amount),0) FROM orders WHERE created_at BETWEEN ? AND ? AND status <> 'cancelled'`, s, e).Row().Scan(&a.productSales)
 	database.DB.Raw(`SELECT COALESCE(SUM(delivery_charge),0) FROM orders WHERE created_at BETWEEN ? AND ? AND status <> 'cancelled'`, s, e).Row().Scan(&a.delivery)
+	database.DB.Raw(`SELECT COALESCE(SUM(platform_fee),0) FROM orders WHERE created_at BETWEEN ? AND ? AND status <> 'cancelled'`, s, e).Row().Scan(&a.platformFee)
 	database.DB.Raw(`SELECT COALESCE(SUM(oc.discount_amount),0) FROM order_coupons oc JOIN orders o ON o.id = oc.order_id WHERE o.created_at BETWEEN ? AND ?`, s, e).Row().Scan(&a.discounts)
 	database.DB.Raw(`SELECT COALESCE(SUM(total_amount),0) FROM credit_notes WHERE issued_at BETWEEN ? AND ?`, s, e).Row().Scan(&a.refunds)
 	database.DB.Raw(`SELECT COALESCE(SUM(items_amount),0) FROM orders WHERE created_at BETWEEN ? AND ? AND status = 'cancelled'`, s, e).Row().Scan(&a.cancellationsAmt)
@@ -159,6 +161,7 @@ func computeGroceryMonthlyMIS(monthKey string, start, end, prevStart, prevEnd, y
 	add("Other Category Sales", otherCur, 0, 0)
 
 	add("Delivery Income", cur.delivery, prev.delivery, ytd.delivery)
+	add("Platform / Convenience Fee", cur.platformFee, prev.platformFee, ytd.platformFee)
 	add("Discounts", cur.discounts, prev.discounts, ytd.discounts)
 	add("Refunds / Returns", cur.refunds, prev.refunds, ytd.refunds)
 	add("Net Revenue", netRevCur, netRevPrev, netRevYTD)
@@ -168,6 +171,7 @@ func computeGroceryMonthlyMIS(monthKey string, start, end, prevStart, prevEnd, y
 	add("Delivery Cost", cur.deliveryCost, prev.deliveryCost, ytd.deliveryCost)
 	add("Wastage / Spoilage", cur.wastage, prev.wastage, ytd.wastage)
 	// BUG-16: only the live snapshot is known; no historical cost snapshot exists, so prior columns are 0, not a copy.
+	add("Inventory Value", invValue, 0, 0)
 	add("Stock Turnover", stockTurnover, 0, 0)
 	add("On-time Delivery %", getMonthlyBudget(monthKey, "On-time Delivery % (manual)"), 0, 0)
 	add("Order Fill Rate %", fillRate(cur), fillRate(prev), fillRate(ytd))
