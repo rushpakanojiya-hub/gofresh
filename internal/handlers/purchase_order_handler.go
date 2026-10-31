@@ -202,7 +202,8 @@ func ReceivePurchaseOrderItems(c *gin.Context) {
             return errors.New("Purchase order not found")
         }
         poID = po.ID
-        if po.Status == "cancelled" || po.Status == "received" {
+        // BUG-18: only dispatched/confirmed/partially received POs can receive stock; draft is unapproved.
+		if po.Status != "sent" && po.Status != "confirmed" && po.Status != "partially_received" {
             statusCode = http.StatusBadRequest
             return errors.New("Cannot receive against a " + po.Status + " purchase order")
         }
