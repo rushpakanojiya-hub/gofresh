@@ -58,10 +58,10 @@ func buildDailySalesSummary(start, end time.Time, label string) DailySalesSummar
 
 	database.DB.Model(&models.Order{}).
 		Where(f+" AND status NOT IN (?, ?)", start, end, "cancelled", "returned").
-		Select("COALESCE(SUM(CASE WHEN payment_method = 'online' AND payment_status <> 'paid' THEN 0 ELSE total_amount + wallet_amount_used END), 0)").Scan(&s.TotalRevenue)
+		Select("COALESCE(SUM(CASE WHEN payment_method = 'online' AND payment_status <> 'paid' THEN 0 WHEN payment_method = 'cod' AND status <> 'delivered' THEN 0 ELSE total_amount + wallet_amount_used END), 0)").Scan(&s.TotalRevenue)
 
 	database.DB.Model(&models.Order{}).
-		Where(f+" AND status NOT IN (?, ?) AND payment_method = ?", start, end, "cancelled", "returned", "cod").
+		Where(f+" AND status = ? AND payment_method = ?", start, end, "delivered", "cod").
 		Select("COALESCE(SUM(total_amount + wallet_amount_used), 0)").Scan(&s.CODRevenue)
 
 	database.DB.Model(&models.Order{}).
@@ -77,10 +77,10 @@ func buildDailySalesSummary(start, end time.Time, label string) DailySalesSummar
 
 	database.DB.Model(&models.Order{}).
 		Where(f+" AND status NOT IN (?, ?)", start, end, "cancelled", "returned").
-		Select("COALESCE(SUM(CASE WHEN payment_method = 'online' AND payment_status <> 'paid' THEN 0 ELSE wallet_amount_used END), 0)").Scan(&s.TotalWalletUsed)
+		Select("COALESCE(SUM(CASE WHEN payment_method = 'online' AND payment_status <> 'paid' THEN 0 WHEN payment_method = 'cod' AND status <> 'delivered' THEN 0 ELSE wallet_amount_used END), 0)").Scan(&s.TotalWalletUsed)
 
 	var nonCancelled int64
-	database.DB.Model(&models.Order{}).Where(f+" AND status NOT IN (?, ?) AND NOT (payment_method = 'online' AND payment_status <> 'paid')", start, end, "cancelled", "returned").Count(&nonCancelled)
+	database.DB.Model(&models.Order{}).Where(f+" AND status NOT IN (?, ?) AND NOT (payment_method = 'online' AND payment_status <> 'paid') AND NOT (payment_method = 'cod' AND status <> 'delivered')", start, end, "cancelled", "returned").Count(&nonCancelled)
 	if nonCancelled > 0 {
 		s.AvgOrderValue = s.TotalRevenue / float64(nonCancelled)
 	}
